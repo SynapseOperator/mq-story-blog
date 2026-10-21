@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+# Imported Markdown intentionally uses two-space hard line breaks.
+docs/product/*.md whitespace=-blank-at-eol

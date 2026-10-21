@@ -1,0 +1,21 @@
+name: 开发任务
+description: 一个可验证的小任务
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: 目标与负责范围
+      description: 说明当前阶段、负责人角色与涉及模块。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 引用 PRD/独立清单时注明来源，列出具体行为和预期证据。
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 依赖、未决项与排除范围
