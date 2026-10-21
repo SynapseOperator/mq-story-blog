@@ -50,6 +50,8 @@ foreach ($skillName in $skillNames) {
 
 进入项目的新 Codex 会话后核对三个名字是否可发现。实际使用时读取对应 SKILL.md，说明范围；显式名称为 `$frontend-design`、`$frontend-testing-debugging`、`$vercel-react-best-practices`。未验证新会话发现时，只报告本地接入，不能写已自动加载。
 
+2026-10-21 已补做实际发现核验：新建短时本地 `codex app-server` 进程，通过 `initialize → initialized → skills/list`，指定本项目 cwd 且 `forceReload: true`。三个 Skills 均返回 `.agents/skills/<name>/SKILL.md`、`enabled: true`、`scope: repo`，发现错误与缺失均为 0；验证脚本和服务进程退出码均为 0。该检查没有创建持久线程、调用模型或更改全局配置，也不意味着本聊天自动加载或调用了全部 Skills。
+
 设计以 PRD 为准。Browser 能力缺失时可回退项目 Playwright，并记录原因；不得虚构调用。上游 pnpm/Bash/`/tmp` 示例适配为 npm/PowerShell/系统临时目录，示例库与上游维护脚本不是本项目的安装依赖。
 
 ## 需求来源与编号
@@ -67,9 +69,22 @@ PRD v1.1 的 UX-01～15 与验收清单 v1.0 的 UX-01～24 存在编号复用�
 
 [仓库](https://github.com/SynapseOperator/mq-story-blog) 所属账号 `SynapseOperator`。插件缺少创建仓库能力，因此创建一步使用已认证 `gh repo create`；之后通过 gh 只读核验 private 和 ADMIN。其他支持的操作继续优先插件。
 
-初始检查中，插件读新仓库返回 404，已请求补充该仓库授权；gh 可读取与插件授权是不同通道。Projects 查询显示 gh 缺少 `read:project` scope，创建还需写入能力。在取得能力前，轻量看板和首轮 Iteration 是待办，不能把 Issue 或草案冒充已建 Project。最终 Issues、CI、保护状态以实际远端结果为准。
+初始检查中，插件读新仓库返回 404；用户随后完成授权，2026-10-21 通过 GitHub 插件重新读取成功，确认同一 owner、private 及 admin/push 权限。插件与 gh 的授权是不同通道。Projects 查询仍显示 gh 缺少 `read:project` scope，当前插件也未提供 Projects/Iteration 接口；创建还需写入能力。轻量看板和首轮 Iteration 保留待办，不把 Issues 冒充已建 Project。
+
+四条真实 Issues 已通过 GitHub 插件创建并读回核验：
+
+| 工作项 | 标签与负责范围 |
+|---|---|
+| [#1 初始化与 CI](https://github.com/SynapseOperator/mq-story-blog/issues/1) | documentation；SynapseOperator；工程基座和真实证据 |
+| [#2 分层 MQ 场景](https://github.com/SynapseOperator/mq-story-blog/issues/2) | enhancement；待认领；静态分层、固定 UI、M/Q 建设中 |
+| [#3 星空与篝火交互](https://github.com/SynapseOperator/mq-story-blog/issues/3) | enhancement；待认领；星光层次、视差、悬停和故事入口 |
+| [#4 羽毛信阅读器](https://github.com/SynapseOperator/mq-story-blog/issues/4) | enhancement；待认领；阅读状态、关闭保护、移动目录 |
+
+每条工作项包含 P0 优先级、负责范围、带来源的验收编号和阶段边界。#2 先完成场景；#3 提供故事入口/演示数据接口后 #4 可以开始，无需等 #3 关闭；#4 集成后再完成 #3 的读信验收。创建工作项不代表已授权或完成 Phase 1 编码。
 
 CI 应覆盖 PR 与 main 的 push，只读 `contents` 权限，checkout 不持久化凭据，使用已审阅的固定官方 Action commit，不注入自定义密钥。交付附真实 Actions 链接；工作流文件存在不等于 CI 通过。
+
+首次提交 `9e56fc6d2896253fdd0b3b9e157daf754aa96669` 已推送，[首次 Quality run](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39593917608) 为 completed/success，安装、lint、typecheck 和生产构建全部通过。后续提交的状态以各自 run 为准。
 
 本轮读取分支保护和 rulesets 均返回 HTTP 403，实际限制为当前套餐不支持该 private 仓库，保护未强制启用；没有升级套餐或改为 public。继续以小 PR、互审和 CI 作为协作约定，但不能将约定称为强制门禁。两位开发者各自使用个人 GitHub 账号，不猜测/邀请未知账号；后续共享应用管理员属于博客权限模型，不能替代个人开发贡献记录，不提前生成管理员密码。
 

@@ -49,4 +49,4 @@ npm run check
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-下一条建议任务是分层 MQ 场景视觉原型，先评审静态布局。目录位置、信纸精确尺寸/动效、手机星位数量与部署平台仍待后续决定，不在脚手架中冻结。
+下一条建议任务是 [#2 分层 MQ 场景视觉原型](https://github.com/SynapseOperator/mq-story-blog/issues/2)，先评审静态布局。四条初始化/原型工作项及依赖见 [工作流](docs/engineering/WORKFLOW.md)。目录位置、信纸精确尺寸/动效、手机星位数量与部署平台仍待后续决定，不在脚手架中冻结。
