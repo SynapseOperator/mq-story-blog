@@ -2,9 +2,9 @@
 
 日期：2026-10-21，更新于 2026-10-22。任务：[feat(prototype): build layered MQ scene](https://github.com/SynapseOperator/mq-story-blog/issues/2)。分支：`feat/issue-2-mq-scene`。
 
-> **当前状态：2026-10-22 已接入用户提供的七张分层素材，候选返工版技术检查通过，等待两位开发者视觉评审。** 初版 `dc4e979` 视觉未通过的决定仍保留为历史；提供素材与本次技术通过都不构成视觉签收。沿用 Draft PR #5，不合并、不进入 #3/#4。最新证据见本文末节。
+> **当前状态：返工版已获用户明确确认视觉及评审通过，PR #5 已合并，Issue #2 已完成。** 初版 `dc4e979` 视觉未通过的决定和候选版交付时的待审记录保留为历史。最新签收、合并及 main CI 证据见本文末节；用户已授权推进 Issue #3，Issue #4 仍待后续集成。本记录不申报 Issue #3 的实现或测试结果。
 
-## 实现与范围
+## Issue #2 交付范围（历史实现快照）
 
 `/` 展示独立夜空、远山/青草坡、情侣、篝火和地面火光，UI 与景观分层。Logo 位于中央上方，MQ/M/Q 为固定半透明导航；`/m`、`/q` 显示建设中并可返回 MQ。账号入口禁用且明确标注“暂未开放”。所有页面标注静态视觉原型，星空和火没有点击事件或循环动画。
 
@@ -96,7 +96,9 @@ A/B 均为 1536×1024 的合成参考图；A 虽有整体 alpha 通道，但不�
 - 在 Codex 本地评审附件中提供 A 与同尺寸现有桌面的并排对照，以及手机截图。文件均明确标记“当前未通过版本”，未将其标为返工后效果；截图和 HTML 对照未加入代码仓库。
 - 当前仅提交正式基准存档、需求入口和评审结论修正。素材制作路径的问题仍待用户回答，页面返工未完成；PR #5 保持 Draft，不能合并。
 
-## 2026-10-22 用户素材接入与候选返工版
+## 2026-10-22 用户素材接入与候选返工版（签收前快照）
+
+本节记录返工版送审时的状态；下文“待审”“尚未通过”等为当时结论，后续签收以本文末节为准，素材来源日期与技术取证保持原记录。
 
 用户选择自行提供分层源素材，随后上传七张 1536×1024 PNG。本轮核验远景为不透明图，其余六张有实际透明像素；黑色预览不是实心底色。此前素材缺口解除。没有重新生成、重绘或自动抠图，只进行 WebP 编码和 CSS 合成，保留原始 PNG 不动；来源、原始 SHA-256、输出体积和处理参数见 [素材说明](../../public/scene/README.md)。七张 WebP 共 1,503,134 bytes，无新增依赖和外部素材请求。
 
@@ -149,4 +151,13 @@ A/B 均为 1536×1024 的合成参考图；A 虽有整体 alpha 通道，但不�
 | Logo / UI | 使用本轮独立 MQ 资产，笔画与 A 接近但发光细节不同；按钮为真实可访问控件，附暂未开放/静态原型说明，字体与间距仍可能有差异 |
 | 移动端 | A 只有桌面基准；竖屏保留核心人物与火、裁掉部分左树和侧面远景，导航移至左侧中部。该构图未被当作已确认手机定稿 |
 
-**交付边界：候选返工版可以评审，视觉尚未通过。** PR #5 保持 Draft，Issue #2 保持 open；等待两位开发者确认，不合并、不进入 #3/#4、无部署。
+**当时的交付边界：候选返工版可以评审，视觉尚未通过。** 送审时 PR #5 保持 Draft、Issue #2 保持 open，等待开发者确认；当时未合并、未进入 #3/#4、无部署。
+
+## 最终签收、合并与后续授权
+
+用户已正式确认 Issue #2 返工版视觉通过，随后明确表示“已经确认评审通过，进行下一步”。该确认是推进 Issue #3 的依据，不以素材上传或技术检查代替人工视觉验收。
+
+- [PR #5](https://github.com/SynapseOperator/mq-story-blog/pull/5) 已由 `zhangjiaming06` 合并，合并提交为 [`4dd0c78fd4e355f720a4bef0a9f9eacd8cd9964d`](https://github.com/SynapseOperator/mq-story-blog/commit/4dd0c78fd4e355f720a4bef0a9f9eacd8cd9964d)。
+- PR Conversation 中存在 `zhangjiaming06` 的 [accept 评论](https://github.com/SynapseOperator/mq-story-blog/pull/5#issuecomment-6332112344)。核验时正式 Reviews 数组为空；这是一条 Conversation 评论，不是 GitHub `APPROVED` Review，不伪造正式审批记录。
+- 合并后的 [main CI run 39719627067](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39719627067) 结果为 `success`；[Issue #2](https://github.com/SynapseOperator/mq-story-blog/issues/2) 状态为 `closed`，原因 `completed`。
+- 后续在 `feat/issue-3-star-campfire-interactions` 实施 Issue #3，保留本次已验收的场景构图与素材；Issue #4 阅读器仍待后续集成，本轮不开发。上述检查只证明 Issue #2 交付及合并状态，不作为 Issue #3 测试已通过的证据。
