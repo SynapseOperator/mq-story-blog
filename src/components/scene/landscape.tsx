@@ -11,6 +11,16 @@ const dust = [
   [75, 43, 9, -3], [91, 38, 11, -7], [31, 48, 10, -1], [69, 18, 8, -7],
 ];
 
+function BackdropImage({ asset, priority }: { asset: "night-sky" | "grassy-hillside"; priority?: "high" }) {
+  return (
+    <picture>
+      {/* Same source pixels and composition; preserve fine texture without lossy encoding on dense portrait screens. */}
+      <source media="(max-aspect-ratio: 1/1) and (min-resolution: 1.5dppx)" srcSet={`/scene/${asset}-lossless.webp`} />
+      <img src={`/scene/${asset}.webp`} alt="" width="1536" height="1024" fetchPriority={priority} />
+    </picture>
+  );
+}
+
 export function Landscape({ interactive = false }: { interactive?: boolean }) {
   const sceneRef = useSceneMotion(interactive);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -85,16 +95,16 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
       <div className="scene-artboard">
         {/* The stationary copy fills only the edge pixels exposed by parallax. */}
         <div className="scene-sky scene-layer" aria-hidden="true">
-          <img src="/scene/night-sky.webp" alt="" width="1536" height="1024" fetchPriority="high" />
+          <BackdropImage asset="night-sky" priority="high" />
         </div>
         <div className="scene-plane scene-plane--far">
           <div className="scene-sky scene-layer" data-scene-layer="sky" aria-hidden="true">
-            <img src="/scene/night-sky.webp" alt="" width="1536" height="1024" />
+            <BackdropImage asset="night-sky" />
           </div>
         </div>
         <div className="scene-plane scene-plane--near">
           <div className="scene-terrain scene-layer" data-scene-layer="terrain" aria-hidden="true">
-            <img src="/scene/grassy-hillside.webp" alt="" width="1536" height="1024" />
+            <BackdropImage asset="grassy-hillside" />
           </div>
           <div className="scene-firelight" data-scene-layer="firelight" aria-hidden="true">
             <div className="firelight-breathe"><img src="/scene/firelight.webp" alt="" width="1536" height="1024" /></div>
@@ -103,10 +113,10 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
             <img src="/scene/couple.webp" alt="" width="1536" height="1024" />
           </div>
           <div className="scene-contact-grass scene-layer" data-scene-layer="contact-grass" aria-hidden="true">
-            <img src="/scene/grassy-hillside.webp" alt="" width="1536" height="1024" />
+            <BackdropImage asset="grassy-hillside" />
           </div>
           {interactive ? <div className="scene-grass-breeze scene-layer" aria-hidden="true">
-            <img src="/scene/grassy-hillside.webp" alt="" width="1536" height="1024" />
+            <BackdropImage asset="grassy-hillside" />
           </div> : null}
           <div className="scene-campfire-flame" data-scene-layer="campfire-flame" aria-hidden="true">
             <div className="flame-intensity"><div className="flame-burn">
