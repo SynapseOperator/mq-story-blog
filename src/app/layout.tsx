@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MQ · Our Stories | 工程占位",
-  description: "MQ 个人博客的 Phase 0 工程占位页。",
+  title: "MQ · Our Stories",
+  description: "MQ · Our Stories 静态视觉原型：星空、青草山坡与篝火旁的我们。",
   robots: { index: false, follow: false },
 };
 

@@ -3,3 +3,4 @@
 *.jpg binary
 # Imported Markdown intentionally uses two-space hard line breaks.
 docs/product/*.md whitespace=-blank-at-eol
+docs/product/visual-baseline-v1.0/*.md whitespace=-blank-at-eol
