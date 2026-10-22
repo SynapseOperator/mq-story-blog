@@ -1,25 +1,33 @@
 # Issue #2 场景素材
 
-> 2026-10-21 产品评审：本目录初版素材对应的页面**视觉未通过**，不能作为正式 A 的替代。返工依据为 [已确认视觉交接](../../docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md)，缺口见 [素材需求](../../docs/engineering/ISSUE_2_REVIEW.md#素材缺口与交付要求)。现有文件保留以供复现；待用户提供分层素材或确认制作方式后再替换。
+2026-10-22 已接入用户提供的 7 张 PNG 的 WebP 版本，独立素材缺口已解除。当前为按 [正式基准 A](../../docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md) 返工的候选版本，仍待两位开发者视觉验收；素材可用、技术检查与视觉通过是不同结论。检查结果和评审记录见 [Issue #2 验收记录](../../docs/engineering/ISSUE_2_REVIEW.md)。
 
-这些素材于 2026-10-21 使用本会话内置 ImageGen 单独生成，用于 MQ 静态原型；没有使用真实人物照片、原始手绘或课程材料。不是从概念图裁切，也没有将整幅概念图作为页面背景。AI 生成素材不冒称第三方开源素材；使用本套素材的初版已被产品负责人判定为视觉不通过，目前仅保留供复现，返工后再由两位开发者共同评审。
+本轮来源为用户提供的图片，不冒称第三方开源素材或从 A 逐像素拆出的原始图层。原始下载 PNG 保持原样、不提交；本轮只提交用于网页的 WebP。编码使用 Sharp，参数为 `quality: 92`、`alphaQuality: 100`、`effort: 6`，没有缩放、重绘、AI 生成或自动抠图。所有输出均为 **1536 × 1024**，共 **1,503,134 bytes**，由本地路径提供。
 
-| 文件 | 尺寸 | 用途 | 透明通道 |
-| --- | --- | --- | --- |
-| `night-sky.webp` | 1536 × 1024 | 深蓝夜空、银河及静态星尘 | 无 |
-| `grassy-hillside.webp` | 1536 × 1024 | 远山和茂盛青草坡 | 有，天空区域透明 |
-| `couple.webp` | 900 × 900 | 背面并肩而坐的虚构成年情侣 | 有 |
-| `campfire.webp` | 600 × 600 | 独立篝火与木柴 | 有 |
+| 文件 | 用途 | 透明通道 | WebP bytes |
+| --- | --- | --- | ---: |
+| `night-sky.webp` | 夜空、银河与远景 | 无 | 271012 |
+| `grassy-hillside.webp` | 前景青草坡及树木 | 有 | 407194 |
+| `couple.webp` | 并肩而坐的情侣 | 有 | 143862 |
+| `campfire-wood.webp` | 篝火木柴与石块 | 有 | 146106 |
+| `campfire-flame.webp` | 独立火焰 | 有 | 252814 |
+| `firelight.webp` | 独立暖光 | 有 | 242954 |
+| `mq-logo.webp` | 独立 MQ 字标 | 有 | 39192 |
 
-生成方向：写实绘本质感、午夜蓝与灰绿、右侧暖金篝火光；天空不包含地面，地面不包含人物或火，人物和篝火均为独立透明素材。草坡保留少量自然野花；无萤火虫、可交互热点、文字或 UI。
+页面依次合成远景、草坡、暖光、情侣、人物下缘草遮挡、火焰和木柴；MQ 字标与固定导航、账号占位分开组织。CSS 调整显示比例、亮度和裁切；人物下缘遮挡复用同一草坡素材，没有增加新的图片内容。导航、账号说明和建设中页面仍由 DOM/SVG 实现。旧的合成篝火 `campfire.webp` 已由木柴与火焰两层替代；本轮不实现循环动画、视差、星火点击、羽毛信或认证。
 
-各次提示词核心约束：
+尚有视觉差异：银河、云与城镇细节，人物眼镜和衣褶与 A 不完全一致；当前素材缺少 A 中的灯笼，灯笼并非 PRD 必需元素，但其视觉影响仍需评审。移动端采用独立构图适配，尚未定稿。不因使用用户提供的素材便将上述差异视为已经批准。
 
-- 天空：wide midnight navy sky, subtle Milky Way, tiny stars; no horizon, ground, people, fire, moon, text or UI; calm upper center for separate wordmark。
-- 草坡：wide lush grassy hillside and low distant mountain ridges, transparent above skyline, blue moonlight, subtle reflected amber light; no sky, people, fire or buildings。
-- 情侣：rear view, seated shoulder to shoulder, ivory knitwear and cream dress, natural adult anatomy, cool light from left and warm light from right; transparent background, no identifiable real people。
-- 篝火：small cozy campfire, rough split logs and natural amber flames, translucent edges; transparent background, no surrounding landscape or floating sparks。
+原始 PNG 的 SHA-256 用于核对来源，文件名与用户提供的下载文件一致：
 
-原始生成 PNG 保留在本机 Codex 素材缓存。仓库版本仅用 Sharp 做等比缩小与 WebP 编码（quality 90、alphaQuality 100），未做背景抠图或内容重绘。四张合计 1,012,456 bytes；所有路径本地提供，无外部素材网络请求。
+| 原始文件 | SHA-256 |
+| --- | --- |
+| `ChatGPT 图像 2026年10月22日 10_30_27-1.png` | `d3a85e2b9e537fd0eaf02f46f3f92044ca843ae8e714232aef77e23772bbe1c8` |
+| `ChatGPT 图像 2026年10月22日 10_30_29-2.png` | `3c23929329772820a4d725df11446b185685d46e7d87884db42e6159b2b73db4` |
+| `ChatGPT 图像 2026年10月22日 10_30_30-3.png` | `3f990bb4cffa46b270965bd290d7df7f661cc11a925fd5cd5d01155583cffefa` |
+| `ChatGPT 图像 2026年10月22日 10_30_32-4.png` | `6ad3df7aaf25c4aaa6076db1329f3acfe2df75002bcc5f833cfb93a729297a54` |
+| `ChatGPT 图像 2026年10月22日 10_30_33-5.png` | `da5f32447c991885b6747b0904bfaf6f3b39e34676db709f89e090d980a81c9f` |
+| `ChatGPT 图像 2026年10月22日 10_30_35-6.png` | `495d07eb52f6197c6b4ccd74390ee6b83a50cc67778f99f0a68335022556bd8b` |
+| `ChatGPT 图像 2026年10月22日 10_30_36-7.png` | `dd5afe0c15ba2152f4a3a426509572f4161a55ded156a5f573ca52eaa3aa2853` |
 
-页面结构：天空 → 气氛渐层 → 远山/草坡 → 地面火光 → 情侣 → 篝火 → 边缘暗角；Logo、导航、账号占位与原型说明属于独立 UI。CSS 可单独定位各层，当前没有循环动画、视差或星火点击事件。远山与草坡目前共用一张环境素材；需要独立远景视差时可在后续获批任务中进一步拆分。
+2026-10-21 的旧初版及其 ImageGen 来源说明可在提交 `dc4e979` 中追溯；该初版已被产品负责人判定视觉未通过，不作为当前素材来源或视觉验收依据。

@@ -2,7 +2,7 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 1 · Issue #2：初版技术通过、视觉未通过，按正式基准 A 返工；独立素材待提供或确认制作方式**。本任务范围为 MQ 夜空、青草山坡、情侣、篝火与独立固定 UI，以及 M/Q 建设中页面；右上角账号入口仅为视觉占位。完整动效与交互（Issue #3）、羽毛信阅读器（Issue #4）、真实故事功能、认证、数据库和部署尚未实现。技术检查与最终视觉验收分别记录；沿用 Draft PR #5，不自动合并或开始下一任务。
+当前为 **Phase 1 · Issue #2：已接入用户于 2026-10-22 提供的 7 张独立素材，候选返工版待两位开发者视觉验收**。初版视觉未通过；本轮素材缺口已解除，按正式基准 A 调整静态 MQ 场景与固定 UI，并保留 M/Q 建设中页面和账号入口视觉占位。完整动效与交互（Issue #3）、羽毛信阅读器（Issue #4）、真实故事功能、认证、数据库和部署尚未实现。技术检查结果见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)，不代表视觉通过；沿用 Draft PR #5，不自动合并或开始下一任务。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -36,7 +36,7 @@ npm run check
 
 - Next.js **16.4.2** App Router、React、TypeScript **5.9.3**、Tailwind CSS 4、ESLint **10.13.0**，由 `create-next-app@16.4.2 --empty` 起步。ESLint 的最小适配与规则缺口见 [工作流](docs/engineering/WORKFLOW.md)。
 - `src/app/`：应用路由、MQ 场景首页与 M/Q 建设中页面。保持单仓库模块化单体，按实际需要增加模块。
-- `src/components/scene/`：独立场景图层、固定导航与建设中视图；四张本地美术素材及来源说明见 [public/scene](public/scene/README.md)。
+- `src/components/scene/`：独立场景图层、固定导航与建设中视图；七张本地美术素材及来源、处理与差异说明见 [public/scene](public/scene/README.md)。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 

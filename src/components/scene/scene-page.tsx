@@ -11,14 +11,24 @@ const navigation = [
 
 function Wordmark() {
   return (
-    <div className="wordmark" role="img" aria-label="MQ · Our Stories">
-      <svg className="wordmark-ornament" viewBox="0 0 200 24" fill="none" aria-hidden="true">
-        <path d="M14 18C42 18 51 7 78 12M122 12C149 7 158 18 186 18M100 2L103 9L110 12L103 15L100 22L97 15L90 12L97 9Z" />
-        <circle cx="83" cy="13" r="1" /><circle cx="117" cy="13" r="1" />
-      </svg>
-      <span className="wordmark-letters" aria-hidden="true">MQ</span>
-      <span className="wordmark-subtitle" aria-hidden="true">Our Stories</span>
+    <div className="wordmark" data-scene-layer="logo">
+      <div className="wordmark-image">
+        <img src="/scene/mq-logo.webp" alt="MQ · Our Stories" width="1536" height="1024" />
+      </div>
+      <p className="wordmark-caption">那些平凡的日子<span>因你而闪闪发光</span></p>
     </div>
+  );
+}
+
+function NavigationIcon({ home = false }: { home?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {home ? (
+        <path d="m2 10 10-8 10 8-2 2v9h-6v-7h-4v7H4v-9Z" fill="currentColor" stroke="none" />
+      ) : (
+        <><circle cx="12" cy="7" r="4" /><path d="M3.5 22v-3a8.5 8.5 0 0 1 17 0v3Z" /></>
+      )}
+    </svg>
   );
 }
 
@@ -33,12 +43,10 @@ export function ScenePage({ section }: { section: Section }) {
         <Wordmark />
         <div className="account-placeholder">
           <button type="button" disabled aria-describedby="account-note">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="8" r="3.2" />
-              <path d="M5.5 20v-2a6.5 6.5 0 0 1 13 0v2" />
-            </svg>
-            <span>登录 / 注册</span>
+            <NavigationIcon />
+            <span>登录</span>
           </button>
+          <button className="register-placeholder" type="button" disabled aria-describedby="account-note">注册</button>
           <span id="account-note">暂未开放</span>
         </div>
       </header>
@@ -46,6 +54,7 @@ export function ScenePage({ section }: { section: Section }) {
         {navigation.map((item) => (
           <Link key={item.section} href={item.href} aria-label={item.name}
             aria-current={section === item.section ? "page" : undefined}>
+            <NavigationIcon home={item.section === "mq"} />
             <span aria-hidden="true">{item.label}</span>
           </Link>
         ))}
