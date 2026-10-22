@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FeatherLetter } from "../reader/feather-letter";
+import { demoStories, type DemoStory } from "./demo-stories";
 import { Landscape } from "./landscape";
 
 type Section = "mq" | "m" | "q";
@@ -34,9 +39,39 @@ function NavigationIcon({ home = false }: { home?: boolean }) {
 
 export function ScenePage({ section }: { section: Section }) {
   const isHome = section === "mq";
+  const [story, setStory] = useState<DemoStory | null>(null);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const readerOpen = useRef(false);
+  const readerTrigger = useRef<HTMLButtonElement | null>(null);
+  const directoryTrigger = useRef<HTMLButtonElement | null>(null);
+
+  function openStory(next: DemoStory, trigger: HTMLButtonElement) {
+    // The synchronous guard also covers multiple clicks before React commits.
+    if (readerOpen.current) return;
+    readerOpen.current = true;
+    readerTrigger.current = trigger;
+    setDirectoryOpen(false);
+    setStory(next);
+  }
+
+  const closeStory = useCallback(() => {
+    setStory(null);
+    readerOpen.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (story || !readerTrigger.current) return;
+    // React must commit the restored visibility/disabled state before focus.
+    // A requestAnimationFrame from closeStory can run before that commit.
+    const trigger = readerTrigger.current;
+    const target = trigger.isConnected && trigger.getClientRects().length
+      ? trigger : document.querySelector<HTMLButtonElement>(".story-entry--star");
+    target?.focus({ preventScroll: true });
+    readerTrigger.current = null;
+  }, [story]);
 
   return (
-    <div className={`scene-page${isHome ? "" : " scene-page--construction"}`}>
+    <div className={`scene-page${isHome ? "" : " scene-page--construction"}${story ? " scene-page--reading" : ""}`}>
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <header className="scene-header" data-scene-layer="ui">
         <Wordmark />
@@ -59,12 +94,12 @@ export function ScenePage({ section }: { section: Section }) {
         ))}
       </nav>
       <main id="main-content" className="scene-content" tabIndex={-1}>
-        <Landscape interactive={isHome} />
+        <Landscape interactive={isHome} reading={Boolean(story)} onRead={openStory} />
         {isHome ? (
           <div className="sr-only">
             <h1>MQ · Our Stories</h1>
             <p>夜空下，情侣并肩坐在茂盛的青草山坡上，身旁燃着篝火。</p>
-            <p>当前为交互原型，故事标题均为合成演示。选择故事星或篝火可验证故事入口，阅读器尚未开放。</p>
+            <p>当前为交互原型，文章与图片均为合成演示。选择故事星或篝火，在羽毛信中阅读。</p>
           </div>
         ) : (
           <section className="construction" aria-labelledby="construction-title">
@@ -75,10 +110,25 @@ export function ScenePage({ section }: { section: Section }) {
           </section>
         )}
       </main>
+      {isHome ? <aside className="memory-directory" aria-label="辅助回忆目录">
+        <button ref={directoryTrigger} type="button" className="memory-toggle" aria-expanded={directoryOpen}
+          aria-controls="memory-list" onClick={() => setDirectoryOpen(!directoryOpen)}>
+          <span aria-hidden="true">✧</span> 回忆目录 <span aria-hidden="true">{directoryOpen ? "−" : "+"}</span>
+        </button>
+        <div id="memory-list" className="memory-list" hidden={!directoryOpen} onKeyDown={(event) => {
+          if (event.key === "Escape") { setDirectoryOpen(false); directoryTrigger.current?.focus(); }
+        }}>
+          <p>合成演示故事</p>
+          {demoStories.map((item) => <button key={item.id} type="button" onClick={() => {
+            if (directoryTrigger.current) openStory(item, directoryTrigger.current);
+          }}><span aria-hidden="true">{item.entry === "campfire" ? "♧" : "✧"}</span>{item.title}</button>)}
+        </div>
+      </aside> : null}
       <footer className="scene-footer" data-scene-layer="ui">
         <span>{isHome ? "交互原型 · 合成演示" : "建设中 · 演示"}</span>
         <span className="scene-footer-brand">MQ · Our Stories</span>
       </footer>
+      {story ? <FeatherLetter key={story.id} story={story} onClosed={closeStory} /> : null}
     </div>
   );
 }

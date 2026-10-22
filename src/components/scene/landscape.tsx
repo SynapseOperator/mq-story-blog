@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { campfireStory, starStories, type DemoStory } from "./demo-stories";
 import { useSceneMotion } from "./use-scene-motion";
 
@@ -21,14 +21,16 @@ function BackdropImage({ asset, priority }: { asset: "night-sky" | "grassy-hills
   );
 }
 
-export function Landscape({ interactive = false }: { interactive?: boolean }) {
-  const sceneRef = useSceneMotion(interactive);
+export function Landscape({ interactive = false, reading = false, onRead }: {
+  interactive?: boolean;
+  reading?: boolean;
+  onRead?: (story: DemoStory, trigger: HTMLButtonElement) => void;
+}) {
+  const sceneRef = useSceneMotion(interactive && !reading);
   const [hovered, setHovered] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const [selected, setSelected] = useState<DemoStory | null>(null);
-  const selectedTrigger = useRef<HTMLButtonElement | null>(null);
-  const active = focused ?? hovered;
+  const active = reading ? null : focused ?? hovered;
   const fireActive = active === campfireStory.id;
 
   useEffect(() => {
@@ -42,17 +44,14 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
     };
   }, []);
 
-  function closeSelection() {
-    selectedTrigger.current?.focus({ preventScroll: true });
-    setSelected(null);
-  }
-
   function entry(story: DemoStory) {
     const showTitle = active === story.id && dismissed !== story.id;
     return (
       <button type="button" className={`story-entry story-entry--${story.entry}`}
         data-story-id={story.id} data-highlighted={active === story.id}
         aria-label={`合成演示故事：${story.title}`}
+        aria-haspopup="dialog"
+        disabled={reading}
         aria-describedby={showTitle ? `${story.id}-title` : undefined}
         onPointerEnter={(event) => {
           if (event.pointerType === "mouse" && matchMedia("(hover: hover)").matches) {
@@ -71,7 +70,12 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
           }
         }}
         onBlur={() => setFocused(null)}
-        onClick={(event) => { selectedTrigger.current = event.currentTarget; setSelected(story); }}>
+        onClick={(event) => {
+          if (reading) return;
+          setHovered(null);
+          setFocused(null);
+          onRead?.(story, event.currentTarget);
+        }}>
         {story.entry === "star" ? <span className="story-star" aria-hidden="true" /> : null}
         <span id={`${story.id}-title`} className="story-tooltip" role="tooltip" hidden={!showTitle}>
           <small>合成演示</small>{story.title}
@@ -85,11 +89,9 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
       data-fire-active={fireActive} onPointerLeave={() => setHovered(null)}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          if (selected) closeSelection();
           setDismissed(active);
           setHovered(null);
           setFocused(null);
-          setSelected(null);
         }
       }}>
       <div className="scene-artboard">
@@ -140,13 +142,6 @@ export function Landscape({ interactive = false }: { interactive?: boolean }) {
           {starStories.map((story, index) => <div key={story.id} className={`story-position story-position--${index + 1}`}>
             {entry(story)}
           </div>)}
-        </div>
-        <div className="story-selection" role="status" aria-live="polite" aria-atomic="true" data-selected-story={selected?.id}>
-          {selected ? <>
-            <span>合成演示 · {selected.title}</span>
-            <small>入口已选中，阅读器尚未开放</small>
-            <button type="button" aria-label="关闭演示入口提示" onClick={closeSelection}>×</button>
-          </> : null}
         </div>
       </> : null}
     </div>
