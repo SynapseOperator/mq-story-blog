@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FeatherLetter } from "../reader/feather-letter";
 import { demoStories, type DemoStory } from "./demo-stories";
 import { Landscape } from "./landscape";
@@ -57,14 +57,18 @@ export function ScenePage({ section }: { section: Section }) {
   const closeStory = useCallback(() => {
     setStory(null);
     readerOpen.current = false;
-    requestAnimationFrame(() => {
-      const trigger = readerTrigger.current;
-      // A resize can hide the mobile directory while the letter is open.
-      const target = trigger?.isConnected && trigger.getClientRects().length
-        ? trigger : document.querySelector<HTMLButtonElement>(".story-entry--star");
-      target?.focus({ preventScroll: true });
-    });
   }, []);
+
+  useEffect(() => {
+    if (story || !readerTrigger.current) return;
+    // React must commit the restored visibility/disabled state before focus.
+    // A requestAnimationFrame from closeStory can run before that commit.
+    const trigger = readerTrigger.current;
+    const target = trigger.isConnected && trigger.getClientRects().length
+      ? trigger : document.querySelector<HTMLButtonElement>(".story-entry--star");
+    target?.focus({ preventScroll: true });
+    readerTrigger.current = null;
+  }, [story]);
 
   return (
     <div className={`scene-page${isHome ? "" : " scene-page--construction"}${story ? " scene-page--reading" : ""}`}>

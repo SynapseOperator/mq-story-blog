@@ -1,34 +1,32 @@
 # 羽毛信独立装饰素材
 
-本目录服务于 Issue #4 的交互原型。素材通过内置 `image_gen` 工具生成，参考已确认 B 的暖米黄色、自然旧纸、磨损边缘和克制羽毛方向；不是 B 的逐像素切片，也没有复制其中的文字或 UI。最终视觉仍待产品负责人和独立开发者评审。
+本目录用于 Issue #4 / Draft PR #7。当前素材来自产品负责人于 2026-10-22 提供的 **《MQ 羽毛信视觉精修交接包 v1.0》**（附件名 `MQ羽毛信视觉.zip`）。包内说明这些是独立生成的 RGBA 图层，并非目标截图的原生 PSD/Figma 拆层，不能保证像素级还原。此前阅读器主体与交互基本认可，本轮美术精修仍等待产品负责人和另一位开发者验收。
 
-| 文件 | 像素 / 编码 | 用途 |
-|---|---|---|
-| `aged-paper-v2.webp` | 1024×1536，带 alpha 的无损 WebP，1,583,956 字节 | 无字纸张；CSS 九片边缘保持窄磨损边，同一有界装饰层承载整个阅读流 |
-| `quill.webp` | 1024×1536，带 alpha 的无损 WebP，801,682 字节 | 独立羽毛装饰，不拦截交互；小屏缩小并放到文字安全区外 |
+## 运行时文件及来源
 
-两项合计约 2.39 MB，随阅读层出现加载；首页静态场景素材未替换。原 PNG 保留在本机图像生成目录，不重复提交。仅使用 Sharp 做无损格式转换，没有插值增大分辨率、程序抠图或人为重绘。纸张最初大折角侵入文字安全区，因此通过第二次内置图像编辑去除；最终版没有跨正文折痕。CSS 依视口调整纸面外框，文章长度只改变内容滚动高度，不改变纸张尺寸。
+下列文件从交接包同名 WebP **逐字节复制，仅重命名**，未重绘、抠图、放大或再次有损编码。源文件路径均相对于包内 `MQ_羽毛信视觉精修交接包_v1.0/`。
 
-文章配图复用 `/scene/night-sky.webp`，在 UI 的 alt/图注中明确标为合成演示，不是真实旅行照片。点赞、留言及正文均为可访问的 DOM，不在素材中烘焙。
+| 网站文件 | 交接包源路径 | 像素 / 大小 | 用途 |
+|---|---|---|---|
+| `parchment.webp` | `assets/letter/parchment-trimmed.webp` | 980×1447 / 1,645,242 B | 有界信纸九宫格及同源中心纹理 |
+| `quill.webp` | `assets/letter/quill-trimmed.webp` | 981×1517 / 587,154 B | 桌面右侧上段羽毛；手机缩小放在顶部安全区 |
+| `butterfly-postmark.webp` | `assets/letter/butterfly-postmark-trimmed.webp` | 1254×1251 / 724,818 B | 顶部右侧邮票与邮戳，不占正文或关闭按钮热区 |
+| `divider-heart.webp` | `assets/ornaments/divider-heart.webp` | 945×84 / 20,104 B | 正文与轻量互动行之间的细分隔 |
+| `leaf-sprig.webp` | `assets/ornaments/leaf-sprig-small.webp` | 330×402 / 69,242 B | 书信收尾处的小叶饰，不再叠加页脚藤蔓等素材 |
 
-与 B 的差异：纸张纤维、破边和羽毛为新制变体；没有复制邮戳/蝴蝶印章、概念图文字、照片和数字；中文字体采用本机宋体/楷体回退。移动端目录、纸张尺寸、字体及动画节奏仍待评审。参考图片的背景/UI 痕迹不覆盖 PRD：读信继续使用 A 的已实现 MQ 场景并隐藏导航和普通账号入口。
+全部为保留 alpha 的无损 WebP，合计 **3,046,560 B（约 3.05 MB）**。纸张、邮戳和装饰 alpha 范围 0–255，羽毛为 0–254。三个主体 WebP 与包内同名 PNG 的 alpha 逐像素相同，alpha>0 区域的 RGB 也一致。完全透明像素中存在不可见颜色，正常浏览器合成不会形成彩色边块；不需要为查看器异常重制素材。
 
-## 实际生成提示词
+原 ZIP、PNG 重复件、完整装饰集、目标/现状截图及临时浏览器证据均留在仓库外。旧 `aged-paper-v2.webp` 已由 `parchment.webp` 替换并移除；先前内置 imagegen 素材及提示词可在提交 `e65d115` 中追溯，本轮没有再次生成美术或增加依赖。
 
-### 纸张初稿
+## 布局与数据边界
 
-```text
-Create a production-ready web decorative asset: one blank nineteenth-century European romantic letter paper, straight-on flat orthographic, portrait 2:3 proportions, filling almost all of the canvas with a narrow transparent margin. Warm pale creamy beige center (#f5e1b9), finely detailed natural handmade paper fibers and very delicate mottling; richly convincing frayed irregular deckle edges, worn brown edges and gently lifted/torn upper-left corner. Keep the center 80% very quiet and legible for Chinese text that will be rendered separately. Aged elegant love letter, not a treasure map, not burnt black. Absolutely NO text, NO handwriting, NO symbols, NO stamps, NO feathers, NO photographs, NO buttons, NO folds across the paper, NO scroll rods, NO background scene. True transparent alpha around the entire paper. Very high quality tactile realistic illustration, softly lit. The only object is the sheet of blank paper.
-```
+- `letter.css` 对纸张使用九宫格：源切片 top/right/bottom/left 为 `180/100/140/120` 像素，中心使用同源 `fill` 避免拼接色差；边缘显示宽度按桌面/手机单独调整。参数是本轮原型试验值。
+- 纸张尺寸只依视口变化；短文和长文使用同样的有界外框。文章、图片、点赞、留言共用一条 `.letter-scroll` 阅读流，不以长文章拉长纸纹。
+- 羽毛、邮戳与纸边属于不接收指针的装饰层。桌面邮戳的可见墨迹留在正文/滚动条外；窄屏移到标题上方，不压缩中文正文列宽。关闭热区维持 44×44px。
+- 文章配图继续复用 `/scene/night-sky.webp`，alt/图注明确标注合成演示。正文、照片、评论与控件均为真实 DOM，点赞和留言预览仅存在于本次阅读状态，不向服务器发送。
 
-### 纸张定向修正
+## 与目标图的保留差异
 
-```text
-Edit only the upper-left corner of this blank letter-paper asset. Remove the large triangular folded / peeled-back corner completely. Continue the same quiet pale beige paper surface right up into that upper-left area, with only a narrow irregular worn deckle edge consistent with the other three sides. Preserve the exact warm colors, subtle fine fiber texture, portrait proportions, natural narrow worn brown perimeter and transparent alpha background. No new elements, no text, no stamps, no feather. The paper must have no large folds anywhere; its central writing area including the top left must remain flat and legible.
-```
+独立纸张的褶皱、纤维和羽毛/邮戳细节并非目标原图的精确切片。保留现有故事 ID、完整演示正文和合成配图，不复制图中的照片、姓名、日期或点赞数字；长文和留言需要内部滚动，不能为了首屏容纳全部内容而缩小文字。中文使用系统宋体/楷体回退，纸张尺寸、字体、目录样式及动效仍待产品评审。
 
-### 独立羽毛
-
-```text
-A single delicate antique writing feather, an isolated quill web decoration. The feather is slender with beautifully detailed warm ivory and muted honey-brown barbs, gently curved shaft pointing down-left and feather tip toward upper-right, around 25 degrees from vertical. Straight-on realistic tactile illustration, soft warm light, nineteenth-century romantic letter aesthetic. Feather only, NOT an inkwell, no paper, no text, no other objects, no frame, no cast-shadow rectangle. Fully transparent alpha background around the feather, clean natural fine edges. Vertical asset, fit the entire feather with very small transparent padding, restrained sepia colors.
-```
+目标图保留的导航与普通账号入口不符合最终 PRD。本实现阅读时隐藏这些入口，并沿用已验收 A 场景作为变暗背景。技术验证不代表视觉验收。

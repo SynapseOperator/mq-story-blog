@@ -1,4 +1,4 @@
-/* B-inspired prototype parameters. Size, typography, dimming, timing and directory
+/* User-supplied refinement assets; prototype parameters. Typography, dimming, timing and directory
    placement remain subject to product review; they are not new PRD constraints. */
 .scene-page--reading .scene-header,
 .scene-page--reading .scene-nav,
@@ -18,55 +18,60 @@
 .letter-dialog[open] { display: grid; place-items: center; }
 .letter-dialog::backdrop { background: rgb(3 9 17 / .6); animation: letter-dim var(--letter-open-duration) ease both; }
 .letter-dialog[data-phase="closing"]::backdrop { animation: letter-undim var(--letter-close-duration) ease both; }
-.letter-sheet { position: relative; width: min(680px, 78vw); height: min(900px, 86dvh); filter: drop-shadow(0 18px 34px #0009); }
-.letter-sheet::before { content: ""; position: absolute; inset: 48px; background: #f3dfbc; pointer-events: none; }
+.letter-sheet { position: relative; width: min(640px, 78vw); height: min(928px, 90dvh); filter: drop-shadow(0 18px 34px #0009); }
+.letter-sheet::before { content: ""; position: absolute; inset: 80px; background: #efdab4; pointer-events: none; }
 .letter-paper {
   position: absolute; inset: 0; user-select: none; pointer-events: none;
-  /* Nine-slice edges retain a narrow worn perimeter. The bounded paper adapts
-     only to the viewport; article length never changes its dimensions. */
-  border: 32px solid transparent;
-  border-image: url("/letter/aged-paper-v2.webp") 70 60 fill / 32px / 0 stretch;
+  /* 980×1447 source. Preserve the layered corners and use the same source fill
+     to avoid seams. Only the viewport changes this bounded frame, never prose. */
+  border: 100px solid transparent;
+  border-image: url("/letter/parchment.webp") 180 100 140 120 fill / 112px 62px 87px 75px / 0 stretch;
 }
-.letter-feather { position: absolute; top: 45px; right: -64px; width: 150px; height: 225px; object-fit: contain; pointer-events: none; user-select: none; z-index: 2; filter: sepia(.15); }
-.letter-close { position: absolute; z-index: 3; top: 17px; right: 19px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: none; background: none; color: #573b26; font: 32px/1 Georgia, serif; cursor: pointer; border-radius: 50%; }
+.letter-feather, .letter-postmark { position: absolute; object-fit: contain; pointer-events: none; user-select: none; z-index: 2; }
+.letter-feather { top: 58px; right: -76px; width: 154px; height: 238px; filter: drop-shadow(2px 4px 3px #50341f30); }
+/* Keep the visible ink beyond the text AND scrollbar when content scrolls. */
+.letter-postmark { top: 44px; right: 0; width: 108px; height: 108px; opacity: .83; }
+.letter-close { position: absolute; z-index: 3; top: 20px; right: 23px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: none; background: none; color: #573b26; font: 32px/1 Georgia, serif; cursor: pointer; border-radius: 50%; }
 .letter-close:hover { background: #895d2a18; }
 .letter-dialog button:focus-visible, .letter-dialog textarea:focus-visible, .letter-scroll:focus-visible { outline: 2px solid #7c4927; outline-offset: 3px; }
-.letter-scroll { position: absolute; inset: 52px 45px 34px 48px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #99744070 transparent; padding: 0 16px 15px; }
-.letter-heading { margin-bottom: 25px; }
-.letter-demo-note { margin: 0 0 12px; color: #765638; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10px; letter-spacing: .12em; }
-.letter-heading h2 { font-family: "STKaiti", "KaiTi", "Kaiti SC", "Songti SC", SimSun, serif; font-weight: 500; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.5; letter-spacing: .09em; margin: 0 0 15px; padding-right: 15px; color: #3c281b; }
-.letter-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding-top: 13px; border-top: 1px solid #8f602951; margin: 0; font-size: 11px; color: #795638; line-height: 1.7; }
-.letter-prose { font-size: 17px; line-height: 1.95; letter-spacing: .03em; overflow-wrap: anywhere; display: flow-root; }
-.letter-prose blockquote { position: relative; color: #855732; margin: 0 0 24px; padding: 0 13px 0 24px; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 20px; line-height: 1.8; }
+.letter-scroll { position: absolute; inset: 58px 94px 42px 58px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #99744070 transparent; padding: 0 12px 16px 8px; }
+.letter-heading { margin-bottom: 19px; }
+.letter-demo-note { margin: 7px 0 0; color: #856440; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10px; letter-spacing: .05em; }
+.letter-heading h2 { font-family: "STKaiti", "KaiTi", "Kaiti SC", "Songti SC", SimSun, serif; font-weight: 500; font-size: clamp(27px, 2.2vw, 33px); line-height: 1.45; letter-spacing: .08em; margin: 0 0 10px; color: #3c281b; }
+.letter-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding-top: 10px; border-top: 1px solid #8f602951; margin: 0; font-size: 11px; color: #795638; line-height: 1.7; }
+.letter-prose { font-size: 16px; line-height: 1.9; letter-spacing: .025em; overflow-wrap: anywhere; display: flow-root; }
+.letter-prose blockquote { position: relative; color: #855732; margin: 0 0 20px; padding: 0 4px 0 20px; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 19px; line-height: 1.75; }
 .letter-prose blockquote::before { content: "“"; position: absolute; left: 0; top: -7px; color: #a3784d; font: 36px Georgia, serif; }
-.letter-prose p { margin: 0 0 16px; }
-.letter-photo { position: relative; float: left; width: 49%; margin: 12px 24px 18px 0; padding: 8px 8px 6px; background: #f1d9b3; border: 1px solid #b38b5666; box-shadow: 1px 3px 5px #54321c40; transform: rotate(-2deg); }
+.letter-prose p { margin: 0 0 12px; }
+.letter-photo { position: relative; float: left; width: 48%; margin: 6px 22px 14px 3px; padding: 7px 7px 6px; background: #f4e2c2; border: 1px solid #b38b5666; box-shadow: 1px 3px 5px #54321c40; transform: rotate(-2deg); }
 .letter-photo::before { content: ""; position: absolute; z-index: 1; left: -12px; top: -6px; width: 52px; height: 20px; transform: rotate(-30deg); background: #c7a16b66; }
 .letter-photo img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
 .letter-photo figcaption { padding-top: 6px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 9px; line-height: 1.6; letter-spacing: 0; color: #795b3f; }
 .letter-image-fallback { min-height: 120px; display: grid; place-items: center; padding: 12px; font-size: 13px; line-height: 1.7; background: #d8bc90; }
-.letter-prose .letter-signature { clear: both; padding-top: 16px; text-align: right; color: #89603b; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 18px; }
-.letter-divider { display: flex; align-items: center; gap: 14px; color: #9b6e42; font-size: 12px; margin: 22px 0 14px; }
-.letter-divider::before, .letter-divider::after { content: ""; height: 1px; background: #a9814f5c; flex: 1; }
-.letter-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 15px; margin-bottom: 27px; }
+.letter-prose .letter-signature { clear: both; padding: 17px 37px 0 0; text-align: right; color: #89603b; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 17px; background: url("/letter/leaf-sprig.webp") right center / 28px auto no-repeat; }
+.letter-divider { height: 24px; margin: 15px 0 6px; background: url("/letter/divider-heart.webp") center / 100% 100% no-repeat; opacity: .8; }
+.letter-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 14px; margin-bottom: 19px; }
 .letter-like { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: #713e2a; font: 13px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
 .letter-like > span:first-child { font: 27px Georgia, serif; }
 .letter-like[aria-pressed="true"] { color: #9e362c; }
-.letter-reactions > span { color: #886a4b; font: 10px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
-.letter-comments h3 { margin: 0 0 10px; font: 500 24px/1.4 "STKaiti", "KaiTi", "Kaiti SC", SimSun, serif; letter-spacing: .15em; }
+.letter-reactions > span { color: #886a4b; font: 11px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
+.letter-comment-count { padding-left: 14px; border-left: 1px solid #a9814f5c; }
+.letter-reactions .letter-reaction-note { margin-left: auto; font-size: 10px; }
+.letter-comments h3 { margin: 0 0 8px; font: 500 23px/1.4 "STKaiti", "KaiTi", "Kaiti SC", SimSun, serif; letter-spacing: .15em; }
 .letter-comments h3::before { content: "❧"; margin-right: 12px; color: #996c3d; }
-.letter-comments > p { margin: 0 0 15px; font-size: 12px; line-height: 1.9; color: #80603f; }
-.letter-comments textarea { display: block; width: 100%; min-height: 100px; max-height: 230px; resize: vertical; padding: 13px; color: #49311f; background: #fff3d72b; border: 1px solid #99724599; border-radius: 3px; font: 16px/1.8 "Songti SC", SimSun, serif; }
+.letter-comments > p { margin: 0 0 12px; font-size: 11px; line-height: 1.85; color: #80603f; }
+.letter-comments textarea { display: block; width: 100%; min-height: 88px; max-height: 230px; resize: vertical; padding: 11px 13px; color: #49311f; background: #fff3d71a; border: 1px solid #99724580; border-radius: 3px; box-shadow: inset 0 1px 4px #9463350a; font: 16px/1.8 "Songti SC", SimSun, serif; }
 .letter-comments textarea::placeholder { color: #8f7457; opacity: 1; }
 .letter-comment-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .letter-comment-actions > span { font: 10px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #80603f; }
-.letter-comment-actions button { border: 1px solid #805231; border-radius: 3px; background: #8a5d39; color: #fff0d7; min-height: 44px; padding: 10px 14px; font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
+.letter-comment-actions button { border: 1px solid #80523188; border-radius: 3px; background: #8a5d39; color: #fff0d7; min-height: 44px; padding: 9px 13px; font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
 .letter-comment-actions button:disabled { opacity: .55; cursor: default; }
 .letter-comment-preview:empty { display: none; }
-.letter-comment-preview { margin-top: 22px; padding: 14px; background: #fff0cd55; border-left: 2px solid #a77a44; }
+.letter-comment-preview { margin-top: 20px; padding: 12px 0 12px 14px; border-left: 2px solid #a77a4466; }
 .letter-comment-preview h4, .letter-comment-preview small { font: 11px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #805c38; margin: 0; }
 .letter-comment-preview p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.9; margin: 10px 0; }
-.letter-sample-comment { margin-top: 28px; border-top: 1px solid #a9814f40; padding-top: 16px; font-size: 13px; line-height: 1.8; }
+.letter-sample-comment { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; border-block: 1px solid #a9814f40; padding-block: 15px 9px; font-size: 13px; line-height: 1.8; }
+.letter-sample-comment .letter-comment-avatar { display: grid; place-items: center; flex: 0 0 32px; height: 32px; margin: 3px 0 0; border-radius: 50%; color: #ead7b3; background: #625649; font: 16px "STKaiti", "KaiTi", serif; }
 .letter-sample-comment p { margin: 0 0 8px; }
 .letter-sample-comment strong { font-weight: 500; }
 .letter-sample-comment span { font-size: 10px; margin-left: 12px; color: #94714d; }
@@ -99,24 +104,28 @@
 }
 @media (max-width: 800px) {
   .letter-sheet { width: calc(100vw - 24px); height: min(960px, calc(100dvh - 36px)); }
-  .letter-scroll { inset: 48px 23px 29px 23px; padding: 0 8px 16px; }
+  .letter-sheet::before { inset: 44px; }
+  .letter-paper { border-width: 55px; border-image-width: 68px 30px 53px 38px; }
+  .letter-scroll { inset: 76px 23px 34px 26px; padding: 0 9px 16px; }
   .letter-close { top: 14px; right: 12px; }
-  .letter-feather { width: 48px; height: 100px; right: -8px; top: 65px; opacity: .8; }
-  .letter-heading h2 { font-size: 27px; padding-right: 27px; }
-  .letter-heading { margin-bottom: 22px; }
+  .letter-feather { width: 36px; height: 60px; right: 55px; top: 12px; opacity: .85; }
+  .letter-postmark { width: 78px; height: 78px; right: 79px; top: -3px; opacity: .8; }
+  .letter-heading h2 { font-size: 26px; letter-spacing: .06em; }
+  .letter-heading { margin-bottom: 18px; }
   .letter-prose { font-size: 16px; line-height: 2; letter-spacing: .02em; }
-  .letter-prose blockquote { font-size: 19px; padding-right: 13px; }
-  .letter-photo { float: none; width: 88%; margin: 22px auto 25px; }
+  .letter-prose blockquote { font-size: 18px; padding-right: 0; }
+  .letter-photo { float: none; width: 90%; margin: 20px auto 24px; }
   .letter-meta { gap: 4px 12px; font-size: 10px; }
   .letter-reactions { gap: 2px 12px; }
+  .letter-reactions .letter-reaction-note { width: 100%; margin-left: 0; }
   .letter-comments h3 { font-size: 23px; }
 }
 @media (max-height: 540px) {
   .letter-sheet { height: calc(100dvh - 20px); }
-  .letter-scroll { inset-block: 35px 24px; }
-  .letter-feather { height: 100px; width: 50px; top: 45px; right: -8px; }
+  .letter-scroll { inset-block: 52px 24px; }
+  .letter-feather { height: 40px; width: 26px; top: 8px; right: 58px; }
+  .letter-postmark { width: 58px; height: 58px; top: -4px; right: 83px; }
   .letter-close { top: 7px; right: 12px; }
-  .letter-heading h2 { padding-right: 26px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .letter-dialog *, .letter-dialog::backdrop { animation: none !important; transition: none !important; }

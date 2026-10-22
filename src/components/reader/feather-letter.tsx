@@ -129,35 +129,37 @@ export function FeatherLetter({ story, onClosed }: { story: DemoStory; onClosed:
       <div className="letter-sheet">
         <div className="letter-paper" aria-hidden="true" />
         <img className="letter-feather" src="/letter/quill.webp" alt="" aria-hidden="true" />
+        <img className="letter-postmark" src="/letter/butterfly-postmark.webp" alt="" aria-hidden="true" />
         <button ref={closeRef} type="button" className="letter-close" aria-label="关闭羽毛信"
           disabled={phase !== "reading" || confirming} onClick={requestClose}>×</button>
         <div className="letter-scroll" tabIndex={0} aria-label="信纸阅读内容" inert={phase !== "reading" || confirming}>
           <header className="letter-heading">
-            <p id="letter-demo-note" className="letter-demo-note">合成演示 · 非真实回忆</p>
             <h2 id="letter-title">{story.title}</h2>
             <p className="letter-meta"><span>{story.date}</span><span>MQ 演示书信</span></p>
+            <p id="letter-demo-note" className="letter-demo-note">合成演示 · 非真实回忆</p>
           </header>
           <article className="letter-prose" aria-label={story.title}>
             <blockquote>{story.introduction}</blockquote>
-            {story.paragraphs.slice(0, 2).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+            <p>{story.paragraphs[0]}</p>
             <figure className="letter-photo">
               {imageFailed ? <div className="letter-image-fallback" role="status">演示配图暂时无法显示，正文仍可继续阅读。</div> :
                 <img src={story.image.src} alt={story.image.alt} width="768" height="512" onError={() => setImageFailed(true)} />}
               <figcaption>{story.image.caption}</figcaption>
             </figure>
-            {story.paragraphs.slice(2).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+            {story.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
             <p className="letter-signature">{story.closing}</p>
           </article>
-          <div className="letter-divider" aria-hidden="true"><span>♥</span></div>
+          <div className="letter-divider" aria-hidden="true" />
           <div className="letter-reactions">
             <button type="button" className="letter-like" aria-pressed={liked} onClick={() => setLiked(!liked)}>
               <span aria-hidden="true">{liked ? "♥" : "♡"}</span>演示点赞 <span>{liked ? 1 : 0}</span>
             </button>
-            <span>仅本次阅读有效，不会发送</span>
+            <span className="letter-comment-count">留言示例 1</span>
+            <span className="letter-reaction-note">仅本次阅读有效，不会发送</span>
           </div>
           <section className="letter-comments" aria-labelledby="letter-comments-title">
             <h3 id="letter-comments-title">留言</h3>
-            <p id="letter-comment-help">写下此刻的想法。此处仅供演示，内容不会发送、公开或保存。</p>
+            <p id="letter-comment-help">写下此刻的想法。仅供演示，不会发送、公开或保存；真实留言审核功能尚未接入。</p>
             <form onSubmit={(event) => { event.preventDefault(); if (draft.trim()) setPreview(draft); }}>
               <label className="sr-only" htmlFor="letter-comment">演示留言</label>
               <textarea id="letter-comment" value={draft} rows={3} maxLength={500}
@@ -172,8 +174,11 @@ export function FeatherLetter({ story, onClosed }: { story: DemoStory; onClosed:
               {preview !== null ? <><h4>你的演示预览 · 尚未发送</h4><p>{preview}</p><small>输入仍保留，关闭时会询问是否放弃。</small></> : null}
             </div>
             <div className="letter-sample-comment">
-              <p><strong>演示访客</strong><span>合成留言示例</span></p>
-              <p>愿每一个平凡的夜晚，都有值得收藏的微光。</p>
+              <span className="letter-comment-avatar" aria-hidden="true">星</span>
+              <div>
+                <p><strong>演示访客</strong><span>合成留言示例</span></p>
+                <p>愿每一个平凡的夜晚，都有值得收藏的微光。</p>
+              </div>
             </div>
           </section>
           <p className="letter-end">这一页的故事，暂且写到这里。</p>
