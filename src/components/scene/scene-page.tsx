@@ -38,7 +38,6 @@ export function ScenePage({ section }: { section: Section }) {
   return (
     <div className={`scene-page${isHome ? "" : " scene-page--construction"}`}>
       <a className="skip-link" href="#main-content">跳到主要内容</a>
-      <Landscape />
       <header className="scene-header" data-scene-layer="ui">
         <Wordmark />
         <div className="account-placeholder">
@@ -60,11 +59,12 @@ export function ScenePage({ section }: { section: Section }) {
         ))}
       </nav>
       <main id="main-content" className="scene-content" tabIndex={-1}>
+        <Landscape interactive={isHome} />
         {isHome ? (
           <div className="sr-only">
             <h1>MQ · Our Stories</h1>
             <p>夜空下，情侣并肩坐在茂盛的青草山坡上，身旁燃着篝火。</p>
-            <p>当前为静态视觉原型。星空和篝火尚未开放交互。</p>
+            <p>当前为交互原型，故事标题均为合成演示。选择故事星或篝火可验证故事入口，阅读器尚未开放。</p>
           </div>
         ) : (
           <section className="construction" aria-labelledby="construction-title">
@@ -76,7 +76,7 @@ export function ScenePage({ section }: { section: Section }) {
         )}
       </main>
       <footer className="scene-footer" data-scene-layer="ui">
-        <span>静态视觉原型 · 演示</span>
+        <span>{isHome ? "交互原型 · 合成演示" : "建设中 · 演示"}</span>
         <span className="scene-footer-brand">MQ · Our Stories</span>
       </footer>
     </div>
