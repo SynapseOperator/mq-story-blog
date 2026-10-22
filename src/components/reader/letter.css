@@ -1,0 +1,123 @@
+/* B-inspired prototype parameters. Size, typography, dimming, timing and directory
+   placement remain subject to product review; they are not new PRD constraints. */
+.scene-page--reading .scene-header,
+.scene-page--reading .scene-nav,
+.scene-page--reading .scene-footer,
+.scene-page--reading .skip-link,
+.scene-page--reading .memory-directory { visibility: hidden; pointer-events: none; }
+.scene-page--reading .story-entry { pointer-events: none; }
+
+.memory-directory { display: none; }
+.letter-dialog {
+  position: fixed; inset: 0; width: 100%; height: 100dvh;
+  max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+  overflow: hidden; background: transparent; color: #49311f; color-scheme: light;
+  font-family: "Songti SC", "STSong", "SimSun", serif;
+  overscroll-behavior: contain;
+}
+.letter-dialog[open] { display: grid; place-items: center; }
+.letter-dialog::backdrop { background: rgb(3 9 17 / .6); animation: letter-dim var(--letter-open-duration) ease both; }
+.letter-dialog[data-phase="closing"]::backdrop { animation: letter-undim var(--letter-close-duration) ease both; }
+.letter-sheet { position: relative; width: min(680px, 78vw); height: min(900px, 86dvh); filter: drop-shadow(0 18px 34px #0009); }
+.letter-sheet::before { content: ""; position: absolute; inset: 48px; background: #f3dfbc; pointer-events: none; }
+.letter-paper {
+  position: absolute; inset: 0; user-select: none; pointer-events: none;
+  /* Nine-slice edges retain a narrow worn perimeter. The bounded paper adapts
+     only to the viewport; article length never changes its dimensions. */
+  border: 32px solid transparent;
+  border-image: url("/letter/aged-paper-v2.webp") 70 60 fill / 32px / 0 stretch;
+}
+.letter-feather { position: absolute; top: 45px; right: -64px; width: 150px; height: 225px; object-fit: contain; pointer-events: none; user-select: none; z-index: 2; filter: sepia(.15); }
+.letter-close { position: absolute; z-index: 3; top: 17px; right: 19px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: none; background: none; color: #573b26; font: 32px/1 Georgia, serif; cursor: pointer; border-radius: 50%; }
+.letter-close:hover { background: #895d2a18; }
+.letter-dialog button:focus-visible, .letter-dialog textarea:focus-visible, .letter-scroll:focus-visible { outline: 2px solid #7c4927; outline-offset: 3px; }
+.letter-scroll { position: absolute; inset: 52px 45px 34px 48px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #99744070 transparent; padding: 0 16px 15px; }
+.letter-heading { margin-bottom: 25px; }
+.letter-demo-note { margin: 0 0 12px; color: #765638; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 10px; letter-spacing: .12em; }
+.letter-heading h2 { font-family: "STKaiti", "KaiTi", "Kaiti SC", "Songti SC", SimSun, serif; font-weight: 500; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.5; letter-spacing: .09em; margin: 0 0 15px; padding-right: 15px; color: #3c281b; }
+.letter-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding-top: 13px; border-top: 1px solid #8f602951; margin: 0; font-size: 11px; color: #795638; line-height: 1.7; }
+.letter-prose { font-size: 17px; line-height: 1.95; letter-spacing: .03em; overflow-wrap: anywhere; display: flow-root; }
+.letter-prose blockquote { position: relative; color: #855732; margin: 0 0 24px; padding: 0 13px 0 24px; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 20px; line-height: 1.8; }
+.letter-prose blockquote::before { content: "“"; position: absolute; left: 0; top: -7px; color: #a3784d; font: 36px Georgia, serif; }
+.letter-prose p { margin: 0 0 16px; }
+.letter-photo { position: relative; float: left; width: 49%; margin: 12px 24px 18px 0; padding: 8px 8px 6px; background: #f1d9b3; border: 1px solid #b38b5666; box-shadow: 1px 3px 5px #54321c40; transform: rotate(-2deg); }
+.letter-photo::before { content: ""; position: absolute; z-index: 1; left: -12px; top: -6px; width: 52px; height: 20px; transform: rotate(-30deg); background: #c7a16b66; }
+.letter-photo img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
+.letter-photo figcaption { padding-top: 6px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 9px; line-height: 1.6; letter-spacing: 0; color: #795b3f; }
+.letter-image-fallback { min-height: 120px; display: grid; place-items: center; padding: 12px; font-size: 13px; line-height: 1.7; background: #d8bc90; }
+.letter-prose .letter-signature { clear: both; padding-top: 16px; text-align: right; color: #89603b; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 18px; }
+.letter-divider { display: flex; align-items: center; gap: 14px; color: #9b6e42; font-size: 12px; margin: 22px 0 14px; }
+.letter-divider::before, .letter-divider::after { content: ""; height: 1px; background: #a9814f5c; flex: 1; }
+.letter-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 15px; margin-bottom: 27px; }
+.letter-like { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: #713e2a; font: 13px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
+.letter-like > span:first-child { font: 27px Georgia, serif; }
+.letter-like[aria-pressed="true"] { color: #9e362c; }
+.letter-reactions > span { color: #886a4b; font: 10px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
+.letter-comments h3 { margin: 0 0 10px; font: 500 24px/1.4 "STKaiti", "KaiTi", "Kaiti SC", SimSun, serif; letter-spacing: .15em; }
+.letter-comments h3::before { content: "❧"; margin-right: 12px; color: #996c3d; }
+.letter-comments > p { margin: 0 0 15px; font-size: 12px; line-height: 1.9; color: #80603f; }
+.letter-comments textarea { display: block; width: 100%; min-height: 100px; max-height: 230px; resize: vertical; padding: 13px; color: #49311f; background: #fff3d72b; border: 1px solid #99724599; border-radius: 3px; font: 16px/1.8 "Songti SC", SimSun, serif; }
+.letter-comments textarea::placeholder { color: #8f7457; opacity: 1; }
+.letter-comment-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.letter-comment-actions > span { font: 10px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #80603f; }
+.letter-comment-actions button { border: 1px solid #805231; border-radius: 3px; background: #8a5d39; color: #fff0d7; min-height: 44px; padding: 10px 14px; font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
+.letter-comment-actions button:disabled { opacity: .55; cursor: default; }
+.letter-comment-preview:empty { display: none; }
+.letter-comment-preview { margin-top: 22px; padding: 14px; background: #fff0cd55; border-left: 2px solid #a77a44; }
+.letter-comment-preview h4, .letter-comment-preview small { font: 11px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #805c38; margin: 0; }
+.letter-comment-preview p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.9; margin: 10px 0; }
+.letter-sample-comment { margin-top: 28px; border-top: 1px solid #a9814f40; padding-top: 16px; font-size: 13px; line-height: 1.8; }
+.letter-sample-comment p { margin: 0 0 8px; }
+.letter-sample-comment strong { font-weight: 500; }
+.letter-sample-comment span { font-size: 10px; margin-left: 12px; color: #94714d; }
+.letter-end { margin: 27px 0 0; text-align: center; color: #9b7c57; font: 12px/1.8 "STKaiti", "KaiTi", "Kaiti SC", serif; }
+.letter-discard { width: min(380px, calc(100% - 44px)); padding: 26px; margin: auto; border: 1px solid #aa8255; border-radius: 4px; color: #49311f; background: #f3dfbc; box-shadow: 0 10px 50px #0006; }
+.letter-discard::backdrop { background: #100c085c; }
+.letter-discard h2 { font-size: 23px; font-weight: 500; margin: 0 0 12px; }
+.letter-discard p { font-size: 14px; line-height: 1.9; margin: 0 0 20px; }
+.letter-discard-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.letter-discard-actions button { min-height: 44px; padding: 9px 13px; border: 1px solid #986b40; border-radius: 3px; background: transparent; color: #694626; font: 13px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
+.letter-discard-actions button:first-child { background: #805632; color: #fff0d7; }
+
+.letter-dialog[data-phase="opening"] .letter-sheet { animation: letter-unfold var(--letter-open-duration) cubic-bezier(.22,.65,.25,1) both; }
+.letter-dialog[data-phase="opening"] .letter-scroll, .letter-dialog[data-phase="opening"] .letter-close { animation: letter-ink-in var(--letter-open-duration) ease both; }
+.letter-dialog[data-phase="closing"] .letter-sheet { animation: letter-fold var(--letter-close-duration) ease-in both; }
+@keyframes letter-unfold { 0%, 10% { clip-path: inset(0 -160px 100% -160px); } 100% { clip-path: inset(-20px -160px -20px -160px); } }
+@keyframes letter-ink-in { 0%, 50% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes letter-fold { from { clip-path: inset(-20px -160px -20px -160px); opacity: 1; } to { clip-path: inset(0 -160px 100% -160px); opacity: .6; } }
+@keyframes letter-dim { from { background: #03091100; } to { background: #03091199; } }
+@keyframes letter-undim { from { background: #03091199; } to { background: #03091100; } }
+
+@media (max-width: 800px), (hover: none) and (pointer: coarse) {
+  /* Trial mobile auxiliary entry, deliberately scoped to the prototype. */
+  .memory-directory { display: flex; position: absolute; z-index: 5; left: 50%; bottom: max(42px, calc(env(safe-area-inset-bottom) + 30px)); transform: translateX(-50%); flex-direction: column-reverse; align-items: center; gap: 9px; }
+  .memory-toggle { display: flex; gap: 14px; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border: 1px solid #dcb47855; border-radius: 24px; background: #111923b8; color: #f3ddbb; font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; backdrop-filter: blur(8px); cursor: pointer; }
+  .memory-list { width: min(280px, calc(100vw - 40px)); max-height: 42dvh; overflow-y: auto; padding: 12px; border: 1px solid #dcb47845; border-radius: 10px; background: #111923f2; box-shadow: 0 6px 28px #0005; }
+  .memory-list p { margin: 3px 10px 9px; font-size: 10px; letter-spacing: .1em; color: #baa589; }
+  .memory-list button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-bottom: 1px solid #dcb4781f; background: transparent; color: #f3ddbb; font: 13px "Songti SC", SimSun, serif; text-align: left; cursor: pointer; }
+  .memory-list button:hover { background: #dcb47812; }
+}
+@media (max-width: 800px) {
+  .letter-sheet { width: calc(100vw - 24px); height: min(960px, calc(100dvh - 36px)); }
+  .letter-scroll { inset: 48px 23px 29px 23px; padding: 0 8px 16px; }
+  .letter-close { top: 14px; right: 12px; }
+  .letter-feather { width: 48px; height: 100px; right: -8px; top: 65px; opacity: .8; }
+  .letter-heading h2 { font-size: 27px; padding-right: 27px; }
+  .letter-heading { margin-bottom: 22px; }
+  .letter-prose { font-size: 16px; line-height: 2; letter-spacing: .02em; }
+  .letter-prose blockquote { font-size: 19px; padding-right: 13px; }
+  .letter-photo { float: none; width: 88%; margin: 22px auto 25px; }
+  .letter-meta { gap: 4px 12px; font-size: 10px; }
+  .letter-reactions { gap: 2px 12px; }
+  .letter-comments h3 { font-size: 23px; }
+}
+@media (max-height: 540px) {
+  .letter-sheet { height: calc(100dvh - 20px); }
+  .letter-scroll { inset-block: 35px 24px; }
+  .letter-feather { height: 100px; width: 50px; top: 45px; right: -8px; }
+  .letter-close { top: 7px; right: 12px; }
+  .letter-heading h2 { padding-right: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .letter-dialog *, .letter-dialog::backdrop { animation: none !important; transition: none !important; }
+}
