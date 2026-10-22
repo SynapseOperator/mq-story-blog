@@ -1,7 +1,9 @@
+import type { Story } from "../lib/stories/story";
+
 /** Entirely fictional reading fixtures, not published articles or personal memories. */
 export const demoStories = [
   {
-    id: "demo-starlight", title: "一起数星星", entry: "star", source: "synthetic-demo",
+    id: "demo-starlight", title: "一起数星星", source: "synthetic-demo",
     date: "某个夏夜 · 虚构日期",
     introduction: "那天的夜空很安静，我们把没有说完的话，慢慢交给星光。",
     paragraphs: [
@@ -19,7 +21,7 @@ export const demoStories = [
     closing: "愿每一个抬头的夜晚，都有人与你分享。",
   },
   {
-    id: "demo-evening", title: "山坡上的晚风", entry: "star", source: "synthetic-demo",
+    id: "demo-evening", title: "山坡上的晚风", source: "synthetic-demo",
     date: "一个入秋的傍晚 · 虚构日期",
     introduction: "风没有留下字迹，却替我们记住了那个傍晚。",
     paragraphs: [
@@ -38,7 +40,7 @@ export const demoStories = [
     closing: "下一次晚风吹起，我们再慢慢走。",
   },
   {
-    id: "demo-everyday", title: "把日常写成诗", entry: "star", source: "synthetic-demo",
+    id: "demo-everyday", title: "把日常写成诗", source: "synthetic-demo",
     date: "一些平常的日子 · 虚构日期",
     introduction: "不必等到盛大的时刻，平凡的一天也可以值得收藏。",
     paragraphs: [
@@ -71,7 +73,7 @@ export const demoStories = [
     closing: "把这些小事写下来，留给以后慢慢读。",
   },
   {
-    id: "demo-campfire", title: "我们在一起的故事", entry: "campfire", source: "synthetic-demo",
+    id: "demo-campfire", title: "我们在一起的故事", source: "synthetic-demo",
     date: "一个有篝火的夜晚 · 虚构日期",
     introduction: "火光把夜晚照暖，我们把故事讲得很慢。",
     paragraphs: [
@@ -90,8 +92,4 @@ export const demoStories = [
     },
     closing: "今夜的暖光，留一点给明天。",
   },
-] as const;
-
-export type DemoStory = (typeof demoStories)[number];
-export const starStories = demoStories.filter((story) => story.entry === "star");
-export const campfireStory = demoStories[3];
+] as const satisfies readonly Story[];

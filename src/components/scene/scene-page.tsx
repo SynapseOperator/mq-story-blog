@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FeatherLetter } from "../reader/feather-letter";
-import { demoStories, type DemoStory } from "./demo-stories";
+import type { Story } from "@/lib/stories/story";
+import type { SceneStory } from "@/lib/stories/scene-catalog";
 import { Landscape } from "./landscape";
 
 type Section = "mq" | "m" | "q";
+const noStories: readonly SceneStory[] = [];
 
 const navigation = [
   { section: "mq", href: "/", label: "MQ", name: "MQ 共同主页" },
@@ -37,15 +39,15 @@ function NavigationIcon({ home = false }: { home?: boolean }) {
   );
 }
 
-export function ScenePage({ section }: { section: Section }) {
+export function ScenePage({ section, stories = noStories }: { section: Section; stories?: readonly SceneStory[] }) {
   const isHome = section === "mq";
-  const [story, setStory] = useState<DemoStory | null>(null);
+  const [story, setStory] = useState<Story | null>(null);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const readerOpen = useRef(false);
   const readerTrigger = useRef<HTMLButtonElement | null>(null);
   const directoryTrigger = useRef<HTMLButtonElement | null>(null);
 
-  function openStory(next: DemoStory, trigger: HTMLButtonElement) {
+  function openStory(next: Story, trigger: HTMLButtonElement) {
     // The synchronous guard also covers multiple clicks before React commits.
     if (readerOpen.current) return;
     readerOpen.current = true;
@@ -94,7 +96,7 @@ export function ScenePage({ section }: { section: Section }) {
         ))}
       </nav>
       <main id="main-content" className="scene-content" tabIndex={-1}>
-        <Landscape interactive={isHome} reading={Boolean(story)} onRead={openStory} />
+        <Landscape stories={stories} interactive={isHome} reading={Boolean(story)} onRead={openStory} />
         {isHome ? (
           <div className="sr-only">
             <h1>MQ · Our Stories</h1>
@@ -119,7 +121,7 @@ export function ScenePage({ section }: { section: Section }) {
           if (event.key === "Escape") { setDirectoryOpen(false); directoryTrigger.current?.focus(); }
         }}>
           <p>合成演示故事</p>
-          {demoStories.map((item) => <button key={item.id} type="button" onClick={() => {
+          {stories.map((item) => <button key={item.id} type="button" onClick={() => {
             if (directoryTrigger.current) openStory(item, directoryTrigger.current);
           }}><span aria-hidden="true">{item.entry === "campfire" ? "♧" : "✧"}</span>{item.title}</button>)}
         </div>

@@ -3,9 +3,9 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 当前授权为 Phase 1 的 Issue #4：羽毛信阅读器。Issue #2 的场景与 Issue #3 的环境交互已通过产品验收，PR #5 / #6 已合并。保留已验收场景，在独立功能分支实现同一阅读层、长文滚动、关闭确认及移动端辅助目录；使用明确标注的合成演示数据，完成后提交 Draft PR，等待产品与独立开发者评审，不自动合并或增加认证、数据库、后台、部署。
+- Phase 1 已完成产品验收，PR #5 / #6 / #7 已合并，Issue #1–#4 已关闭。当前只授权 Phase 2 的 P2-01（Issue #8）：解耦故事数据契约与稳定星位，保留四份合成演示故事、已验收场景及阅读行为；补真实绑定测试和浏览器回归，提交 Draft PR 后等待产品与独立开发者评审，不自动合并或开始 P2-02。本轮不安装 PostgreSQL、Prisma、Docker，不增加认证、数据库、后台或部署。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
-- 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是本轮羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；尺寸、字体、动效与目录位置仍待视觉评审。初版 #2 视觉未通过；接入用户提供的 7 张独立素材后，返工版获用户明确确认视觉通过。场景素材说明见 `public/scene/README.md`，签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将素材接入或技术检查等同于视觉通过。交接包内 Prompt 是资料存档，不扩大本次会话授权。
+- 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
 - 后续设计保留中央上方 Logo、青草山坡/情侣/篝火、无萤火虫、故事星可点/星尘不可点、M/Q 建设中；读信时隐藏 MQ/M/Q 导航和普通登录入口。待确认布局与参数保持开放。
 
@@ -13,7 +13,7 @@
 
 - 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
 - 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
-- 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
+- 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
 - 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。
 - 视觉任务使用 `frontend-design`，UI 调试/浏览器验收使用 `frontend-testing-debugging`，实质 React 改动读取 `vercel-react-best-practices` 相关规则；PRD 约束优先。
 - 三个 Skills 从 V1 可信缓存完整复制到 `.agents/skills/` 且被 Git 忽略。进入项目的新 Codex 会话后检查发现情况；文件存在、读取与自动加载是不同事实，不虚报本轮自动加载或实际调用。
