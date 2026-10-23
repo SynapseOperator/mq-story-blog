@@ -5,6 +5,7 @@ import pg from "pg";
 import { createDatabaseClient } from "../../src/lib/db/client.ts";
 import { databaseUrl } from "./environment.mjs";
 import { runPrisma } from "./prisma-command.mjs";
+import { runStoryIntegration } from "./story-integration.mjs";
 
 let stage = "validate test target";
 let passed = 0;
@@ -18,6 +19,7 @@ async function main() {
   const token = randomUUID().replaceAll("-", "");
   const names = [`mq_test_it_${token}`, `mq_test_isolated_${token}`];
   const urls = names.map((name) => { const url = new URL(baseUrl); url.pathname = `/${name}`; return url.href; });
+  let failure;
   try {
     stage = "connect to PostgreSQL 18 test instance";
     const info = (await control.query("SELECT current_database() AS db, current_user AS usr, current_setting('server_version_num') AS version")).rows[0];
@@ -94,13 +96,23 @@ async function main() {
     await clients[0].databaseProbe.delete({ where: { id } });
     assert.equal(await clients[0].databaseProbe.findUnique({ where: { id } }), null);
     pass(stage);
+    stage = "story lifecycle and database constraints";
+    await runStoryIntegration(clients[0], clients[1], pass);
+  } catch (error) {
+    failure = error;
   } finally {
-    await Promise.all(clients.map((client) => client.$disconnect()));
-    try {
-      // No reset, TRUNCATE, dev database access, or database-name input.
-      for (const name of created) await control.query(`DROP DATABASE "${name}"`);
-    } finally { await control.end(); }
+    // Attempt every cleanup even if a disconnect/drop fails. Keep the original
+    // failure and never force-terminate connections or remove an unrelated DB.
+    for (const result of await Promise.allSettled(clients.map((client) => client.$disconnect()))) {
+      if (result.status === "rejected") failure ??= result.reason;
+    }
+    for (const name of created) {
+      try { await control.query(`DROP DATABASE "${name}"`); }
+      catch (error) { failure ??= error; }
+    }
+    try { await control.end(); } catch (error) { failure ??= error; }
   }
+  if (failure) throw failure;
   pass("remove only this run's temporary databases");
   console.log(`Database integration: ${passed} checks passed`);
 }
@@ -108,6 +120,6 @@ async function main() {
 try { await main(); }
 catch (error) {
   const code = /^[A-Z0-9_]{1,30}$/.test(error.code ?? "") ? error.code : "ERROR";
-  console.error(`Database integration FAILED at: ${stage} (${code}). Connection details omitted.`);
+  console.error(`Database integration FAILED at: ${error.storyStage ?? stage} (${code}). Connection details omitted.`);
   process.exitCode = 1;
 }

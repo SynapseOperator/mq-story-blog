@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1 已验收收尾；P2-01（Issue #8 / PR #9）已合并。当前只授权 P2-02（Issue #10）：PostgreSQL 18 开发/测试隔离、Prisma 7、迁移与真实数据库测试；保留四份合成演示故事、已验收场景及阅读行为。完成后提交 Draft PR 等待验收，不自动合并或开始 P2-03，不开发认证、发布、点赞、留言或后台业务，不部署。
+- Phase 1 与 P2-01/02 已验收收尾，PR #11 已合并、Issue #10 completed 关闭且 main CI 成功。当前只授权 P2-03（Issue #12）：故事/不可变内容版本、稳定星位与唯一篝火约束、内部生命周期事务服务及真实 PostgreSQL 测试。保留四份合成演示故事、已验收场景及阅读行为，不接入数据库到页面；不开放 HTTP/Server Action 写入接口，不开发认证、后台、点赞、留言或部署。完成后提交 Draft PR 等待架构与技术验收，不自动合并或开始 P2-04。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -25,4 +25,5 @@
 - 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
 - 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。
 - PR #9 采用产品负责人明确授权的一次性独立评审延期例外，见 [审计记录](https://github.com/SynapseOperator/mq-story-blog/pull/9#issuecomment-6362057412)。正式独立 Review 当时未完成，后续非阻塞复核仍保留；此例外不自动适用于其他 PR，不伪造 APPROVED 或历史证据。
+- PR #11 采用负责人另行授权的一次性 Review Exception，见 [审计记录](https://github.com/SynapseOperator/mq-story-blog/pull/11#issuecomment-6363562717)；当时无独立 APPROVED，辅助复核不冒充正式 Review。该例外不继承 PR #9，也不适用于 P2-03。Docker 启动错误未复现且根因未知，作为环境风险记录，不擅自修改注册表或重装。
 - 远端写入遵守本次授权；未授权不改变可见性、不采购或部署。核对真实状态后才报告 Actions/分支保护结果。接入说明见 `docs/engineering/WORKFLOW.md`。

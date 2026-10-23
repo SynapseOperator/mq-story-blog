@@ -2,9 +2,9 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-02：PostgreSQL 开发与测试基础**（[Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10)）。Phase 1 的静态场景、环境交互和羽毛信阅读器已通过产品验收；PR #5 / #6 / #7 已合并，Issue #1–#4 已关闭。P2-01 的数据契约与稳定星位解耦已通过产品验收，[PR #9](https://github.com/SynapseOperator/mq-story-blog/pull/9) 已合并，[Issue #8](https://github.com/SynapseOperator/mq-story-blog/issues/8) 已关闭；[合并后的 main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39933860000) 成功，合并提交为 `6dcd0d3990b5b48ebdc909148b6c7516515fe04f`。
+当前为 **Phase 2 · P2-03：故事生命周期与星位约束**（[Issue #12](https://github.com/SynapseOperator/mq-story-blog/issues/12)）。Phase 1 场景、环境交互与羽毛信及 P2-01 稳定星位解耦已验收收尾。P2-02 的 PostgreSQL/Prisma、Windows 本机迁移、隔离与持久化已获负责人技术验收；[PR #11](https://github.com/SynapseOperator/mq-story-blog/pull/11) 已合并为 `98698ef5d9aae0162020abb5ea6a01452cdba2ae`，[main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39944405270) 成功，[Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10) completed 关闭。
 
-本任务只建设数据库基础设施、迁移与集成测试，保留四份合成演示故事及已验收的构图、动画和阅读行为。完成后提交 Draft PR，等待产品与开发者评审，不自动合并或开始 P2-03。数据库探针不是博客业务模型；网站仍使用演示数据，真实故事、认证、点赞/留言服务与部署尚未实现。
+本任务实现数据库领域模型与内部事务服务：独立草稿/公开版本、显式发布更新、下架/恢复、星位预留及唯一篝火。页面继续使用四份合成演示故事，不改构图、动画或阅读行为，不开放未鉴权的写入 API。领域约束与 ER 关系见 [故事生命周期说明](docs/engineering/STORY_LIFECYCLE.md)。完成后提交 Draft PR 等待架构、技术与开发者评审，不自动合并或开始 P2-04；认证、后台、正式发布 API、点赞/留言及部署尚未实现。
 
 Phase 2 架构审查已确认继续使用 Next.js 模块化单体，采用 PostgreSQL 18 + Prisma 7 稳定线；后续业务采用独立草稿与公开版本、显式发布更新和受限结构化内容块。认证框架在 P2-04 经最小技术验证后确定，优先评估成熟方案。沿用已审查的 P2-01 至 P2-14 Roadmap，后续实现细节按对应任务确认。
 
@@ -46,7 +46,8 @@ npm run check
 - `src/components/scene/`：独立场景图层、固定导航与建设中视图；七张本地美术素材及来源、处理与差异说明见 [public/scene](public/scene/README.md)。
 - `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
 - `src/lib/stories/`：独立阅读契约与稳定场景绑定；`src/data/` 提供当前合成演示数据，由首页路由适配后传给组件。后续真实数据在此页面边界接入，不让组件依赖演示数据源；本轮数据库基础尚不接入场景或阅读器。
-- `prisma/`：基础探针 Schema 与版本化迁移；[数据库说明](docs/engineering/DATABASE.md) 记录开发/测试隔离、凭据管理和实际验证边界。
+- `prisma/`：基础探针及故事/内容版本/星位 Schema，历史迁移保留，新领域约束使用新增 SQL 迁移；[数据库说明](docs/engineering/DATABASE.md) 记录环境与测试隔离。
+- `src/server/stories/`：受限内容块校验与内部生命周期事务服务，没有路由或 Server Action，尚未承担认证职责；不得在权限层完成前将写方法开放给浏览器。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 
@@ -62,9 +63,11 @@ npm run check
 
 PR #9 因第二位开发者暂时无法 Review，按产品负责人明确授权采用一次性 Review Exception，见 [审计说明](https://github.com/SynapseOperator/mq-story-blog/pull/9#issuecomment-6362057412)。这不是正式独立 Review 已通过；独立复核保留为非阻塞事项，其他 PR 继续按各自授权和评审门槛处理。
 
+PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审计说明](https://github.com/SynapseOperator/mq-story-blog/pull/11#issuecomment-6363562717)。合并时无独立 APPROVED Review，不能把辅助复核描述为双人审批；该例外不适用于 P2-03。Docker 启动错误根因未明，保留为已记录环境风险，不擅自改注册表或重装。
+
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `chore/p2-02-postgresql-foundation` 对应 [#10 数据库开发与测试基础](https://github.com/SynapseOperator/mq-story-blog/issues/10)。四条初始化/原型工作项及依赖的历史记录见 [工作流](docs/engineering/WORKFLOW.md)；其中 Phase 0 的命令与范围是历史快照，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数，不将原型参数扩展为永久产品约束。
+本分支 `feat/p2-03-story-lifecycle` 对应 [#12 故事生命周期与星位约束](https://github.com/SynapseOperator/mq-story-blog/issues/12)。四条初始化/原型工作项及依赖的历史记录见 [工作流](docs/engineering/WORKFLOW.md)；其中 Phase 0 的命令与范围是历史快照，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数，不将原型参数扩展为永久产品约束。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
