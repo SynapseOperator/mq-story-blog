@@ -123,6 +123,10 @@ npm run test:auth:logs
 
 `node scripts/auth/rate-limit-regression.mjs` 默认重跑旧/新对照，故意在本次独立临时库制造旧实现冲突；原始脱敏结果保留在本机审查证据目录。CI 使用 `--custom-only`，验证冷键/热行竞争、拒绝不延长窗口与到期恢复，不重复制造旧错误。登录 burst 才用于实际验证 HTTP 哈希饱和；注册 hash 位于事务中，连接池限制可能使注册 burst 全部成功，不能以它证明队列曾达到容量。
 
+补测 [Quality #21](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39994562504) 和诊断 [Quality #22](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39995353910) 保留失败记录。#22 的注册突发为 15 成功、5 个 500，固定类别确认这 5 个为 Prisma **P2028 事务错误**，不是 hash overflow；其余故障注入可区分。这不能追溯证明 #20 的历史 503 原因。独立真实 PG 探针占满3个连接，默认等待2秒时第四笔 P2028，3秒释放连接后等待预算5秒的客户端成功。
+
+仅认证使用 `src/server/auth/database.ts` 专用客户端，将 Prisma 事务获取等待从默认2秒明确为 **5秒**，事务执行时限仍为 **5秒**；保留池大小3、驱动连接超时5秒与哈希/共享额度，不修改 P2-03 数据库工厂。使用 [Prisma 7 官方事务选项](https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions)，不重试非幂等注册或把事务错误转称容量拒绝。`npm run test:auth:transactions` 比较真实默认/认证客户端，并纳入 CI；20注册突发仍严格要求成功或已明确识别的哈希拒绝。此预算不保证无限负载成功，超预算的事务错误继续按内部错误处理，正式部署仍需容量验证。
+
 ## UI 与开放门槛
 
 场景账号入口和信纸内账号窗口共用会话状态与原生 dialog。登录/注册不导航离开阅读器；取消/成功后保留文章、滚动、演示留言草稿。外层阅读规则、Logo/星位/动画/素材保持不变。登录不赋予真实点赞/评论能力，原有演示按钮仍明确为本地状态。用户名/密码要求与不提供找回在窗口中明确说明。

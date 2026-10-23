@@ -4,7 +4,7 @@ import { username } from "better-auth/plugins";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { toNextJsHandler } from "better-auth/next-js";
-import { createDatabaseClient } from "../../lib/db/client.ts";
+import { createAuthDatabaseClient } from "./database.ts";
 import { authConfiguration, AUTH_PATHS, credentials, inspectRequest, jsonReply } from "./policy.ts";
 import { consumeAuthLimit } from "./rate-limit.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
@@ -21,7 +21,7 @@ function publicUser(value: unknown) {
 
 function createService() {
   const config = authConfiguration();
-  const db = createDatabaseClient(config.databaseURL);
+  const db = createAuthDatabaseClient(config.databaseURL);
   // This object is deliberately private. Do not export auth.api mutation methods:
   // direct server calls bypass the HTTP admission/limiting boundary.
   const auth = betterAuth({
