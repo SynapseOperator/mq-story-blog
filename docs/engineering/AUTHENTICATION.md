@@ -64,6 +64,21 @@ erDiagram
 
 主限流使用 PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`、固定顺序事务加锁、数据库时间及饱和计数，跨 Node 进程共用。每 60 秒注册与登录各自：用户名 8 次、客户端 20 次、全站 120 次；get-session/sign-out 客户端 240、全站 3000。所有尝试计数，不依赖仅成功请求；命中时返回 429 + Retry-After。全站桶先检查，限制攻击者创建任意用户名桶的数量。过期一小时的项目窗口在请求中清理；键为带服务端 secret 的 HMAC，不存原始用户名/IP/Cookie。阈值是当前可审查实现参数，正式开放前须结合容量与误伤测量调整。
 
+框架第二道保护仍开启，使用 Better Auth **1.7.12 官方 `customStorage.consume(key, rule)`**，复用 `RateLimit` 表与现有迁移。一次 PostgreSQL UPSERT 在唯一键锁下决定是否放行和增加计数，替换原生存储的读取/创建/冲突重试路径；拒绝请求不延长窗口，保留框架“最后一次接受请求后的活动窗口”语义，与项目固定窗口区分。键同样 HMAC 化，官方支持的规则仍为每路径 60 秒 1000 次，不信任客户端 IP 头。第二次查询只计算拒绝后的 Retry-After，不参与放行决定。
+
+故障分类以具体异常来源为依据，不能仅观察 503 + Retry-After：
+
+| 响应 | 含义 |
+|---|---|
+| 429 `RATE_LIMITED` | 已确认额度耗尽 |
+| 503 `AUTH_HASH_BUSY` | 密码执行队列抛出的明确容量异常 |
+| 503 `AUTH_LIMITER_ERROR` | 项目或框架限流存储失败，关闭入口，不能计为正常限流或哈希饱和 |
+| 503 `AUTH_STORAGE_UNAVAILABLE` | 已识别的数据库连接故障 |
+| 503 `AUTH_UNAVAILABLE` | 认证配置不可用 |
+| 500 `AUTH_INTERNAL_ERROR` | 其他内部错误；不附加猜测的 Retry-After |
+
+应用日志只写对应固定类别，不序列化原始 Error；PostgreSQL 服务日志必须单独配置和审计，见 [日志复核](AUTH_LOGGING_REVIEW.md)。TERSE 不会清除驱动 Error DETAIL，也不能清除可能出现在主 ERROR 中的输入。
+
 未配置代理时，**只允许 loopback 本地 Origin**，所有客户端归保守共享桶，完全忽略 X-Forwarded-For；不宣称已获得真实终端 IP。非本地 Origin 必须配置 `AUTH_PROXY_SECRET`，每次请求需携带可信入口覆写的 `x-mq-proxy-key` 和单一 `x-mq-client-ip`。入口从连接 socket 获取 IP，不使用客户端 XFF；密钥固定长度比较。IPv4 映射 IPv6 归一，IPv6 按 /64 合并，避免换写法/接口地址突破限流。
 
 生产入口必须阻止绕过代理直连、删除/覆写这两个私有头、关闭含秘密请求头的访问日志；代理与应用之间使用受保护网络。此契约已由本地 HTTPS 反向代理试验覆盖，**没有选择或部署生产平台**。共享用户名桶可能被恶意消耗造成短时拒绝登录，仍需监测及独立安全审查；数据库/代理故障一律关闭认证入口，不降级为无限流。
@@ -74,7 +89,7 @@ erDiagram
 
 严格格式 `$mq-scrypt$v=1$N=32768,r=8,p=3$<salt>$<key>`，只执行代码固定成本，拒绝未知/损坏/更高成本编码，防止数据库成本字段触发资源失控。保留框架 NFKC 规范化，不 trim/截断；密码 12–128 UTF-16 code units，拒绝损坏代理项。后续若改变参数需新版本与显式迁移方案；Spike 合成账号不迁入。
 
-每进程最多 2 个 scrypt 执行、4 个排队；单个工作区约32MiB，native maxmem48MiB，饱和返回安全503/Retry-After。全站共享限流再约束多实例请求量。副本数量/内存预算必须在部署前确定；此项不是压力测试或生产容量保证。
+每进程最多 2 个 scrypt 执行、4 个排队；单个工作区约32MiB，native maxmem48MiB，明确队列饱和返回503 `AUTH_HASH_BUSY` / Retry-After。全站共享限流再约束多实例请求量。副本数量/内存预算必须在部署前确定；此项不是压力测试或生产容量保证。
 
 Windows 与 Linux 运行 `npm run test:auth:hash` 比较默认/正式成本与并发，不输出密码/hash/salt。Windows 初次测量平均默认 hash/verify 52.17/51.74ms，正式155.67/155.31ms；6任务通过2执行+4排队约480/489ms。机器差异与重复测量合理，CI/最新结果见 PR 证据，RSS 采样不冒充峰值。
 
@@ -98,9 +113,15 @@ npm run test:db
 npm run test:auth:hash
 # test:auth 使用已构建的 Next 应用
 npm run test:auth
+npm run test:auth:limiter
+npm run test:auth:logs
 ```
 
 认证 runner 只经项目 test URL 白名单，在测试实例创建 `mq_test_auth_<随机32hex>`；校验 PostgreSQL18/current_user，部署全部正式迁移并检查 schema drift，启动两个生产进程测试，结束后仅清理自己的进程/临时库。没有 SQLite/Mock、down -v、reset 或全局 prune。真实密码/secret/cookie 仅在内存，报告只有断言、次数和版本。CI 对 main 与 stacked base 的 PR 执行相同测试。
+
+本轮审查保留 [Quality #20 原始记录](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39988162531)：数据库日志有 29 条 `RateLimit_key_key` ERROR，以及两处 CHECK DETAIL 的合成内部邮箱。此前将 Linux 注册 burst 的单次泛化 503 归因为 scrypt 容量不足，**证据不足，撤回该归因**。历史响应没有错误来源分类，不能在事后确定原因。独立无哈希 HTTP/PG 对照稳定复现原生限流竞争，但框架能捕获并重试，低于额度的请求均成功，没有复现 503。
+
+`node scripts/auth/rate-limit-regression.mjs` 默认重跑旧/新对照，故意在本次独立临时库制造旧实现冲突；原始脱敏结果保留在本机审查证据目录。CI 使用 `--custom-only`，验证冷键/热行竞争、拒绝不延长窗口与到期恢复，不重复制造旧错误。登录 burst 才用于实际验证 HTTP 哈希饱和；注册 hash 位于事务中，连接池限制可能使注册 burst 全部成功，不能以它证明队列曾达到容量。
 
 ## UI 与开放门槛
 

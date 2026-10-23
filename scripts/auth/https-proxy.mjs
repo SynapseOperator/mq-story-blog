@@ -156,6 +156,58 @@ export async function runHttpsChecks({ origin, ca, backendOrigin, connectionStri
     const count = (await pool.query('SELECT count(*)::int AS count FROM "Session" WHERE "userId" = $1', [user.id])).rows[0].count;
     assert.equal(count, 0, "HTTPS logout must actually delete the session");
     pass("logout deletes the database session and immediately rejects the copied Secure cookie");
+
+    // Reset only this run's isolated counters. Four requests fit the password
+    // executor's accepted capacity; neither a generic 503 nor Retry-After may
+    // be accepted as evidence of a successful capacity/limiter test.
+    await pool.query('DELETE FROM "AuthRateLimit"');
+    await pool.query('DELETE FROM "RateLimit"');
+    const incorrectPassword = `${password}_incorrect`;
+    secrets.push(incorrectPassword);
+    const beforeConcurrent = (await pool.query('SELECT count(*)::int AS count FROM "Session" WHERE "userId" = $1', [user.id])).rows[0].count;
+    const concurrent = await Promise.all([password, incorrectPassword, password, incorrectPassword].map(value =>
+      request("/sign-in/username", { body: { username, password: value } })));
+    for (const [index, result] of concurrent.entries()) {
+      if (index % 2 === 0) {
+        assert.equal(result.status, 200, "Below-capacity correct-password HTTPS login must succeed without limiter contention failures");
+        assert.equal(result.data?.user?.id, user.id, "Successful HTTPS login must identify the expected account");
+        assert.equal(result.data?.user?.username, username);
+      } else {
+        assert.equal(result.status, 401, "Below-capacity wrong-password HTTPS login must be an authentication rejection, not a capacity/internal error");
+        assert.equal(result.data?.code, "INVALID_CREDENTIALS", "Wrong-password status must have the exact public error category");
+      }
+    }
+    const afterConcurrent = (await pool.query('SELECT count(*)::int AS count FROM "Session" WHERE "userId" = $1', [user.id])).rows[0].count;
+    assert.equal(afterConcurrent - beforeConcurrent, 2, "Only the two successful concurrent HTTPS logins may create sessions");
+    pass("four concurrent below-capacity TLS logins return exactly two successes/two INVALID_CREDENTIALS and create two sessions");
+
+    await pool.query('DELETE FROM "AuthRateLimit"');
+    await pool.query('DELETE FROM "RateLimit"');
+    // Separate HTTPS requests share the PostgreSQL username budget. Small
+    // batches deliberately avoid confusing quota rejection with hash overload.
+    for (let batch = 0; batch < 2; batch += 1) {
+      const admitted = await Promise.all(Array.from({ length: 4 }, () =>
+        request("/sign-in/username", { body: { username, password: incorrectPassword } })));
+      for (const result of admitted) {
+        assert.equal(result.status, 401, "All first eight TLS attempts must reach credential verification under the configured username quota");
+        assert.equal(result.data?.code, "INVALID_CREDENTIALS");
+      }
+    }
+    const overQuota = await request("/sign-in/username", { body: { username, password } });
+    assert.equal(overQuota.status, 429, "Ninth TLS attempt must be rejected by the shared username quota");
+    assert.equal(overQuota.data?.code, "RATE_LIMITED", "Rate rejection must be distinguishable from hash saturation and internal errors");
+    assert.match(String(overQuota.headers["retry-after"] ?? ""), /^[1-9][0-9]*$/, "Rate rejection must provide a retry interval");
+    const afterQuota = (await pool.query('SELECT count(*)::int AS count FROM "Session" WHERE "userId" = $1', [user.id])).rows[0].count;
+    assert.equal(afterQuota, afterConcurrent, "Wrong-password and rate-limited requests must not create sessions");
+    const frameworkCounter = (await pool.query('SELECT count FROM "RateLimit"')).rows;
+    assert.equal(frameworkCounter.length, 1, "The admitted TLS requests must use one shared framework path bucket");
+    assert.equal(frameworkCounter[0].count, 8, "The ninth attempt must be stopped before framework processing or password execution");
+    pass("eight TLS attempts share one username quota and the ninth returns exact RATE_LIMITED without creating a session");
+    const finalSessions = (await pool.query('SELECT token FROM "Session" WHERE "userId" = $1', [user.id])).rows;
+    secrets.push(...finalSessions.map(value => value.token));
+    // Leave the subsequent browser phase with fresh test-owned budgets.
+    await pool.query('DELETE FROM "AuthRateLimit"');
+    await pool.query('DELETE FROM "RateLimit"');
     return { passed, total: passed, secrets };
   } finally { await pool.end(); }
 }

@@ -31,7 +31,9 @@
     "db:migrate": "node scripts/db/migrate.mjs deploy dev",
     "db:status": "node scripts/db/migrate.mjs status dev",
     "test:db": "npm run db:generate && node scripts/db/integration.mjs",
-    "test:db:persistence": "npm run db:generate && node scripts/db/persistence.mjs"
+    "test:db:persistence": "npm run db:generate && node scripts/db/persistence.mjs",
+    "test:auth:limiter": "node scripts/auth/rate-limit-regression.mjs --custom-only",
+    "test:auth:logs": "node scripts/auth/database-log-audit.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

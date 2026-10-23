@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import pg from "pg";
 import { databaseUrl } from "../db/environment.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
+import { configureTemporaryDatabaseLogging } from "../db/log-privacy.mjs";
 import { runAuthHttpTests } from "./http-tests.mjs";
 import { runHttpsChecks, startHttpsProxy } from "./https-proxy.mjs";
 
@@ -86,6 +87,7 @@ async function main() {
     stage = "create an empty test-owned authentication database";
     await control.query(`CREATE DATABASE "${name}"`);
     created = true;
+    await configureTemporaryDatabaseLogging(control, name);
     stage = "apply every committed migration to an empty database";
     await runPrisma(["migrate", "deploy"], isolated.href);
     await runPrisma(["migrate", "status"], isolated.href);

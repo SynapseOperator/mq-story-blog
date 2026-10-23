@@ -6,6 +6,7 @@ import { createDatabaseClient } from "../../src/lib/db/client.ts";
 import { databaseUrl } from "./environment.mjs";
 import { runPrisma } from "./prisma-command.mjs";
 import { runStoryIntegration } from "./story-integration.mjs";
+import { configureTemporaryDatabaseLogging, verifyDatabaseLogging } from "./log-privacy.mjs";
 
 let stage = "validate test target";
 let passed = 0;
@@ -35,6 +36,7 @@ async function main() {
       assert.match(name, /^mq_test_(it|isolated)_[a-f0-9]{32}$/);
       await control.query(`CREATE DATABASE "${name}"`);
       created.push(name);
+      await configureTemporaryDatabaseLogging(control, name);
     }
     for (const url of urls) {
       const client = createDatabaseClient(url);
@@ -45,6 +47,9 @@ async function main() {
     pass(stage);
 
     stage = "apply committed migrations to both empty databases";
+    const loggingInspection = new pg.Pool({ connectionString: urls[0], max: 1 });
+    try { await verifyDatabaseLogging(loggingInspection); }
+    finally { await loggingInspection.end(); }
     for (const url of urls) await runPrisma(["migrate", "deploy"], url);
     for (const client of clients) {
       const history = await client.$queryRaw`SELECT migration_name, finished_at FROM _prisma_migrations WHERE rolled_back_at IS NULL`;

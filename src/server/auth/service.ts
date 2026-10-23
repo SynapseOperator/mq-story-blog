@@ -8,6 +8,8 @@ import { createDatabaseClient } from "../../lib/db/client.ts";
 import { authConfiguration, AUTH_PATHS, credentials, inspectRequest, jsonReply } from "./policy.ts";
 import { consumeAuthLimit } from "./rate-limit.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
+import { createFrameworkRateLimitStorage } from "./framework-rate-limit.ts";
+import { classifyAuthFailure, type AuthFailureStage } from "./failure.ts";
 
 export type PublicSession = { user: { id: string; username: string }; session: { expiresAt: string } };
 
@@ -40,7 +42,7 @@ function createService() {
       defaultCookieAttributes: { httpOnly: true, secure: config.secure, sameSite: "lax", path: "/" } },
     // Additional framework guard, not the primary granular limiter. Explicitly
     // configured even in development; do not trust arbitrary proxy IP headers.
-    rateLimit: { enabled: true, storage: "database", window: 60, max: 1000,
+    rateLimit: { enabled: true, customStorage: createFrameworkRateLimitStorage(db, config.secret), window: 60, max: 1000,
       customRules: Object.fromEntries([...AUTH_PATHS.keys()].map(path => [path, { window: 60, max: 1000 }])) },
     disabledPaths: ["/sign-in/email", "/change-email", "/update-user", "/request-password-reset", "/reset-password", "/send-verification-email", "/verify-email"],
     plugins: [username({ minUsernameLength: 3, maxUsernameLength: 32, usernameValidator: value => /^[a-zA-Z0-9_]{3,32}$/.test(value) })],
@@ -78,7 +80,7 @@ async function publicResponse(response: Response, path: string) {
   let safe: unknown = null;
   if (!response.ok) {
     const known = new Set(["USERNAME_IS_ALREADY_TAKEN", "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"]);
-    const code = response.status === 429 ? "RATE_LIMITED" : response.status >= 500 ? "AUTH_UNAVAILABLE"
+    const code = response.status === 429 ? "RATE_LIMITED" : response.status >= 500 ? "AUTH_INTERNAL_ERROR"
       : path === "/sign-in/username" ? "INVALID_CREDENTIALS"
       : known.has(String(body?.code)) ? "USERNAME_UNAVAILABLE" : "AUTH_REQUEST_REJECTED";
     safe = { code };
@@ -96,19 +98,26 @@ export async function handleAuth(request: Request) {
   // Unknown endpoints cannot initialize connections or create limiter entries.
   const url = new URL(request.url);
   if (!AUTH_PATHS.has(url.pathname.slice("/api/auth".length))) return jsonReply(404, "DISABLED_ENDPOINT");
+  let stage: AuthFailureStage = "config";
   try {
     const { config, db, handlers } = getService();
+    stage = "framework";
     const inspected = await inspectRequest(request, config);
     if (inspected.response) return inspected.response;
+    stage = "project-limit";
     const limit = await consumeAuthLimit(db, config.secret, inspected.path, inspected.client, inspected.input?.username);
     if (!limit.allowed) return Response.json({ code: "RATE_LIMITED" }, { status: 429,
       headers: { "cache-control": "no-store", "retry-after": String(limit.retryAfter) } });
     const handler = handlers[request.method as keyof typeof handlers];
     if (!handler) return jsonReply(405, "METHOD_NOT_ALLOWED");
+    stage = "framework";
     return await publicResponse(await handler(request), inspected.path);
-  } catch {
-    // No exception serialization: driver errors may contain connection details.
-    return Response.json({ code: "AUTH_UNAVAILABLE" }, { status: 503, headers: { "cache-control": "no-store", "retry-after": "5" } });
+  } catch (error) {
+    // Fixed provenance/category only; never serialize driver objects or values.
+    const failure = classifyAuthFailure(error, stage);
+    console.error(failure.event);
+    return Response.json({ code: failure.code }, { status: failure.status,
+      headers: { "cache-control": "no-store", ...(failure.retryAfter ? { "retry-after": String(failure.retryAfter) } : {}) } });
   }
 }
 

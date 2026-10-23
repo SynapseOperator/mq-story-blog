@@ -134,9 +134,28 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
     try {
       await pool.query(`CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "${model}" FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`);
       const result = await request("/sign-up/email", { body: { username, password } });
-      expect(result.status >= 400, "Intentional database failure must not return registration success");
+      expect(result.status === 500 && result.data?.code === "AUTH_INTERNAL_ERROR", "Intentional database failure must be an internal error, never a hash-capacity rejection");
+      expect(!result.headers.has("retry-after"), "An unexpected database failure cannot claim a known retry delay");
       const counts = (await pool.query('SELECT (SELECT count(*)::int FROM "User" WHERE username = $1) AS users, (SELECT count(*)::int FROM "Account" a JOIN "User" u ON u.id = a."userId" WHERE u.username = $1) AS accounts, (SELECT count(*)::int FROM "Session" s JOIN "User" u ON u.id = s."userId" WHERE u.username = $1) AS sessions', [username])).rows[0];
       expect(Object.values(counts).every((value) => value === 0), "Registration rollback must leave no user/account/session fragments");
+    } finally {
+      await pool.query(`DROP TRIGGER IF EXISTS "${triggerName}" ON "${model}"`);
+      await pool.query(`DROP FUNCTION IF EXISTS "${functionName}"()`);
+    }
+  }
+
+  async function limiterFailureProbe(model, label) {
+    const username = `${label}_${suffix}`;
+    const functionName = `auth_test_limit_fail_${model.toLowerCase()}_${suffix}`;
+    const triggerName = `auth_test_limit_trigger_${model.toLowerCase()}_${suffix}`;
+    // Both limiter tables are exclusively in this run's disposable database.
+    // Inject at PostgreSQL rather than fabricating a capacity HTTP response.
+    await pool.query(`CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'intentional limiter storage probe'; END $$`);
+    try {
+      await pool.query(`CREATE TRIGGER "${triggerName}" BEFORE INSERT OR UPDATE ON "${model}" FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`);
+      const response = await request("/sign-up/email", { body: { username, password } });
+      expect(response.status === 503 && response.data?.code === "AUTH_LIMITER_ERROR", "A real limiter storage failure must have a distinct category and cannot pass as password saturation");
+      expect((await userByUsername(username)).length === 0, "Unavailable limiter admission must fail closed before registration writes");
     } finally {
       await pool.query(`DROP TRIGGER IF EXISTS "${triggerName}" ON "${model}"`);
       await pool.query(`DROP FUNCTION IF EXISTS "${functionName}"()`);
@@ -417,11 +436,38 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
 
     await run("Account insertion failure rolls back the entire registration", () => rollbackProbe("Account", "fail_account"));
     await run("Session insertion failure rolls back the entire registration", () => rollbackProbe("Session", "fail_session"));
+    await run("project limiter database failure is distinct from password saturation", () => limiterFailureProbe("AuthRateLimit", "fail_project"));
+    await run("framework limiter database failure is distinct from password saturation", () => limiterFailureProbe("RateLimit", "fail_framework"));
 
-    await run("single-process signup burst bounds hashing work and leaves no partial registration", async () => {
+    await run("concurrent credential validation below quota and hash capacity has no internal or limiter failures", async () => {
+      expect(Boolean(primary), "Registration prerequisite must pass");
+      for (let round = 0; round < 3; round += 1) {
+        // Each series starts with cold framework/project counters in this run's
+        // guarded temporary database. Four in-flight jobs remain below a single
+        // process's six-job password capacity; eight attempts meet the username
+        // allowance exactly and are below the client/global quotas.
+        await pool.query('DELETE FROM "AuthRateLimit"');
+        await pool.query('DELETE FROM "RateLimit"');
+        const servers = Array.from({ length: 4 }, (_, index) => round === 0 ? origin
+          : round === 1 ? secondOrigin : index % 2 ? secondOrigin : origin);
+        const before = await sessionRows(primary);
+        const successful = await Promise.all(servers.map(server => request("/sign-in/username", {
+          server, body: { username: primary.username, password },
+        })));
+        expect(successful.every(item => item.status === 200 && item.data?.user?.id === primary.id), "Every below-capacity valid login must succeed, including cold shared limiter rows");
+        const incorrect = await Promise.all(servers.map(server => request("/sign-in/username", {
+          server, body: { username: primary.username, password: `Wrong!${password}` },
+        })));
+        expect(incorrect.every(item => item.status === 401 && item.data?.code === "INVALID_CREDENTIALS"), "Below-capacity invalid passwords must fail only as credential errors");
+        const after = await sessionRows(primary);
+        expect(after.length === before.length + 4, "Only the four successful concurrent logins may create complete sessions");
+      }
+    });
+
+    await run("single-process signup burst preserves atomicity and classifies any capacity refusal", async () => {
       const inputs = Array.from({ length: 20 }, (_, index) => ({ username: `busy${index}_${suffix}`, password }));
       const results = await Promise.all(inputs.map((body) => request("/sign-up/email", { body })));
-      expect(results.every((item) => [200, 503].includes(item.status)), "Admitted burst requests must finish with success or controlled capacity rejection");
+      expect(results.every((item) => item.status === 200 || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Burst requests may succeed or report positively identified hash saturation; generic 503, limiter and database errors must fail");
       for (let index = 0; index < results.length; index += 1) {
         const result = results[index];
         const username = inputs[index].username;
@@ -435,14 +481,55 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
           expect(counts.accounts === 1 && counts.sessions === 1, "Successful burst registration must be complete and atomic");
         }
       }
-      // CPU scheduling differs between Windows and Linux CI. Deterministic queue
-      // unit tests establish the hard bound; this actual HTTP burst records the
-      // capacity responses observed on this host without a production test hook.
-      const busy = results.filter((item) => item.status === 503).length;
-      console.log(`OBSERVED signup burst: 20 requests, ${20 - busy} successful, ${busy} controlled capacity responses`);
+      // Signup hashes run inside Prisma transactions; the connection pool can
+      // naturally keep them below password queue capacity. This is an atomicity
+      // probe, not evidence that the HTTP saturation path was exercised.
+      const busy = results.filter((item) => item.status === 503 && item.data?.code === "AUTH_HASH_BUSY").length;
+      console.log(`OBSERVED signup atomicity burst: 20 requests, ${20 - busy} successful, ${busy} identified hash-capacity responses; saturation not required in this case`);
       await pool.query('DELETE FROM "AuthRateLimit"');
       await pool.query('DELETE FROM "RateLimit"');
       await register("recovery");
+    });
+
+    await run("single-process real login saturation returns identified hash overflow and recovers", async () => {
+      const accounts = [];
+      for (let index = 0; index < 3; index += 1) accounts.push(await register(`load${index}`));
+      let observedBusy = 0;
+      // A login releases its database reads before verification, unlike signup's
+      // transaction. Twenty actual HTTP requests stay within client quota and
+      // divide across username allowances (7/7/6), so quota rejection is not an
+      // acceptable outcome. No production password/queue hooks are replaced.
+      for (let round = 0; round < 3 && observedBusy === 0; round += 1) {
+        await pool.query('DELETE FROM "AuthRateLimit"');
+        await pool.query('DELETE FROM "RateLimit"');
+        const before = await Promise.all(accounts.map(sessionRows));
+        const inputs = Array.from({ length: 20 }, (_, index) => accounts[index % accounts.length]);
+        const results = await Promise.all(inputs.map(account => request("/sign-in/username", {
+          server: origin, body: { username: account.username, password },
+        })));
+        expect(results.every(item => item.status === 200
+          || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Below-quota login load must not hide rate-limit, database or framework exceptions as capacity refusal");
+        const busy = results.filter(item => item.status === 503 && item.data?.code === "AUTH_HASH_BUSY");
+        expect(busy.every(item => Number(item.headers.get("retry-after")) > 0), "Identified hash overflow must provide a bounded positive retry interval");
+        expect(busy.every(item => !item.cookieLines.some(line => /session_token=/i.test(line))), "Rejected password work must not issue a session cookie");
+        for (let index = 0; index < accounts.length; index += 1) {
+          const account = accounts[index];
+          const successful = results.filter((item, requestIndex) => inputs[requestIndex] === account && item.status === 200);
+          expect(successful.every(item => item.data?.user?.id === account.id), "Every successful login must identify the requested synthetic account");
+          const after = await sessionRows(account);
+          expect(after.length === before[index].length + successful.length, "Only successful requests may add sessions; hash rejections must leave no hidden session rows");
+        }
+        observedBusy += busy.length;
+        console.log(`OBSERVED login saturation round ${round + 1}: 20 requests, ${20 - busy.length} successful, ${busy.length} AUTH_HASH_BUSY`);
+        // Promise.all above waits for all accepted work to complete before a
+        // repeat. Clear only this run's disposable counters, never real users.
+      }
+      expect(observedBusy > 0, "At least one real HTTP request must exercise the identified password-queue saturation path");
+      await pool.query('DELETE FROM "AuthRateLimit"');
+      await pool.query('DELETE FROM "RateLimit"');
+      const recovered = await request("/sign-in/username", { body: { username: accounts[0].username, password } });
+      expect(recovered.status === 200 && recovered.data?.user?.id === accounts[0].id, "Password verification must recover after all saturated work completes");
+      await sessionRows(accounts[0]);
     });
 
     await run("shared username limiter admits at most eight concurrent attempts across two processes", async () => {
@@ -450,15 +537,19 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       const results = await Promise.all(Array.from({ length: 12 }, (_, index) => request("/sign-in/username", { server: index % 2 ? secondOrigin : origin, body: { username: index % 2 ? username.toUpperCase() : username, password } })));
       expect(results.filter((item) => item.status === 429).length === 4, "A canonical username has a single shared eight-request allowance");
       expect(results.filter((item) => item.status !== 429).length === 8, "Exactly eight requests may pass the username limiter");
-      expect(results.every((item) => [401, 429, 503].includes(item.status)), "Rate rejection or bounded hash capacity must fail in controlled states");
-      expect(results.filter((item) => item.status === 429).every((item) => Number(item.headers.get("retry-after")) > 0), "Rate-limit responses require a positive Retry-After");
+      expect(results.every((item) => (item.status === 401 && item.data?.code === "INVALID_CREDENTIALS")
+        || (item.status === 429 && item.data?.code === "RATE_LIMITED")
+        || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Internal/framework-limiter failures cannot count as password capacity or rate rejection");
+      expect(results.filter((item) => item.status === 429 || item.status === 503).every((item) => Number(item.headers.get("retry-after")) > 0), "Known quota/capacity responses require a positive Retry-After");
     });
 
     await run("shared client limiter ignores spoofed forwarded IP and admits twenty concurrent attempts", async () => {
       const results = await Promise.all(Array.from({ length: 40 }, (_, index) => request("/sign-in/username", { server: index % 2 ? secondOrigin : origin, body: { username: `client${index}_${suffix}`, password } })));
       expect(results.filter((item) => item.status === 429).length === 20, "One untrusted client bucket must span both processes regardless of forged headers");
       expect(results.filter((item) => item.status !== 429).length === 20, "Only twenty concurrent requests may pass the shared client limiter");
-      expect(results.every((item) => [401, 429, 503].includes(item.status)), "Limiter and capacity responses must be controlled");
+      expect(results.every((item) => (item.status === 401 && item.data?.code === "INVALID_CREDENTIALS")
+        || (item.status === 429 && item.data?.code === "RATE_LIMITED")
+        || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Limiter and capacity responses must carry distinct verified categories; generic storage/internal failures must fail");
       const keys = (await pool.query('SELECT key FROM "AuthRateLimit"')).rows;
       expect(keys.length > 0 && keys.every((item) => !item.key.includes(suffix) && !item.key.includes("198.18.")), "Persisted limiter keys cannot expose raw usernames or client IPs");
     });
@@ -467,6 +558,9 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       const body = { username: `window_${suffix}`, password };
       const initial = await Promise.all(Array.from({ length: 9 }, (_, index) => request("/sign-in/username", { body, server: index % 2 ? secondOrigin : origin })));
       expect(initial.filter((item) => item.status === 429).length === 1, "The username window must first be exhausted");
+      expect(initial.every((item) => (item.status === 401 && item.data?.code === "INVALID_CREDENTIALS")
+        || (item.status === 429 && item.data?.code === "RATE_LIMITED")
+        || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Expiry setup cannot hide internal or limiter storage failures");
       const moved = await pool.query('UPDATE "AuthRateLimit" SET "expiresAt" = now() - interval \'1 second\'');
       expect(moved.rowCount > 0, "Real persisted limiter buckets must exist before expiring them");
       const resumed = await request("/sign-in/username", { body, server: secondOrigin });
