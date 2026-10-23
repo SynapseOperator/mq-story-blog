@@ -21,7 +21,7 @@ const eslintConfig = defineConfig([
   ]),
   {
     files: ["scripts/**/*.mjs", "tests/**/*.mjs", "prisma.config.ts"],
-    languageOptions: { globals: { process: "readonly", console: "readonly", Buffer: "readonly" } },
+    languageOptions: { globals: { process: "readonly", console: "readonly", Buffer: "readonly", Request: "readonly", Response: "readonly", AbortSignal: "readonly" } },
   },
 ]);
 

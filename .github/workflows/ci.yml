@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/p2-03-story-lifecycle]
   push:
     branches: [main]
 
@@ -43,13 +43,15 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm test
+      - name: Linux scrypt cost and bounded concurrency measurements
+        run: npm run test:auth:hash
       - name: Production build
         run: npm run build
 
   database:
     name: database
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: 'true'
     services:
@@ -96,6 +98,12 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:db
+      - name: Production build for real HTTP authentication tests
+        run: npm run build
+      - name: Isolated PostgreSQL authentication, concurrency and HTTPS tests
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:auth
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
