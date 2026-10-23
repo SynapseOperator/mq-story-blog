@@ -467,6 +467,13 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
     await run("single-process signup burst preserves atomicity and classifies any capacity refusal", async () => {
       const inputs = Array.from({ length: 20 }, (_, index) => ({ username: `busy${index}_${suffix}`, password }));
       const results = await Promise.all(inputs.map((body) => request("/sign-up/email", { body })));
+      const categories = new Set(["AUTH_HASH_BUSY", "AUTH_LIMITER_ERROR", "AUTH_INTERNAL_ERROR", "AUTH_STORAGE_UNAVAILABLE", "RATE_LIMITED"]);
+      const outcomes = {};
+      for (const item of results) {
+        const key = `${item.status}:${item.status === 200 ? "SUCCESS" : categories.has(item.data?.code) ? item.data.code : "UNEXPECTED"}`;
+        outcomes[key] = (outcomes[key] ?? 0) + 1;
+      }
+      console.log("OBSERVED signup status categories: " + JSON.stringify(outcomes));
       expect(results.every((item) => item.status === 200 || (item.status === 503 && item.data?.code === "AUTH_HASH_BUSY")), "Burst requests may succeed or report positively identified hash saturation; generic 503, limiter and database errors must fail");
       for (let index = 0; index < results.length; index += 1) {
         const result = results[index];

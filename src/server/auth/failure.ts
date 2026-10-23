@@ -16,5 +16,8 @@ export function classifyAuthFailure(error: unknown, stage: AuthFailureStage) {
   if (["P1001", "P1002", "P1017", "ECONNREFUSED", "ETIMEDOUT"].includes(String(code))) {
     return { status: 503, code: "AUTH_STORAGE_UNAVAILABLE", event: "MQ_AUTH_STORAGE_UNAVAILABLE", retryAfter: 5 };
   }
-  return { status: 500, code: "AUTH_INTERNAL_ERROR", event: "MQ_AUTH_INTERNAL_ERROR" };
+  // A fixed Prisma category is useful for pool/transaction diagnostics without
+  // exposing its message (which can contain SQL, model data or connection info).
+  return { status: 500, code: "AUTH_INTERNAL_ERROR",
+    event: code === "P2028" ? "MQ_AUTH_TRANSACTION_ERROR" : "MQ_AUTH_INTERNAL_ERROR" };
 }

@@ -158,6 +158,11 @@ async function main() {
   } catch (error) {
     failure = error;
   } finally {
+    const auditCategories = ["MQ_AUTH_CONFIG_UNAVAILABLE", "MQ_AUTH_LIMITER_FAILURE", "MQ_AUTH_HASH_BUSY",
+      "MQ_AUTH_STORAGE_UNAVAILABLE", "MQ_AUTH_INTERNAL_ERROR", "MQ_AUTH_TRANSACTION_ERROR", "MQ_AUTH_FRAMEWORK_ERROR"];
+    const captured = servers.map(server => server.output).join("\n");
+    console.log("Authentication fixed-category audit: " + JSON.stringify(Object.fromEntries(auditCategories
+      .map(category => [category, captured.split(category).length - 1]).filter(([, count]) => count > 0))));
     // End processes before dropping only the database created by this exact run.
     // Never FORCE DROP, kill someone else's sessions, or remove Docker volumes.
     for (const result of await Promise.allSettled(servers.map(stopServer))) {

@@ -38,6 +38,11 @@ test("limiter failures fail closed in a category distinct from quota and passwor
 });
 
 test("known connectivity failures differ from integrity and unexpected errors", () => {
+  const transaction = classifyAuthFailure({ code: "P2028" }, "framework");
+  assert.equal(transaction.event, "MQ_AUTH_TRANSACTION_ERROR");
+  assert.equal(transaction.code, "AUTH_INTERNAL_ERROR");
+  assert.equal(transaction.status, 500);
+  assert.equal(transaction.retryAfter, undefined);
   for (const code of ["P1001", "P1002", "P1017", "ECONNREFUSED", "ETIMEDOUT"]) {
     const failure = classifyAuthFailure({ code }, "framework");
     assert.equal(failure.status, 503);
