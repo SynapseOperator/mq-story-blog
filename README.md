@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-01：故事数据与稳定星位解耦**（[Issue #8](https://github.com/SynapseOperator/mq-story-blog/issues/8)）。Phase 1 的静态场景、环境交互和羽毛信阅读器已通过产品验收；[PR #5](https://github.com/SynapseOperator/mq-story-blog/pull/5)、[PR #6](https://github.com/SynapseOperator/mq-story-blog/pull/6)、[PR #7](https://github.com/SynapseOperator/mq-story-blog/pull/7) 已合并，Issue #1–#4 已关闭。[PR #7 合并后的 main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39771934866) 成功，合并提交为 `aee578d65b039a1f1356167724345ea1fdfcd85b`。
+当前为 **Phase 2 · P2-02：PostgreSQL 开发与测试基础**（[Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10)）。Phase 1 的静态场景、环境交互和羽毛信阅读器已通过产品验收；PR #5 / #6 / #7 已合并，Issue #1–#4 已关闭。P2-01 的数据契约与稳定星位解耦已通过产品验收，[PR #9](https://github.com/SynapseOperator/mq-story-blog/pull/9) 已合并，[Issue #8](https://github.com/SynapseOperator/mq-story-blog/issues/8) 已关闭；[合并后的 main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39933860000) 成功，合并提交为 `6dcd0d3990b5b48ebdc909148b6c7516515fe04f`。
 
-本任务只解耦数据契约、稳定星位与篝火身份，保留四份合成演示故事及已验收的构图、动画和阅读行为。完成真实绑定测试、工程检查与浏览器回归后提交 Draft PR，等待产品与独立开发者评审，不自动合并或开始 P2-02。真实故事业务、认证、数据库和部署尚未实现。
+本任务只建设数据库基础设施、迁移与集成测试，保留四份合成演示故事及已验收的构图、动画和阅读行为。完成后提交 Draft PR，等待产品与开发者评审，不自动合并或开始 P2-03。数据库探针不是博客业务模型；网站仍使用演示数据，真实故事、认证、点赞/留言服务与部署尚未实现。
 
-Phase 2 架构审查已确认继续使用 Next.js 模块化单体；后续采用 PostgreSQL 18 + Prisma 7 稳定线，独立草稿与公开版本、显式发布更新和受限结构化内容块。认证框架在 P2-04 经最小技术验证后确定，优先评估成熟方案。本轮不安装数据库相关工具，沿用已审查的 P2-01 至 P2-14 Roadmap，后续实现细节按对应任务确认。
+Phase 2 架构审查已确认继续使用 Next.js 模块化单体，采用 PostgreSQL 18 + Prisma 7 稳定线；后续业务采用独立草稿与公开版本、显式发布更新和受限结构化内容块。认证框架在 P2-04 经最小技术验证后确定，优先评估成熟方案。沿用已审查的 P2-01 至 P2-14 Roadmap，后续实现细节按对应任务确认。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -35,7 +35,9 @@ npm start
 npm run check
 ```
 
-`check` 串行执行 lint、类型检查、自动化测试和生产构建，任一步失败即返回非零。`npm test` 使用 Node.js 原生测试运行器验证稳定绑定，覆盖故事重排、过滤及篝火身份等行为；CI 同样执行测试。此处为操作说明，实际结果以命令退出码及对应 [Actions 记录](https://github.com/SynapseOperator/mq-story-blog/actions) 为准，测试通过不代替浏览器回归或未来真实业务验证。
+`check` 串行执行 lint、Prisma Schema 校验、类型检查、自动化测试和生产构建，任一步失败即返回非零；类型检查与构建会先生成 Prisma Client，但不连接数据库。`npm test` 使用 Node.js 原生测试运行器验证稳定绑定与数据库配置保护，包括故事重排、过滤及篝火身份等行为；CI 同样执行测试。此处为操作说明，实际结果以命令退出码及对应 [Actions 记录](https://github.com/SynapseOperator/mq-story-blog/actions) 为准，测试通过不代替浏览器回归或真实数据库验证。
+
+数据库环境、独立开发/测试入口、迁移与验证命令见 [数据库开发与测试说明](docs/engineering/DATABASE.md)。`npm run check` 可在没有数据库时检查现有前端；真实 PostgreSQL 迁移、隔离及持久化由独立数据库检查验证，不能用前端构建成功代替。当前本机尚无可用 Docker，本地容器与持久化验证仍受阻；不因此改用 SQLite 或 Mock。
 
 ## 工程与需求入口
 
@@ -43,7 +45,8 @@ npm run check
 - `src/app/`：应用路由、MQ 场景首页与 M/Q 建设中页面。保持单仓库模块化单体，按实际需要增加模块。
 - `src/components/scene/`：独立场景图层、固定导航与建设中视图；七张本地美术素材及来源、处理与差异说明见 [public/scene](public/scene/README.md)。
 - `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
-- `src/lib/stories/`：独立阅读契约与稳定场景绑定；`src/data/` 提供当前合成演示数据，由首页路由适配后传给组件。后续真实数据在此页面边界接入，不让组件依赖演示数据源；本轮没有数据库实现。
+- `src/lib/stories/`：独立阅读契约与稳定场景绑定；`src/data/` 提供当前合成演示数据，由首页路由适配后传给组件。后续真实数据在此页面边界接入，不让组件依赖演示数据源；本轮数据库基础尚不接入场景或阅读器。
+- `prisma/`：基础探针 Schema 与版本化迁移；[数据库说明](docs/engineering/DATABASE.md) 记录开发/测试隔离、凭据管理和实际验证边界。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 
@@ -57,9 +60,11 @@ npm run check
 
 两位开发者分别使用自己的 GitHub 账号，以 Issue 明确范围和验收，在功能分支提交小 PR，互审后合并。未来应用内唯一共享管理员与 GitHub 开发账号是两个权限边界；本阶段不创建管理员账号或密码，不邀请未经确认的协作者。
 
+PR #9 因第二位开发者暂时无法 Review，按产品负责人明确授权采用一次性 Review Exception，见 [审计说明](https://github.com/SynapseOperator/mq-story-blog/pull/9#issuecomment-6362057412)。这不是正式独立 Review 已通过；独立复核保留为非阻塞事项，其他 PR 继续按各自授权和评审门槛处理。
+
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-01-stable-story-slots` 对应 [#8 数据契约与稳定星位](https://github.com/SynapseOperator/mq-story-blog/issues/8)。四条初始化/原型工作项及依赖的历史记录见 [工作流](docs/engineering/WORKFLOW.md)。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数，不将原型参数扩展为永久产品约束。
+本分支 `chore/p2-02-postgresql-foundation` 对应 [#10 数据库开发与测试基础](https://github.com/SynapseOperator/mq-story-blog/issues/10)。四条初始化/原型工作项及依赖的历史记录见 [工作流](docs/engineering/WORKFLOW.md)；其中 Phase 0 的命令与范围是历史快照，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数，不将原型参数扩展为永久产品约束。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
@@ -82,4 +87,4 @@ npm run check
 
 当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
 
-Issue #3 的四项读信依赖已随 Issue #4 完成联合验收和收尾。本轮数据解耦仍须独立完成回归，不能仅沿用 Phase 1 的通过结论；工程检查与产品验收分别记录。真实业务与剩余课程验收保留后续阶段。
+Issue #3 的四项读信依赖已随 Issue #4 完成联合验收和收尾，P2-01 数据解耦亦已验收。后续改动仍须按实际影响验证，不能把历史通过结论当作新提交的测试结果；工程检查与产品验收分别记录。真实业务与剩余课程验收保留后续阶段。
