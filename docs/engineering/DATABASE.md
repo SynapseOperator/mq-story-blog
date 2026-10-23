@@ -75,24 +75,64 @@ CI 沿用现有 Quality 工作流，并增加独立数据库检查。临时 Post
 
 CI 临时服务只在一次性 runner 的回环端口使用 `trust`，不设置或展示共享密码；本地 Compose 与 CI 中的 Compose 验证均使用独立随机密码和 SCRAM。不能将临时服务的信任配置复制到本地 Compose 或部署环境。CI 不需要正式数据库密钥；本地随机密码不提交，CI 的临时随机值也不能写入可下载的日志、产物或缓存。工作流文件存在并不代表执行成功，结果须附具体 run 链接和被验证的提交 SHA。
 
-## 当前本机状态与安装前置事项
+## Windows 本机验收（2026-10-23）
 
-2026-10-23 的实际检查结果：
+最初没有 Docker 时，`db:env` 已创建本地凭据（退出 0），`db:up` 退出 1，`test:db` 因 `ECONNREFUSED` 退出 1；这些历史结果不代表数据库验证通过。之后负责人明确批准官方 Docker Desktop 安装，本次保留原有 `.env.db.local`，未重新生成或输出密码，补齐下列真实验证。
 
-| 检查 | 结果 |
-|---|---|
-| Windows | Windows 11 Home，版本 `10.0.26200` |
-| WSL | `2.6.3`，Ubuntu 可启动，Linux kernel `6.6.87.2` |
-| Hypervisor | `HypervisorPresent=true`；部分 CIM 虚拟化属性为 false，不能单凭这些属性判定 BIOS 虚拟化未启用 |
-| Docker | PATH、常见系统/用户安装目录及 WSL 内未发现可用 Docker；没有安装或启动 Docker Desktop |
-| 资源快照 | 约 31.7 GB 总内存、4.9 GB 可用；C 盘约 116.5 GB、D 盘约 461.6 GB 空闲 |
-| 端口 | 检查时 `55432`、`55433` 未占用；实际启动前仍须重新检查 |
+### 安装与环境
 
-实际执行 `npm run db:env` 成功创建被忽略的本地凭据文件（退出 0）；`npm run db:up` 因没有 Docker 退出 1；`npm run test:db` 在连接阶段以 `ECONNREFUSED` 退出 1，未执行数据库迁移或读写。因此，本机的容器、迁移、停止/重启与重建持久化尚未通过验证。CI 上的真实验证即使成功，也不等于这台 Windows 工作站已完成本地验收。
+安装前确认 Windows 11 Home `10.0.26200`、WSL `2.6.3` 与现有虚拟化可用；约 31.7 GB 总内存、5.5 GB 可用，C / D 盘分别约 115.9 / 461.2 GB 空闲。55432 / 55433 未占用；保留现有 6 个 VirtualBox 虚拟机进程和停止状态的 Ubuntu。
 
-建议批准后从 [Docker 官方 Windows 安装页](https://docs.docker.com/desktop/setup/install/windows-install/) 下载并验证 Docker Desktop，采用 per-user 安装与 WSL 2 Linux 容器后端。现有 WSL 先保留；首次启动由用户确认条款和需要的 WSL 集成，再验证 `docker version`、`docker compose version` 及引擎连通性，随后运行本文件中的数据库检查。
+安装程序来自 [Docker 官方 Windows 安装入口](https://docs.docker.com/desktop/setup/install/windows-install/)，实际下载域名为 `desktop.docker.com`，签名为有效的 Docker Inc.。安装器版本 `4.96.3.244472`，SHA-256 为 `3D8ADAD4F6C86583E0B00EA19A76197C51CCF5C83437C9ED775B739756452507`。执行 `install --user --backend=wsl-2 --quiet`，退出 0；未传入自动接受许可参数，许可及登录由使用者处理。安装位置为 `%LOCALAPPDATA%\Programs\DockerDesktop`。
 
-安装会增加 Docker 程序、容器镜像/数据占用及 WSL CPU/内存开销，可能要求重新登录或重启；本任务尚未执行这些系统操作。若安装器要求管理员权限、额外 Windows 功能或 BIOS 变更，先报告具体要求再确认。不自动修改 Hyper-V、BIOS、安全策略或全局 `.wslconfig`，不采购付费服务。官方条款需由使用者核对适用性。
+| 项目 | Windows 本机实际结果 | 已通过的 Linux CI 实际结果 |
+|---|---|---|
+| Docker Desktop | 4.96.3，per-user | 不使用 Desktop |
+| Docker Client / Engine | 29.9.2 / 29.9.2 | 28.0.4 / 28.0.4 |
+| Compose | 5.6.1 | 2.38.2 |
+| 容器后端 | Linux，WSL kernel `6.6.87.2-microsoft-standard-WSL2` | Linux runner |
+| PostgreSQL | 18.6，`server_version_num=180006` | 18.6 |
+| Prisma CLI / Client / adapter | 7.10.1 | 7.10.1 |
+| pg / Node / npm | 8.23.1 / 24.19.0 / 11.17.0 | 8.23.1 / 24.19.0 / 11.17.0 |
+
+Linux 证据：[当前代码提交 `5cdd02a` 的 Quality #16](https://github.com/SynapseOperator/mq-story-blog/actions/runs/39936781894)，quality / database 两个 job 成功。后续文档提交的最新 CI 在 PR #11 单独核对，不把旧 run 当作新提交证据。
+
+本机 context 为 `desktop-linux`，连接本机 named pipe；未执行 `docker context use` 或手工改写全局 Docker 配置，未改动 `.wslconfig`。旧 Codex 进程未继承安装后的 PATH，因此本轮只给执行命令的进程补充 `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`，并设置进程内 `DOCKER_CONTEXT=desktop-linux`。新终端可直接检查 `docker version` / `docker compose version`；不要因此修改系统安全策略。
+
+### 本机命令与证据
+
+验证的代码提交为 `5cdd02ab13aac660aebbfb35f5d00e2411a91775`；后续收尾仅更新 README 和本说明。
+
+| 实际命令 | 退出码 | 结果 |
+|---|---|---|
+| `npm.cmd run db:up` | 0 | 官方 PG18.6 镜像，开发/测试两个容器健康，端口仅绑定回环 |
+| `npm.cmd run db:generate` / `db:validate` | 各 0 | Prisma Client 生成及 Schema 校验成功 |
+| `npm.cmd run db:migrate` / `db:status` | 各 0 | 开发库正式迁移 deploy 及状态成功 |
+| `npm.cmd run test:db` | 0 | 11/11，真实 PG 连接、两个隔离空库迁移、重复迁移与差异检查、CRUD、约束、回滚、隔离及清理 |
+| `npm.cmd run test:db:persistence` | 0 | 5/5，双实例数据/身份隔离、停止启动、重建保留数据、重建后重复迁移 |
+| `npm.cmd run check` | 0 | lint、Schema、typecheck、20/20 单元测试及生产构建 |
+| 浏览器 `snapshot.mjs` / `regression.mjs` / `scene-regression.mjs` | 各 0 | 39 项阅读流程 + 19 项场景/入口检查通过 |
+
+持久化测试前即时检查：两个实例的其他客户端会话均为 0、prepared transaction 均为 0；容器 label 均属于 `mq-story-blog`，没有停止其他本地任务。重建前后实际容器 ID 如下，命名卷保持不变：
+
+| 实例 | 重建前 ID（前 12 位） | 重建后 ID（前 12 位） | 持续挂载的卷 |
+|---|---|---|---|
+| 开发 | `8906ecdf4758` | `0ceda98007cd` | `mq-story-blog_dev-data:/var/lib/postgresql` |
+| 测试 | `895d96cc137d` | `a90d379ef60d` | `mq-story-blog_test-data:/var/lib/postgresql` |
+
+两个实例均在停止/启动及重建后读回各自不同的合成标记；实际 PGDATA 为 `/var/lib/postgresql/18/docker`。验收后迁移 `202610230001_database_foundation` 均已完成，`database_probe` 均剩余 0 行，测试只清理自身探针。未执行 `down -v`、prune 或数据库 reset。两个容器最终保留为健康运行状态。
+
+对比安装前快照确认 `.env.db.local` 内容未变且仍被 Git 忽略；全局 `.wslconfig` 未变，Ubuntu 仍停止，原有 6 个 VirtualBox 进程保留。未修改 BIOS、Hyper-V、Windows 安全策略或全局 WSL 配置，未采购服务。Docker 自有 WSL 发行版和镜像/卷占用属于已授权安装的新增资源。
+
+浏览器复用现有 Playwright 1.64.1 / Chromium 156.0.8078.4，未新增依赖；生产构建 `ZtNkOwLT9BwmE_0B3kMzk`，视口 1536×1024、390×844、320×568、844×390。覆盖故事星/篝火对应文章、长文内部滚动、草稿保护、关闭、焦点、移动目录、reduced-motion、视差与固定 UI、M/Q 路由；意外 console/runtime/HTTP 错误为 0、写请求为 0，图片故障注入的 1 条预期 `ERR_FAILED` 单独记录。
+
+本地截图与 JSON 位于当前 Codex 任务证据目录 `mq-p2-02-windows/`，不提交浏览器会话或大文件。手机是 Chromium 触屏模拟，未覆盖实体手机、Safari 或 Firefox。本轮未重复严格历史像素比较；此前桌面比较存在最大 2/255（首页）、6/255（阅读器）通道差的历史记录仍保留在 PR，不改写成像素零差。工程回归不等于新的产品视觉验收。
+
+### Docker 启动问题的边界
+
+用户登录后报告启动器找不到 `SOFTWARE\Docker Inc.\Docker Desktop` 注册表项。官方 `docker desktop start --timeout 45` 恢复成功（退出 0）；随后在没有容器时完成三次正常停止后的启动对照：根目录启动器使用安装目录、使用工程目录、直接打开原桌面快捷方式，均启动成功。没有手改注册表、快捷方式或重装。
+
+普通快捷方式指向安装根目录启动器，浏览器 `docker-desktop` 协议登记指向 `resources` 下启动器；这是观察到的差异，不足以证明它导致报错。此前错误未复现，根因与浏览器登录回调触发条件仍未确认，不能声称已永久修复。若再现，先记录触发入口与错误，再用官方启动命令检查；不要凭猜测补注册表键或更改登录协议。
 
 ## 收尾边界
 

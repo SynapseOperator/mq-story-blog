@@ -37,7 +37,7 @@ npm run check
 
 `check` 串行执行 lint、Prisma Schema 校验、类型检查、自动化测试和生产构建，任一步失败即返回非零；类型检查与构建会先生成 Prisma Client，但不连接数据库。`npm test` 使用 Node.js 原生测试运行器验证稳定绑定与数据库配置保护，包括故事重排、过滤及篝火身份等行为；CI 同样执行测试。此处为操作说明，实际结果以命令退出码及对应 [Actions 记录](https://github.com/SynapseOperator/mq-story-blog/actions) 为准，测试通过不代替浏览器回归或真实数据库验证。
 
-数据库环境、独立开发/测试入口、迁移与验证命令见 [数据库开发与测试说明](docs/engineering/DATABASE.md)。`npm run check` 可在没有数据库时检查现有前端；真实 PostgreSQL 迁移、隔离及持久化由独立数据库检查验证，不能用前端构建成功代替。当前本机尚无可用 Docker，本地容器与持久化验证仍受阻；不因此改用 SQLite 或 Mock。
+数据库环境、独立开发/测试入口、迁移与验证命令见 [数据库开发与测试说明](docs/engineering/DATABASE.md)。`npm run check` 可在没有数据库时检查现有前端；真实 PostgreSQL 迁移、隔离及持久化由独立数据库检查验证，不能用前端构建成功代替。2026-10-23 已按负责人授权安装官方 Docker Desktop（per-user / WSL 2），Windows 本机的迁移、11 项集成测试及 5 项隔离/持久化检查通过；与 Linux CI 的结果、版本差异和启动问题边界分别记录在该说明中。
 
 ## 工程与需求入口
 
