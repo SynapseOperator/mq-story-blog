@@ -45,6 +45,8 @@ npm run db:down
 
 ## Schema、迁移与检查
 
+为兼容 CI 中的 Compose 版本，`db:start` 使用 `up --no-recreate --wait` 恢复已有容器并等待健康，不依赖较新版本的 `start --wait`；没有容器时也可创建本项目容器。行为依据见 [Docker Compose up 官方说明](https://docs.docker.com/reference/cli/docker/compose/up/)。
+
 `prisma/schema.prisma` 是 Schema 入口；首条迁移位于 `prisma/migrations/202610230001_database_foundation/migration.sql`，创建 `database_probe` 表：UUID 主键 `id`、最多 100 字符的合成值 `value`、带时区创建时间 `created_at`。迁移锁声明 PostgreSQL。迁移进入 PR 审查；不要把 `db push` 当作正式迁移历史，也不要为通过检查擅自重置数据库。
 
 ```sh

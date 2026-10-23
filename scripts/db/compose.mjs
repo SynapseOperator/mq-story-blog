@@ -16,7 +16,8 @@ export function composeArguments(parameters) {
     up: ["up", "--detach", "--wait", "--wait-timeout", "120", ...services],
     down: ["down"],
     stop: ["stop", ...services],
-    start: ["start", "--wait", "--wait-timeout", "120", ...services],
+    // Older Compose releases lack `start --wait`; up can await health without recreating stopped containers.
+    start: ["up", "--detach", "--no-recreate", "--wait", "--wait-timeout", "120", ...services],
     recreate: ["up", "--detach", "--wait", "--wait-timeout", "120", "--force-recreate", ...services],
   };
   if (!Object.hasOwn(actions, operation) || (operation === "down" && target !== "all")) {

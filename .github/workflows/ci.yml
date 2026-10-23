@@ -98,6 +98,8 @@ jobs:
         run: npm run test:db
       - name: Create isolated local-style development and test databases
         run: |
+          docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
+          docker compose version
           npm run db:env
           npm run db:up
       - name: Verify isolation, restart and container recreation persistence

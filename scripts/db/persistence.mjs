@@ -20,6 +20,7 @@ async function main() {
   ];
   const id = randomUUID();
   const seeded = [];
+  let failure;
   let checks = 0;
   async function withClient(target, callback) {
     const client = createDatabaseClient(target.url);
@@ -71,10 +72,19 @@ async function main() {
     stage = "repeat migration deployment after recreation preserves data";
     for (const target of targets) await runPrisma(["migrate", "deploy"], target.url);
     await verifyRows();
+  } catch (error) {
+    failure = error;
   } finally {
     // Only remove our unique probe, never truncate or clear either database.
-    for (const target of seeded) await withClient(target, (client) => client.databaseProbe.deleteMany({ where: { id } }));
+    for (const target of seeded) {
+      try { await withClient(target, (client) => client.databaseProbe.deleteMany({ where: { id } })); }
+      catch (error) {
+        failure ??= error;
+        console.error("Could not remove this run's probe; the database may be unavailable. No other data was cleared.");
+      }
+    }
   }
+  if (failure) throw failure;
   console.log(`Compose persistence/isolation: ${checks} checks passed`);
 }
 
