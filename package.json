@@ -9,28 +9,44 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run db:generate && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "npm run db:generate && next typegen && tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run db:validate && npm run typecheck && npm test && npm run build",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:env": "node scripts/db/init-env.mjs",
+    "db:up": "node scripts/db/compose.mjs up",
+    "db:down": "node scripts/db/compose.mjs down",
+    "db:stop": "node scripts/db/compose.mjs stop",
+    "db:start": "node scripts/db/compose.mjs start",
+    "db:recreate": "node scripts/db/compose.mjs recreate",
+    "db:migrate": "node scripts/db/migrate.mjs deploy dev",
+    "db:status": "node scripts/db/migrate.mjs status dev",
+    "test:db": "npm run db:generate && node scripts/db/integration.mjs",
+    "test:db:persistence": "npm run db:generate && node scripts/db/persistence.mjs"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "next": "16.4.2",
+    "pg": "8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@eslint/js": "10.0.1",
     "eslint": "10.13.0",
     "eslint-plugin-react-hooks": "7.1.1",
-    "typescript-eslint": "8.72.0",
+    "prisma": "7.10.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "8.72.0"
   }
 }

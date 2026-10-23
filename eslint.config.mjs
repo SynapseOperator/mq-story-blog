@@ -17,7 +17,12 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".agents/**",
+    "src/generated/prisma/**",
   ]),
+  {
+    files: ["scripts/**/*.mjs", "tests/**/*.mjs", "prisma.config.ts"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", Buffer: "readonly" } },
+  },
 ]);
 
 export default eslintConfig;

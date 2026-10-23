@@ -41,7 +41,72 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      - name: Story binding tests
+      - name: Unit tests
         run: npm test
       - name: Production build
         run: npm run build
+
+  database:
+    name: database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+    services:
+      postgres:
+        image: postgres:18.6-bookworm
+        env:
+          POSTGRES_DB: mq_test
+          POSTGRES_USER: mq_test
+          # Only this disposable, loopback-only GitHub runner service uses trust.
+          # Local Compose services use independent random passwords with SCRAM.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mq_test -d mq_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+          --memory 512m
+          --cpus 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; reviewed in V1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0; reviewed in V1
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Setup npm
+        run: npm install --global npm@11.17.0
+      - name: Verify package manager
+        run: test "$(npm --version)" = "11.17.0"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate schema and generate Prisma client
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: |
+          npm run db:validate
+          npm run db:generate
+      - name: Empty database migrations and PostgreSQL integration tests
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:db
+      - name: Create isolated local-style development and test databases
+        run: |
+          docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
+          docker compose version
+          npm run db:env
+          npm run db:up
+      - name: Verify isolation, restart and container recreation persistence
+        run: npm run test:db:persistence
+      - name: Stop project databases while preserving their volumes
+        if: always()
+        run: |
+          if [ -f .env.db.local ]; then
+            npm run db:down
+          fi

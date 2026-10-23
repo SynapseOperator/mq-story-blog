@@ -43,6 +43,7 @@ next-env.d.ts
 # Local input and third-party skills stay on this computer.
 LOCAL_ONLY_REFERENCE/
 /.agents/skills/
+/src/generated/prisma/
 *.docx
 *.doc
 *.zip
