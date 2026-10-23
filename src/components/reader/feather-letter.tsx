@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { DemoStory } from "../scene/demo-stories";
+import type { Story } from "@/lib/stories/story";
 
 type ReaderPhase = "opening" | "reading" | "closing";
 
@@ -9,7 +9,7 @@ type ReaderPhase = "opening" | "reading" | "closing";
 const OPEN_DURATION = 1000;
 const CLOSE_DURATION = 400;
 
-export function FeatherLetter({ story, onClosed }: { story: DemoStory; onClosed: () => void }) {
+export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmationRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { campfireStory, starStories, type DemoStory } from "./demo-stories";
+import { storySlotClasses, type SceneStory } from "@/lib/stories/scene-catalog";
+import type { Story } from "@/lib/stories/story";
 import { useSceneMotion } from "./use-scene-motion";
 
 // Small glints only: decorative, deterministic and never part of the focus order.
@@ -21,17 +22,20 @@ function BackdropImage({ asset, priority }: { asset: "night-sky" | "grassy-hills
   );
 }
 
-export function Landscape({ interactive = false, reading = false, onRead }: {
+export function Landscape({ stories, interactive = false, reading = false, onRead }: {
+  stories: readonly SceneStory[];
   interactive?: boolean;
   reading?: boolean;
-  onRead?: (story: DemoStory, trigger: HTMLButtonElement) => void;
+  onRead?: (story: Story, trigger: HTMLButtonElement) => void;
 }) {
+  const starStories = stories.filter((story) => story.entry === "star");
+  const campfireStory = stories.find((story) => story.entry === "campfire");
   const sceneRef = useSceneMotion(interactive && !reading);
   const [hovered, setHovered] = useState<string | null>(null);
   const [focused, setFocused] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const active = reading ? null : focused ?? hovered;
-  const fireActive = active === campfireStory.id;
+  const fireActive = active === campfireStory?.id;
 
   useEffect(() => {
     function clearEmphasis() { setHovered(null); setFocused(null); }
@@ -44,7 +48,7 @@ export function Landscape({ interactive = false, reading = false, onRead }: {
     };
   }, []);
 
-  function entry(story: DemoStory) {
+  function entry(story: SceneStory) {
     const showTitle = active === story.id && dismissed !== story.id;
     return (
       <button type="button" className={`story-entry story-entry--${story.entry}`}
@@ -127,7 +131,7 @@ export function Landscape({ interactive = false, reading = false, onRead }: {
           </div>
           <div className="scene-campfire-wood" data-scene-layer="campfire-wood">
             <img src="/scene/campfire-wood.webp" alt="" width="1536" height="1024" />
-            {interactive ? entry(campfireStory) : null}
+            {interactive && campfireStory ? entry(campfireStory) : null}
           </div>
         </div>
       </div>
@@ -139,7 +143,7 @@ export function Landscape({ interactive = false, reading = false, onRead }: {
               left: `${x}%`, top: `${y}%`, "--twinkle-duration": `${duration}s`, "--twinkle-delay": `${delay}s`,
             } as CSSProperties} />)}
           </div>
-          {starStories.map((story, index) => <div key={story.id} className={`story-position story-position--${index + 1}`}>
+          {starStories.map((story) => <div key={story.id} className={`story-position ${storySlotClasses[story.slotId]}`}>
             {entry(story)}
           </div>)}
         </div>
