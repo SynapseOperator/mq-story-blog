@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Story } from "@/lib/stories/story";
+import { AccountControls } from "../auth/account-controls";
 
 type ReaderPhase = "opening" | "reading" | "closing";
 
@@ -120,7 +121,7 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
     <dialog ref={dialogRef} className="letter-dialog" data-phase={phase} data-story-id={story.id}
       aria-labelledby="letter-title" aria-describedby="letter-demo-note" aria-busy={phase !== "reading"}
       style={{ "--letter-open-duration": `${OPEN_DURATION}ms`, "--letter-close-duration": `${CLOSE_DURATION}ms` } as CSSProperties}
-      onCancel={(event) => { event.preventDefault(); requestClose(); }}
+      onCancel={(event) => { event.preventDefault(); if (event.target === event.currentTarget) requestClose(); }}
       onPointerDown={(event) => { backdropPress.current = event.target === event.currentTarget; }}
       onClick={(event) => {
         if (event.target === event.currentTarget && backdropPress.current) requestClose();
@@ -159,6 +160,7 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
           </div>
           <section className="letter-comments" aria-labelledby="letter-comments-title">
             <h3 id="letter-comments-title">留言</h3>
+            <AccountControls reader />
             <p id="letter-comment-help">写下此刻的想法。仅供演示，不会发送、公开或保存；真实留言审核功能尚未接入。</p>
             <form onSubmit={(event) => { event.preventDefault(); if (draft.trim()) setPreview(draft); }}>
               <label className="sr-only" htmlFor="letter-comment">演示留言</label>

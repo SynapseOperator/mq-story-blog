@@ -6,6 +6,7 @@ import { FeatherLetter } from "../reader/feather-letter";
 import type { Story } from "@/lib/stories/story";
 import type { SceneStory } from "@/lib/stories/scene-catalog";
 import { Landscape } from "./landscape";
+import { AccountControls } from "../auth/account-controls";
 
 type Section = "mq" | "m" | "q";
 const noStories: readonly SceneStory[] = [];
@@ -77,14 +78,7 @@ export function ScenePage({ section, stories = noStories }: { section: Section; 
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <header className="scene-header" data-scene-layer="ui">
         <Wordmark />
-        <div className="account-placeholder">
-          <button type="button" disabled aria-describedby="account-note">
-            <NavigationIcon />
-            <span>登录</span>
-          </button>
-          <button className="register-placeholder" type="button" disabled aria-describedby="account-note">注册</button>
-          <span id="account-note">暂未开放</span>
-        </div>
+        <AccountControls />
       </header>
       <nav className="scene-nav" aria-label="主页导航" data-scene-layer="ui">
         {navigation.map((item) => (

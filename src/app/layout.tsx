@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "../components/reader/letter.css";
+import "../components/auth/auth.css";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 export const metadata: Metadata = {
   title: "MQ · Our Stories",
@@ -11,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body><AuthProvider>{children}</AuthProvider></body>
     </html>
   );
 }
