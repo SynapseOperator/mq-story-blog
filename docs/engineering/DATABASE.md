@@ -1,12 +1,12 @@
 # PostgreSQL 开发与测试基础
 
-本文件对应 [P2-02 / Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10)。这里只建设数据库运行、迁移与真实集成测试；页面仍使用四份合成演示故事，不创建用户、管理员、文章发布、点赞或留言服务。后续业务 Schema、服务端权限与发布版本约束在对应任务中实现。
+本文件记录已验收的 [P2-02 / Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10) 环境与迁移运行方式。P2-03 新增故事领域 Schema、原生约束和内部事务服务，见 [STORY_LIFECYCLE.md](STORY_LIFECYCLE.md)；页面仍使用四份合成演示故事，不创建账号、正式发布 API、点赞或留言服务。
 
 ## 技术与隔离边界
 
 - PostgreSQL 使用官方 `postgres:18.6-bookworm` 镜像；版本号固定，升级须通过迁移与集成测试。
 - Prisma CLI、Client、PostgreSQL adapter 均锁定 `7.10.1`，`pg` 驱动锁定 `8.23.1`，由 `package-lock.json` 固定依赖树。
-- Prisma Schema 只包含合成 `DatabaseProbe`，用于验证写入、读取、迁移和持久化，不先定义或冻结未来业务实体。
+- P2-02 的 `DatabaseProbe` 保留为独立基础设施探针。P2-03 另增 `Story`、`StoryRevision` 和 `StarSlot`，使用新迁移，不改写已应用的探针迁移；具体约束见领域说明，不提前定义用户或其他业务实体。
 - 当前 Next.js、TypeScript、npm 与前端测试流程继续保留；网站页面不依赖数据库才能展示现有原型。
 
 | 环境 | Compose 服务 | 数据库 / 用户 | 本机入口 | 网络 / 命名卷 |
@@ -136,4 +136,4 @@ Linux 证据：[当前代码提交 `5cdd02a` 的 Quality #16](https://github.com
 
 ## 收尾边界
 
-P2-02 以 Draft PR 提交，独立记录本地与 CI 的命令、退出码和限制，等待项目负责人验收；不自动合并、不开始 P2-03。唯一管理员、唯一篝火、稳定星位、故事版本归属等数据库级业务约束仍属于后续任务，本轮探针迁移不能冒充这些功能已实现。
+P2-02 已获负责人技术验收，PR #11 按其另行授权的一次性 Review Exception 合并，main CI 成功，Issue #10 completed 关闭。以上 Windows 验收记录是 P2-02 的历史证据，不冒充 P2-03 新增领域测试结果。P2-03 的唯一篝火、星位和版本归属约束及测试见领域说明；唯一管理员仍在后续用户/认证任务实现。P2-03 以新 Draft PR 提交，不自动合并或开始 P2-04。

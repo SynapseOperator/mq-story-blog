@@ -10,11 +10,69 @@ datasource db {
   provider = "postgresql"
 }
 
-// Synthetic infrastructure probes only. Business models belong to P2-03.
+// Synthetic infrastructure probes, separate from all business records.
 model DatabaseProbe {
   id        String   @id @default(uuid()) @db.Uuid
   value     String   @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("database_probe")
+}
+
+enum StoryKind {
+  STAR
+  CAMPFIRE
+}
+
+enum StoryState {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+model StarSlot {
+  id       String @id @db.VarChar(64)
+  sceneKey String @unique @map("scene_key") @db.VarChar(64)
+  story    Story?
+
+  @@map("star_slot")
+}
+
+// Native SQL additionally enforces the singleton campfire, legal lifecycle,
+// immutable identity/published binding, and optimistic version increments.
+model Story {
+  id                  String          @id @default(uuid()) @db.Uuid
+  slug                String          @unique @db.VarChar(120)
+  kind                StoryKind
+  state               StoryState      @default(DRAFT)
+  slotId              String?         @unique @map("slot_id") @db.VarChar(64)
+  draftRevisionId     String          @map("draft_revision_id") @db.Uuid
+  publishedRevisionId String?         @map("published_revision_id") @db.Uuid
+  version             Int             @default(0)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  slot                StarSlot?       @relation(fields: [slotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisions           StoryRevision[] @relation("StoryRevisions")
+  // Composite ownership FKs are DEFERRABLE INITIALLY DEFERRED in migration SQL:
+  // create the story and its first immutable revision in the same transaction.
+  draftRevision       StoryRevision   @relation("DraftRevision", fields: [id, draftRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
+  publishedRevision   StoryRevision?  @relation("PublishedRevision", fields: [id, publishedRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("story")
+}
+
+// Every save appends a revision. Native SQL rejects UPDATE and DELETE so an
+// already-published revision cannot silently change with a later draft save.
+model StoryRevision {
+  id           String   @id @default(uuid()) @db.Uuid
+  storyId      String   @map("story_id") @db.Uuid
+  title        String   @db.VarChar(160)
+  content      Json
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  story        Story    @relation("StoryRevisions", fields: [storyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  draftFor     Story[]  @relation("DraftRevision")
+  publishedFor Story[]  @relation("PublishedRevision")
+
+  @@unique([storyId, id])
+  @@map("story_revision")
 }
