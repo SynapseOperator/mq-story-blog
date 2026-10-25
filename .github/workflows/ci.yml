@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main, feat/p2-03-story-lifecycle]
+    branches: [main]
   push:
     branches: [main]
 
@@ -118,6 +118,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:auth
+      - name: Singleton administrator, least privilege and real HTTP authorization
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:admin
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
