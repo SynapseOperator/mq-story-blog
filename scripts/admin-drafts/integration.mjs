@@ -13,6 +13,8 @@ import { startHttpsProxy } from "../auth/https-proxy.mjs";
 import { applyAdminDraftDatabasePrivileges } from "./privileges.mjs";
 import { runDraftDatabaseTests } from "./database-tests.mjs";
 import { runDraftHttpTests, runDraftHttpsTests } from "./http-tests.mjs";
+import { createAuthDatabaseClient } from "../../src/server/auth/database.ts";
+import { initializeAdmin } from "../../src/server/admin/maintenance.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -136,7 +138,7 @@ async function main() {
     console.log("PASS disabled authentication rejects both private draft resources");
     stage = "production HTTPS draft operations and trusted ingress validation";
     const backendPort = await unusedPort(); tls = await startHttpsProxy(backendPort); secrets.add(tls.proxySecret);
-    await startServer(backendPort, { ...env, AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
+    const secureServer = await startServer(backendPort, { ...env, AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
       { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" });
     const httpsResult = await runDraftHttpsTests({ connectionString: application.connectionString, origin: tls.origin,
       backendOrigin: `http://127.0.0.1:${backendPort}`, ca: tls.ca, credentials: httpResult, secrets });
@@ -148,11 +150,36 @@ async function main() {
       const counters = new pg.Pool({ connectionString: application.connectionString, max: 1 });
       try { await counters.query('DELETE FROM "AuthRateLimit"; DELETE FROM "RateLimit"'); }
       finally { await counters.end(); }
-      const { runBrowser } = await import(pathToFileURL(process.env.MQ_DRAFT_BROWSER_MODULE).href);
+      const { runBrowser, runFreshCampfireBrowser } = await import(pathToFileURL(process.env.MQ_DRAFT_BROWSER_MODULE).href);
       await runBrowser({ baseURL: tls.origin, evidenceDirectory: process.env.DRAFT_BROWSER_EVIDENCE_DIR,
         admin: httpResult.admin, regular: httpResult.regular, privateCanaries: httpResult.privateCanaries,
         ignoreHTTPSErrors: true, expectedSecure: true });
       console.log("PASS real production desktop/mobile draft and existing-reader browser regression");
+      if (runFreshCampfireBrowser) {
+        // Existing HTTP tests intentionally retain their singleton CAMPFIRE.
+        // Verify the first UI creation in a third empty, owned database instead
+        // of deleting that fixture or weakening the original uniqueness test.
+        stage = "first CAMPFIRE UI creation in a separate empty database";
+        const fresh = await isolatedDatabase();
+        const admin = { username: `editor_${id().slice(0, 10)}`, password: `MqTest!${randomBytes(24).toString("base64url")}` };
+        secrets.add(admin.password);
+        const maintenance = createAuthDatabaseClient(fresh.maintenanceUrl);
+        try { await initializeAdmin(maintenance, admin); } finally { await maintenance.$disconnect(); }
+        await stopServer(secureServer);
+        await startServer(backendPort, { ...env, DATABASE_URL: fresh.runtimeUrl, AUTH_ORIGIN: tls.origin,
+          AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
+          { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" });
+        await runFreshCampfireBrowser({ baseURL: tls.origin, evidenceDirectory: process.env.DRAFT_BROWSER_EVIDENCE_DIR,
+          admin, ignoreHTTPSErrors: true, expectedSecure: true });
+        const freshInspection = new pg.Pool({ connectionString: fresh.connectionString, max: 1 });
+        try {
+          const campfires = (await freshInspection.query("SELECT kind,state,slot_id FROM story WHERE kind='CAMPFIRE'")).rows;
+          assert.equal(campfires.length, 1); assert.equal(campfires[0].state, "DRAFT"); assert.equal(campfires[0].slot_id, null);
+          console.log("PASS first UI CAMPFIRE persists as one slot-free draft in its separate database");
+          const rows = (await freshInspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+          rows.forEach(row => secrets.add(row.value));
+        } finally { await freshInspection.end(); }
+      }
     }
     stage = "production application log privacy regression";
     const inspection = new pg.Pool({ connectionString: application.connectionString, max: 1 });

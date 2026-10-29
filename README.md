@@ -2,13 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-08A：管理员草稿服务与受保护 API**（[Issue #23](https://github.com/SynapseOperator/mq-story-blog/issues/23)）。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站只使用用户名和密码，内部占位邮箱不用于收发邮件或权限判断。
+当前为 **Phase 2 · P2-08B：管理员简单结构化故事编辑器**（[Issue #25](https://github.com/SynapseOperator/mq-story-blog/issues/25)）。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站只使用用户名和密码，内部占位邮箱不用于收发邮件或权限判断。
 
-Phase 1 与 P2-01 至 P2-04 已合入，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。本分支按负责人授权从待独立安全评审的 [PR #18](https://github.com/SynapseOperator/mq-story-blog/pull/18) 已核实提交 `c12e17725ae1dddcc0d53357a6c76f10f62e64ae` 派生，Draft PR 暂以 `feat/p2-05-admin-boundary` 为 base。依赖未合并不等于已在 main；[PR #20](https://github.com/SynapseOperator/mq-story-blog/pull/20) 和 [PR #22](https://github.com/SynapseOperator/mq-story-blog/pull/22) 的公开读取/分享功能也尚未引入本分支。
+Phase 1 与 P2-01 至 P2-04 已合入，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。本分支从 [PR #24](https://github.com/SynapseOperator/mq-story-blog/pull/24) 已核实提交 `aeeda4115530a030960ed469d9c1e564304c73fa` 派生，Draft PR 暂以 `feat/p2-08a-admin-drafts` 为 base。PR #24 又依赖 [PR #18](https://github.com/SynapseOperator/mq-story-blog/pull/18)，依赖未合并不等于已在 main；[PR #20](https://github.com/SynapseOperator/mq-story-blog/pull/20) 和 [PR #22](https://github.com/SynapseOperator/mq-story-blog/pull/22) 的公开读取/分享功能尚未引入。
 
-本轮仅增加四个私有草稿 API、同事务领域操作和精确列权限，沿用 `/admin` 最小入口，不新增编辑器或预览 UI。场景和羽毛信继续使用四份合成故事，登录与阅读视觉不变。[草稿接口说明](docs/engineering/ADMIN_DRAFTS.md) 记录 DTO、事务、权限与验证；基础权限见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)，认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，生命周期见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。只在临时库使用合成账号，尚未开放正式注册或创建真实管理员。
+受控管理员可从 `/admin` 进入 `/admin/stories`，手动创建和编辑结构化草稿。所有数据操作复用四个私有草稿 API；服务端与数据库权限边界不变。界面区分当前编辑、发送快照及服务器确认版本；冲突或结果未知时保留本地输入，先核对再保存。场景与羽毛信继续使用四份合成故事，已验收视觉不变。
 
-Phase 2 沿用 Next.js 模块化单体、独立草稿与公开版本、显式发布及受限内容块。P2-01 至 P2-14 Roadmap 保留。完成本 Draft PR 后停止，等待技术及安全 Review，不自动合并、不进入 P2-08B/C；依赖修改或合并后同步并重新验证。
+[编辑器说明](docs/engineering/ADMIN_EDITOR.md) 记录状态、错误恢复和浏览器验收；[草稿接口说明](docs/engineering/ADMIN_DRAFTS.md) 记录 DTO、事务与列权限。基础权限见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)，认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，生命周期见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。只在临时库使用合成账号，未开放正式注册或创建真实管理员。
+
+Phase 2 保留 P2-01 至 P2-14 Roadmap。完成本 Draft PR 后等待产品、技术及独立 Review，不自动合并，不进入 P2-08C/P2-09/P2-10；依赖修改或合并后重新验证，包括公开读取/分享联合测试。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

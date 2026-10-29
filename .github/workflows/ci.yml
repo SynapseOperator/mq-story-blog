@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main, feat/p2-05-admin-boundary]
+    branches: [main, feat/p2-05-admin-boundary, feat/p2-08a-admin-drafts]
   push:
     branches: [main]
 
@@ -126,6 +126,12 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:admin-drafts
+      - name: Install Chromium for private editor browser regression
+        run: npx playwright install --with-deps chromium
+      - name: Private editor PostgreSQL, HTTPS and desktop/mobile browser regression
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:admin-editor
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
