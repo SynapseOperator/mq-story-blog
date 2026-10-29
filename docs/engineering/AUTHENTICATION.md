@@ -4,9 +4,9 @@
 
 ## 依赖与合并
 
-从 P2-03 `d582cd780dd1c50a84403c2030cdfa4eda738c62` 创建 `feat/p2-04-username-auth`。Draft PR 的 base 为 `feat/p2-03-story-lifecycle`；[PR #13](https://github.com/SynapseOperator/mq-story-blog/pull/13) 未合并，没有 Review Exception。不能将故事领域代码描述为已经属于 main。
+P2-04 原从 P2-03 `d582cd7` 建立 Stacked PR。2026-10-25，PR #13 与 #16 均获 SnorkelingBreather 对精确 HEAD 的正式 APPROVED，在负责人授权下普通 merge；#16 retarget main 后重新执行数据库/认证/浏览器及 CI 检查。最终 main `30ccf87cd59f23a1f749b7843badca9ae80e829a` 的 quality/database 均成功，Issues #12/#15 completed。未使用 Review Exception；原失败 CI 与修正记录保留。
 
-PR #13 获正式授权合并后，先核对 main 的真实 SHA/CI，再调整本 PR base；若依赖 squash 合并，谨慎处理重复提交，仅保留本增量，不修改历史迁移。重新执行空库全部迁移、schema diff、故事/认证集成、工程检查和浏览器回归，新的提交需要新的 Review/CI。当前不合并任一 PR，不开始 P2-05。
+当前 P2-05 增量见 [ADMIN_AUTHORIZATION.md](ADMIN_AUTHORIZATION.md)。以下 P2-04 测试数量与历史诊断保留原始语义，不作为新提交自动通过的依据。
 
 ## 请求与数据路径
 
@@ -54,7 +54,7 @@ erDiagram
 - `User.username` NOT NULL + UNIQUE + CHECK 小写 `[a-z0-9_]{3,32}`；服务端将 ASCII 大写转为小写。数据库唯一性解决并发同名竞争。
 - `User.email` 是服务端随机 UUIDv4 `@accounts.invalid`，与用户名无关联；UNIQUE、格式 CHECK、不可变 UPDATE trigger；`emailVerified=false` CHECK。不发邮件、不承诺密码找回。
 - `Account` 仅允许 credential，accountId=userId、密码非空且 OAuth token 为空；providerId/accountId 复合唯一，用户外键。公开接口不接受内部字段。
-- 没有 role/admin/grant 列或管理员插件。P2-04 所有新用户只有普通身份，尚未具备管理员权限；P2-05 才设计唯一管理员授权，不以 `User.role UNIQUE` 代替唯一管理员约束。
+- 不使用 role 字段或 Better Auth 管理员插件；公开注册始终普通身份。P2-05 在独立迁移中增加 AdminGrant，以稳定 User ID 关联，公开认证 HTTP 路径没有授权能力；不以 `User.role UNIQUE` 代替单例约束。
 - `Session` 有唯一 token、用户 FK、绝对过期时间；Cookie cache 关闭，每次读取检查数据库，默认 24 小时绝对有效、不自动续期。退出/删除 Session/过期后旧 Cookie 立即失效。后续受控管理服务可撤销记录，本轮没有无鉴权撤销 API。
 - **Better Auth 默认 Session.token 在数据库中原值存储，本实现未改为哈希保存。** Cookie 签名、HttpOnly 与响应字段剔除不等于数据库 token 已哈希；DB/备份泄漏仍是关键风险。
 - `Verification` 是框架兼容模型，当前无邮件功能且测试要求零记录。`RateLimit` 是框架第二道保守限流；`AuthRateLimit` 是项目共享原子窗口。
@@ -131,6 +131,6 @@ npm run test:auth:logs
 
 场景账号入口和信纸内账号窗口共用会话状态与原生 dialog。登录/注册不导航离开阅读器；取消/成功后保留文章、滚动、演示留言草稿。外层阅读规则、Logo/星位/动画/素材保持不变。登录不赋予真实点赞/评论能力，原有演示按钮仍明确为本地状态。用户名/密码要求与不提供找回在窗口中明确说明。
 
-开放真实用户前仍必须完成：独立安全审查、应用数据库最小权限检查（运行身份不能沿用迁移/测试创建库身份）、正式 HTTPS/代理配置审查、备份及日志秘密保护、资源压力与限流误伤评估。P2-05 管理员及后续业务不属于本次范围。UI 产品验收待负责人；技术测试不替代视觉/交互审批。
+开放真实用户前仍必须完成：独立安全审查、实际部署的应用数据库最小权限检查（不能沿用迁移/测试创建库身份）、正式 HTTPS/代理配置审查、备份及日志秘密保护、资源压力与限流误伤评估。P2-04 UI 已通过负责人视觉验收，P2-05 保留其设计；后续测试不冒充新的产品审批。
 
 官方依据（2026-10-23 核对，兼容性同时以安装的1.7.12源码和真实测试为准）：[Hooks](https://better-auth.com/docs/concepts/hooks)、[Options](https://better-auth.com/docs/reference/options)、[Prisma adapter](https://better-auth.com/docs/adapters/prisma)、[Username](https://better-auth.com/docs/plugins/username)、[Rate limit](https://better-auth.com/docs/concepts/rate-limit)、[Sessions](https://better-auth.com/docs/concepts/session-management)、[OWASP 密码存储](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)、[Node scrypt](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)。

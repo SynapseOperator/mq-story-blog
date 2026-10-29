@@ -77,7 +77,8 @@ model StoryRevision {
   @@map("story_revision")
 }
 
-// Authentication compatibility fields are server-only; no administrator grant exists in P2-04.
+// Authentication compatibility fields are server-only. Admin authorization is
+// a separate immutable identity binding, never a client-provided User role.
 model User {
   id String @id
   name String
@@ -90,6 +91,8 @@ model User {
   displayUsername String?
   sessions Session[]
   accounts Account[]
+  adminGrant AdminGrant?
+  adminSecurityEvents AdminSecurityEvent[]
 }
 model Session {
   id String @id
@@ -143,4 +146,29 @@ model AuthRateLimit {
   count     Int
   expiresAt DateTime @db.Timestamptz(3)
   @@index([expiresAt])
+}
+
+// Native CHECK id=1 plus the primary key enforce one persistent authorization
+// identity, including after revocation. Triggers protect identity and lifecycle.
+model AdminGrant {
+  id                Int       @id @default(1)
+  userId            String    @unique
+  version           Int       @default(0)
+  credentialVersion Int       @default(0)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+// Append-only trigger-generated operations. No token, password, email, story
+// body or unbounded free text. Database identity is not a natural-person claim.
+model AdminSecurityEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind          String   @db.VarChar(32)
+  userId        String
+  eventAt       DateTime @default(now()) @db.Timestamptz(3)
+  databaseActor String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([userId, eventAt])
 }

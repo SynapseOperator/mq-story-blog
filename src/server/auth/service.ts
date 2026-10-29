@@ -10,6 +10,7 @@ import { consumeAuthLimit } from "./rate-limit.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
 import { createFrameworkRateLimitStorage } from "./framework-rate-limit.ts";
 import { classifyAuthFailure, type AuthFailureStage } from "./failure.ts";
+import { withAdminCredentialLock } from "../admin/login-lock.ts";
 
 export type PublicSession = { user: { id: string; username: string }; session: { expiresAt: string } };
 
@@ -111,7 +112,10 @@ export async function handleAuth(request: Request) {
     const handler = handlers[request.method as keyof typeof handlers];
     if (!handler) return jsonReply(405, "METHOD_NOT_ALLOWED");
     stage = "framework";
-    return await publicResponse(await handler(request), inspected.path);
+    const response = inspected.path === "/sign-in/username" && inspected.input
+      ? await withAdminCredentialLock(db, config.databaseURL, inspected.input, () => handler(request))
+      : await handler(request);
+    return await publicResponse(response, inspected.path);
   } catch (error) {
     // Fixed provenance/category only; never serialize driver objects or values.
     const failure = classifyAuthFailure(error, stage);
@@ -123,9 +127,19 @@ export async function handleAuth(request: Request) {
 
 /** Read-only server boundary for future authenticated services. Never returns a bearer token/email/role claim. */
 export async function readSession(headers: Headers): Promise<PublicSession | null> {
+  const verified = await readVerifiedSession(headers);
+  return verified ? { user: verified.user, session: { expiresAt: verified.expiresAt } } : null;
+}
+
+/** Server-only identity proof for authorization. The session ID is not a bearer
+ * token and must still be revalidated with the grant in the operation transaction.
+ * Never serialize this internal object through a public authentication endpoint.
+ */
+export async function readVerifiedSession(headers: Headers) {
   try {
     const result = await getService().auth.api.getSession({ headers });
     const user = publicUser(result?.user);
-    return user && result?.session ? { user, session: { expiresAt: result.session.expiresAt.toISOString() } } : null;
+    return user && result?.session ? { user, sessionId: result.session.id,
+      expiresAt: result.session.expiresAt.toISOString() } : null;
   } catch { throw new Error("AUTH_UNAVAILABLE"); }
 }
