@@ -1,6 +1,6 @@
 # P2-06：公开故事读取与阅读器接入
 
-对应 [Issue #19](https://github.com/SynapseOperator/mq-story-blog/issues/19)，依据 PRD v1.1 §5.1–5.5、§6、§7 与 §11。分支直接来自 main `30ccf87cd59f23a1f749b7843badca9ae80e829a`，只使用已合并 P2-03/04；待独立 Review 的 P2-05 / PR #18 未合并，不依赖其管理员权限模块。
+对应 [Issue #19](https://github.com/SynapseOperator/mq-story-blog/issues/19)，依据 PRD v1.1 §5.1–5.5、§6、§7 与 §11。分支最初来自 main `30ccf87cd59f23a1f749b7843badca9ae80e829a`。2026-10-29 同步已合入 P2-05 的 main `8c7c83c31d0ff2aed0bbcc32325ee711aa288a4e`；保留管理员实现与公开只读数据路径，未改管理员授权逻辑。同步后的 PR #20 新提交须重新独立 Review。
 
 ## 数据路径与公开契约
 
@@ -57,7 +57,7 @@ npm run test:db
 npm run test:public
 ```
 
-`test:public` 校验现有 `mq_test` 本机/CI 实例，仅以它作为控制连接，创建本轮随机 `mq_test_public_<随机值>` 数据库与独立非特权只读角色。依次从空库执行历史 001→002→003、重复部署、migration status 与 schema drift 检查；不新增迁移，也不修改历史 SQL。
+`test:public` 校验现有 `mq_test` 本机/CI 实例，仅以它作为控制连接，创建本轮随机 `mq_test_public_<随机值>` 数据库与独立非特权只读角色。依次从空库执行历史 001→002→003→004、重复部署、migration status 与 schema drift 检查；不新增迁移，也不修改历史 SQL。
 
 合成夹具在这个临时库内通过已有生命周期服务创建：两篇公开星星、一篇公开篝火、未发布草稿、下架故事以及已发布文章的未发布修订和旧历史版本。长文含多张配图和故意失效配图，另有无图短文。测试期间将现有合成夜空素材复制为唯一临时静态文件供真实 HTTP 加载，结束后只删除本轮精确文件；不提交重复素材。
 
@@ -67,7 +67,7 @@ npm run test:public
 
 结束时只清理本轮创建的进程、数据库、角色和图片，不 FORCE DROP、不停止现有开发任务、不 reset/清空已有库、不 prune/删除卷。CI database Job 在生产构建后执行同一 `test:public`。具体命令退出码、检查数量、截图及 CI 链接以本次 PR 的实际执行记录为准；本说明本身不代表测试或视觉验收已经通过。
 
-## 本轮本机验证（2026-10-29）
+## 首轮本机验证（2026-10-29，提交 648d9e5）
 
 - Windows / PostgreSQL 18.6 / Prisma 7.10.1：`npm run check` 退出 0，46 项单元测试、lint、Schema、类型检查及生产构建通过。
 - `npm run test:db` 退出 0，31 项数据库/生命周期检查；`npm run test:public`（带外部浏览器 hook）退出 0，15 项公开 PostgreSQL/HTTP 检查，以及真实空库、连接拒绝、迁移重复部署、drift 与只读身份检查。
@@ -76,10 +76,18 @@ npm run test:public
 - 首轮新测试出现期望键排序错误，已修正；浏览器故障用例曾因等待 networkidle 超时，改为明确等待真实 503/200 与 DOM 状态后整组通过。原失败报告保留在仓库外，不把失败当作已通过。
 - 浏览器脚本、JSON、截图在本机 `mq-p2-06/run-03` 证据目录，不提交凭据、Cookie、HAR 或测试资料。CI 结果及提交 SHA 在 Draft PR 中单独记录；以上不代表负责人产品验收或独立 APPROVED Review。
 
+## 同步 P2-05 后的本机复验（2026-10-29）
+
+- 合并 main `8c7c83c31d0ff2aed0bbcc32325ee711aa288a4e` 时，解决 CI、协作说明、README 和临时数据库日志白名单四处冲突；CI 同时保留 `test:admin` 与 `test:public`，白名单只增加各自受控的临时库前缀。管理员实现及迁移与 main 一致，公开读取及已验收 UI 与 `648d9e5` 一致。
+- `npm run check` 退出 0：54 项单元测试、lint、Schema、类型检查及生产构建通过。
+- `npm run test:db`、`npm run test:auth`、`npm run test:admin` 均退出 0：31 项数据库检查、35 项认证 HTTP / 8 项 HTTPS、18 项管理员数据库 / 20 项 HTTP / 4 项 HTTPS 检查；维护 CLI 身份检查、空库 001→002→003→004、权限与日志隔离同时通过。
+- `npm run test:public`（同一仓库外浏览器 hook）退出 0：15 项 PostgreSQL/HTTP 检查、20 组 Chromium 156 生产浏览器检查、12 张截图。证据在本机 `mq-pr20-main-sync/run-01`；桌面、390px、320px、reduced-motion、空库、网络/数据库失败重试、下架、长文、草稿保护和迟到响应复验通过。
+- 这些是 PR #20 同步分支的复验，不表示公开读取已经合入 main；新同步提交必须取得对应 CI 和新的独立 APPROVED，不能沿用 `648d9e5` 的审批。PR #22 继续等待 #20，分享联合验收尚未重跑。
+
 ## 保留限制
 
 本项不提供故事写入、发布/下架、管理页面、上传、分享 URL、真实点赞或留言服务，不自动录入任何真实内容。当前库若为空，需要保持真实空状态；不能为填满三颗星而自动插入文章。
 
-临时只读身份验证不等于生产运行身份已配置。既有正式开放门槛继续保留：认证默认关闭或受控启用、Session Token 原值存储风险、最小权限部署、正式 HTTPS/可信代理、日志/备份保护及独立安全审查。P2-05 独立 Review 不因本项开发而跳过，P2-06 完成 Draft PR 后等待产品与独立评审，不自动合并或进入 P2-07。
+临时只读身份验证不等于生产运行身份已配置。既有正式开放门槛继续保留：认证默认关闭或受控启用、Session Token 原值存储风险、最小权限部署、正式 HTTPS/可信代理、日志/备份保护及独立安全审查。P2-05 已经正式独立 Review 并合入；P2-06 同步后的新提交仍须独立评审，不沿用旧提交批准，不越过门禁合并或推进 P2-07。
 
 本轮临时角色的 SELECT 是表级权限，仍可读取表内非公开修订；PUBLISHED/公开版本隔离由上述服务端查询保证，不构成数据库凭据失陷后的保密边界。正式运行身份是否进一步采用受限视图或其他策略，应随生产最小权限审查落实。
