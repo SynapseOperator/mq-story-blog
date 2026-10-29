@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1 与 P2-01 至 P2-04 已验收；PR #13/#16 已经独立 APPROVED 并普通 merge，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。P2-05 / PR #18 保持独立安全评审，未合并，不使用 Review Exception。当前只授权 P2-06（Issue #19）：直接从 main 开发公开故事摘要与按需正文读取、内容块适配及真实 PostgreSQL/HTTP/浏览器验证，不依赖或修改 P2-05 管理员模块。仅在隔离库使用合成测试数据，不向开发库自动 seed；保留已验收场景、动画、信纸与认证 UI，不开发分享 URL、内容管理、点赞/留言或部署。完成独立 Draft PR 后停止，不自动合并、不进入 P2-07。
+- Phase 1 与 P2-01 至 P2-04 已验收并合入 main。P2-06 / PR #20 已获负责人技术与视觉验收，Ready for Review，等待 SnorkelingBreather 正式独立 Review，尚未合并。当前只授权 P2-07（Issue #21）：从 P2-06 已验证提交 `648d9e5360951bd0c027aae410306469f8b5d2d7` 叠加稳定分享 URL 与历史导航，PR 暂以 `feat/p2-06-public-stories` 为 base；依赖合并后重新调整 base、核对增量并完整测试，不冒充 main。P2-05 / PR #18 继续待独立安全评审，不合并、不使用 Review Exception、不修改管理员模块。仅在隔离库使用合成数据，不自动 seed 开发库，不开发内容管理、点赞/留言或部署；保持已验收视觉，手机标题单字换行仅列后续优化。完成 Draft PR 后停止，不自动合并或继续其他任务。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -23,6 +23,7 @@
 ## 数据与协作边界
 
 - 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开 API 保持只读与 no-store，未来写入口必须等待独立管理员权限边界正式接入。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
+- 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
 - 认证边界与本地运行见 `docs/engineering/AUTHENTICATION.md`。公开 HTTP 路径严格白名单，内部邮箱/密码/Session Token 不进入日志或客户端 DTO；不能为了测试关闭 CSRF/Origin。默认 token 原值存库，正式用户开放前必须完成独立安全与数据库最小权限审查。
 - 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
 - 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。

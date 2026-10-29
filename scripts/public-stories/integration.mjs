@@ -13,6 +13,7 @@ import { runPrisma } from "../db/prisma-command.mjs";
 import { configureTemporaryDatabaseLogging, verifyDatabaseLogging } from "../db/log-privacy.mjs";
 import { createPublicFixtures } from "./fixtures.mjs";
 import { runPublicReadChecks } from "./checks.mjs";
+import { runSharingReadChecks } from "./sharing-checks.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -129,6 +130,8 @@ async function main() {
     const emptyReader = createPublicStoryReader(readClient);
     assert.deepEqual(await emptyReader.listStories(), []);
     assert.equal(await emptyReader.getStory(randomUUID()), null);
+    assert.equal(await emptyReader.getStoryBySlug("empty-database-synthetic"), null);
+    assert.equal(await emptyReader.getSummaryBySlug("empty-database-synthetic"), null);
     console.log("PASS genuinely empty public database returns no fabricated stories");
     stage = "prepare one test-owned static image and synthetic stories only in the isolated database";
     try { await mkdir(mediaDirectory); directoryCreated = true; }
@@ -145,6 +148,10 @@ async function main() {
     assert.equal(emptyHttp.status, 200);
     assert.deepEqual(await emptyHttp.json(), { stories: [] });
     assert.match(emptyHttp.headers.get("cache-control") ?? "", /no-store/);
+    const emptyShare = await fetch(`${baseURL}/api/stories/by-slug/empty-database-synthetic`, { signal: AbortSignal.timeout(10_000) });
+    assert.equal(emptyShare.status, 404);
+    assert.deepEqual(await emptyShare.json(), { code: "PUBLIC_STORY_NOT_FOUND" });
+    assert.match(emptyShare.headers.get("cache-control") ?? "", /no-store/);
     console.log("PASS genuinely empty PostgreSQL database returns HTTP 200 with an empty catalog");
     stage = "insert this run's synthetic publication fixtures";
     const fixtureController = await createPublicFixtures(client, { imageSource, brokenImageSource });
@@ -154,6 +161,11 @@ async function main() {
       fixtureController, setDatabaseAvailable, runtimeRole: role });
     assert.equal(result.passed, result.total);
     console.log(`Public stories PostgreSQL/HTTP integration: ${result.passed}/${result.total} checks passed`);
+    stage = "real PostgreSQL share URL, metadata and RSC isolation";
+    const sharingResult = await runSharingReadChecks({ client, readClient, baseURL,
+      fixtureController, setDatabaseAvailable });
+    assert.equal(sharingResult.passed, sharingResult.total);
+    console.log(`Story sharing PostgreSQL/HTTP integration: ${sharingResult.passed}/${sharingResult.total} checks passed`);
     stage = "verify actual PostgreSQL connection refusal does not serve demo fallback";
     const failedUrl = new URL(runtimeUrl);
     failedUrl.port = String(await unusedPort());
@@ -161,7 +173,7 @@ async function main() {
     while (failedPort === Number(failedUrl.port)) failedPort = await unusedPort();
     const failedServer = await startServer(failedPort, { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1",
       DATABASE_URL: failedUrl.href, MQ_AUTH_ENABLED: "false" }, servers, 503);
-    for (const endpoint of ["/api/stories", `/api/stories/${fixtures.starOne.id}`]) {
+    for (const endpoint of ["/api/stories", `/api/stories/${fixtures.starOne.id}`, `/api/stories/by-slug/${fixtures.starOne.slug}`]) {
       const response = await fetch(`http://127.0.0.1:${failedPort}${endpoint}`, { signal: AbortSignal.timeout(10_000) });
       assert.equal(response.status, 503);
       assert.deepEqual(await response.json(), { code: "PUBLIC_STORIES_UNAVAILABLE" });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import type { Story, LetterContentState } from "@/lib/stories/story";
 import { AccountControls } from "../auth/account-controls";
 
@@ -37,11 +37,15 @@ function LetterProse({ story }: { story: Story }) {
   </article>;
 }
 
-export function FeatherLetter({ entry, content, onRetry, onClosed }: {
+export type LetterNavigationHandle = { requestClose: () => boolean };
+
+export function FeatherLetter({ entry, content, onRetry, onClosed, onCloseCancelled, navigationRef }: {
   entry: { id: string; title: string };
   content: LetterContentState;
   onRetry: () => void;
   onClosed: () => void;
+  onCloseCancelled?: () => void;
+  navigationRef?: Ref<LetterNavigationHandle>;
 }) {
   const story = content.status === "ready" ? content.story : null;
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -60,6 +64,17 @@ export function FeatherLetter({ entry, content, onRetry, onClosed }: {
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
+
+  useEffect(() => {
+    if (!draft.trim()) return;
+    // Cross-document Back/Forward, refresh and closing the tab use the browser's
+    // own confirmation. Draft text is never stored in history or localStorage.
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [draft]);
+
+  useImperativeHandle(navigationRef, () => ({ requestClose }));
 
   const finishClose = useCallback(() => {
     if (finished.current) return;
@@ -127,18 +142,21 @@ export function FeatherLetter({ entry, content, onRetry, onClosed }: {
   }
 
   function requestClose() {
-    if (phaseRef.current !== "reading" || confirmationRef.current?.open) return;
+    if (phaseRef.current !== "reading" || confirmationRef.current?.open
+      || dialogRef.current?.querySelector(".auth-dialog[open]")) return false;
     if (draft.trim()) {
       confirmationTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setConfirming(true);
       confirmationRef.current?.showModal();
       continueRef.current?.focus({ preventScroll: true });
     } else beginClose();
+    return true;
   }
 
   function continueEditing() {
     confirmationRef.current?.close();
     setConfirming(false);
+    onCloseCancelled?.();
     // The previous control may be in the temporarily inert reading content.
     focusFrame.current = requestAnimationFrame(() => confirmationTrigger.current?.focus({ preventScroll: true }));
   }

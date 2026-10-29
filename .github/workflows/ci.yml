@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/p2-06-public-stories]
   push:
     branches: [main]
 

@@ -65,3 +65,12 @@ export async function readPublicCatalog(signal: AbortSignal) {
 export async function readPublicStory(id: string, signal: AbortSignal) {
   return decodePublicStory(await read(`/api/stories/${encodeURIComponent(id)}`, signal), id);
 }
+
+export async function readPublicStoryBySlug(slug: string, signal: AbortSignal) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120) throw new PublicStoryReadError(true);
+  const value = await read(`/api/stories/by-slug/${encodeURIComponent(slug)}`, signal);
+  const record = object(object(value).story);
+  const base = identity(record);
+  if (base.slug !== slug) throw new PublicStoryReadError();
+  return { ...base, content: validateStoryContent(record.content) };
+}

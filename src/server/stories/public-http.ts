@@ -1,5 +1,5 @@
 import { createDatabaseClient } from "../../lib/db/client.ts";
-import { createPublicStoryReader, isPublicStoryId } from "./public-service.ts";
+import { createPublicStoryReader, isPublicStoryId, isPublicStorySlug } from "./public-service.ts";
 
 const headers = {
   "cache-control": "no-store, max-age=0",
@@ -40,5 +40,31 @@ export async function handlePublicStories(request: Request, id?: string) {
     // and unavailable database have distinct responses; no fixture fallback.
     console.error("MQ_PUBLIC_STORIES_UNAVAILABLE");
     return reply({ code: "PUBLIC_STORIES_UNAVAILABLE" }, 503);
+  }
+}
+
+export async function handlePublicStoryBySlug(request: Request, slug: string) {
+  if (request.method !== "GET" && request.method !== "HEAD") return rejectPublicStoryMethod();
+  if (new URL(request.url).search) return reply({ code: "PUBLIC_STORY_REQUEST_REJECTED" }, 400);
+  if (!isPublicStorySlug(slug)) return reply({ code: "PUBLIC_STORY_NOT_FOUND" }, 404);
+  try {
+    const story = await reader().getStoryBySlug(slug);
+    return story ? reply({ story }) : reply({ code: "PUBLIC_STORY_NOT_FOUND" }, 404);
+  } catch {
+    console.error("MQ_PUBLIC_STORIES_UNAVAILABLE");
+    return reply({ code: "PUBLIC_STORIES_UNAVAILABLE" }, 503);
+  }
+}
+
+/** Dynamic page metadata uses the same public query boundary as the API.
+ * Missing/private/error cases deliberately expose only a generic page title;
+ * the client separately obtains the actionable 404/503 reading state. */
+export async function readPublicStorySummaryBySlug(slug: string) {
+  if (!isPublicStorySlug(slug)) return null;
+  try {
+    return await reader().getSummaryBySlug(slug);
+  } catch {
+    console.error("MQ_PUBLIC_STORIES_UNAVAILABLE");
+    return null;
   }
 }
