@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/p2-05-admin-boundary]
   push:
     branches: [main]
 
@@ -122,6 +122,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:admin
+      - name: Protected drafts, column privileges, transaction rollback and HTTP concurrency
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:admin-drafts
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'

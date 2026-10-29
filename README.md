@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-05：唯一管理员授权与后台权限边界**（[Issue #17](https://github.com/SynapseOperator/mq-story-blog/issues/17)）。复用已验收的 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站只使用用户名和密码，内部占位邮箱不用于收发邮件或权限判断。
+当前为 **Phase 2 · P2-08A：管理员草稿服务与受保护 API**（[Issue #23](https://github.com/SynapseOperator/mq-story-blog/issues/23)）。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站只使用用户名和密码，内部占位邮箱不用于收发邮件或权限判断。
 
-Phase 1 与 P2-01 至 P2-04 已验收。[PR #13](https://github.com/SynapseOperator/mq-story-blog/pull/13)、[PR #16](https://github.com/SynapseOperator/mq-story-blog/pull/16) 均经独立 APPROVED 后普通 merge，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`，合并后的 quality/database CI 成功。本分支直接基于该 main，不再是 Stacked PR。
+Phase 1 与 P2-01 至 P2-04 已合入，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。本分支按负责人授权从待独立安全评审的 [PR #18](https://github.com/SynapseOperator/mq-story-blog/pull/18) 已核实提交 `c12e17725ae1dddcc0d53357a6c76f10f62e64ae` 派生，Draft PR 暂以 `feat/p2-05-admin-boundary` 为 base。依赖未合并不等于已在 main；[PR #20](https://github.com/SynapseOperator/mq-story-blog/pull/20) 和 [PR #22](https://github.com/SynapseOperator/mq-story-blog/pull/22) 的公开读取/分享功能也尚未引入本分支。
 
-本轮增加数据库单例管理员授权、受控离线维护、可复用服务端鉴权与 `/admin` 权限检查页；不提供文章编辑、发布或审核。场景和羽毛信继续使用四份合成故事，既有登录与阅读视觉不变。[管理员权限说明](docs/engineering/ADMIN_AUTHORIZATION.md) 记录模型、操作、权限矩阵与限制；认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，故事领域见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。所有管理员测试均使用临时库合成账号，尚未开放正式用户或创建真实管理员。
+本轮仅增加四个私有草稿 API、同事务领域操作和精确列权限，沿用 `/admin` 最小入口，不新增编辑器或预览 UI。场景和羽毛信继续使用四份合成故事，登录与阅读视觉不变。[草稿接口说明](docs/engineering/ADMIN_DRAFTS.md) 记录 DTO、事务、权限与验证；基础权限见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)，认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，生命周期见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。只在临时库使用合成账号，尚未开放正式注册或创建真实管理员。
 
-Phase 2 沿用 Next.js 模块化单体、PostgreSQL 18 + Prisma 7、独立草稿与公开版本、显式发布及受限内容块。P2-01 至 P2-14 Roadmap 保留，后续细节按任务审查。本次完成 Draft PR 后停止，必须独立 Review，不自动合并、不进入 P2-06。
+Phase 2 沿用 Next.js 模块化单体、独立草稿与公开版本、显式发布及受限内容块。P2-01 至 P2-14 Roadmap 保留。完成本 Draft PR 后停止，等待技术及安全 Review，不自动合并、不进入 P2-08B/C；依赖修改或合并后同步并重新验证。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -49,7 +49,7 @@ npm run check
 - `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
 - `src/lib/stories/`：独立阅读契约与稳定场景绑定；`src/data/` 提供当前合成演示数据，由首页路由适配后传给组件。后续真实数据在此页面边界接入，不让组件依赖演示数据源；本轮数据库基础尚不接入场景或阅读器。
 - `prisma/`：基础探针及故事/内容版本/星位 Schema，历史迁移保留，新领域约束使用新增 SQL 迁移；[数据库说明](docs/engineering/DATABASE.md) 记录环境与测试隔离。
-- `src/server/stories/`：受限内容块校验与内部生命周期事务服务，没有路由或 Server Action，尚未承担认证职责；不得在权限层完成前将写方法开放给浏览器。
+- `src/server/stories/`：受限内容块、共享事务操作与内部生命周期工厂；`src/app/api/admin/stories/` 只暴露经 `withAdmin` 的四个草稿接口。发布/选位等仍仅内部可用，不提供 HTTP 写入口。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 
@@ -69,7 +69,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-05-admin-boundary` 对应 [#17 管理员权限](https://github.com/SynapseOperator/mq-story-blog/issues/17)。历史记录见 [工作流](docs/engineering/WORKFLOW.md)；历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数。
+本分支 `feat/p2-08a-admin-drafts` 对应 [#23 管理员草稿](https://github.com/SynapseOperator/mq-story-blog/issues/23)。历史记录见 [工作流](docs/engineering/WORKFLOW.md)；历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 

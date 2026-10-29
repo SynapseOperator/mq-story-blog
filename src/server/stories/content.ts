@@ -25,6 +25,10 @@ export class ContentValidationError extends Error {
   }
 }
 
+// Existing synthetic scene image, reused as a read-only prototype reference.
+// Draft HTTP restricts images to this list until P2-09 defines media ownership.
+export const SYNTHETIC_STORY_IMAGES: readonly string[] = ["/scene/night-sky.webp"];
+
 function reject(message: string): never {
   throw new ContentValidationError(message);
 }
@@ -70,6 +74,7 @@ function containsControl(value: string): boolean {
 
 function imageSource(value: unknown): string {
   const src = text(value, 2048, "图片地址");
+  if (SYNTHETIC_STORY_IMAGES.includes(src)) return src;
   if (src !== src.trim() || containsControl(src) || src.includes("\\")) {
     return reject("图片地址包含不安全字符。");
   }
