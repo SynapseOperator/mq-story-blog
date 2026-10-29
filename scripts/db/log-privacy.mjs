@@ -28,7 +28,7 @@ export async function logPrivacySettings() {
  * Existing local databases/roles/server defaults are deliberately not changed.
  */
 export async function configureTemporaryDatabaseLogging(control, name) {
-  assert.match(name, /^mq_test_(auth|it|isolated)_[a-f0-9]{32}$/);
+  assert.match(name, /^mq_test_(auth|it|isolated|public)_[a-f0-9]{32}$/);
   const destination = (await control.query("SHOW log_destination")).rows[0].log_destination;
   assert.equal(destination, "stderr", "Temporary DB privacy validation requires stderr logging");
   for (const [key, value] of await logPrivacySettings()) {

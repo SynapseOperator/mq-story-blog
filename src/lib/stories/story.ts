@@ -1,7 +1,8 @@
-/** Reading contract, independent of a fixture's literal IDs and scene placement.
- * This increment still serves synthetic content only; publication is a later task.
- */
-export interface Story {
+import type { PublicStoryDetail } from "./public-story";
+
+/** Legacy synthetic fixtures remain usable in explicitly isolated tests. They
+ * are never a fallback for the public PostgreSQL source. */
+export interface DemoStory {
   readonly id: string;
   readonly title: string;
   readonly source: "synthetic-demo";
@@ -15,3 +16,11 @@ export interface Story {
   };
   readonly closing: string;
 }
+
+/** Published revisions have no invented date, introduction, author or closing. */
+export type Story = DemoStory | (PublicStoryDetail & { readonly source: "published" });
+
+export type LetterContentState =
+  | { readonly status: "loading" }
+  | { readonly status: "error"; readonly unavailable: boolean }
+  | { readonly status: "ready"; readonly story: Story };

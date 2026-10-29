@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { storySlotClasses, type SceneStory } from "@/lib/stories/scene-catalog";
-import type { Story } from "@/lib/stories/story";
+import { storySlotClasses } from "@/lib/stories/scene-catalog";
+import type { PublicStorySummary } from "@/lib/stories/public-story";
 import { useSceneMotion } from "./use-scene-motion";
 
 // Small glints only: decorative, deterministic and never part of the focus order.
@@ -23,10 +23,10 @@ function BackdropImage({ asset, priority }: { asset: "night-sky" | "grassy-hills
 }
 
 export function Landscape({ stories, interactive = false, reading = false, onRead }: {
-  stories: readonly SceneStory[];
+  stories: readonly PublicStorySummary[];
   interactive?: boolean;
   reading?: boolean;
-  onRead?: (story: Story, trigger: HTMLButtonElement) => void;
+  onRead?: (story: PublicStorySummary, trigger: HTMLButtonElement) => void;
 }) {
   const starStories = stories.filter((story) => story.entry === "star");
   const campfireStory = stories.find((story) => story.entry === "campfire");
@@ -48,12 +48,12 @@ export function Landscape({ stories, interactive = false, reading = false, onRea
     };
   }, []);
 
-  function entry(story: SceneStory) {
+  function entry(story: PublicStorySummary) {
     const showTitle = active === story.id && dismissed !== story.id;
     return (
       <button type="button" className={`story-entry story-entry--${story.entry}`}
         data-story-id={story.id} data-highlighted={active === story.id}
-        aria-label={`合成演示故事：${story.title}`}
+        aria-label={`故事：${story.title}`}
         aria-haspopup="dialog"
         disabled={reading}
         aria-describedby={showTitle ? `${story.id}-title` : undefined}
@@ -82,7 +82,7 @@ export function Landscape({ stories, interactive = false, reading = false, onRea
         }}>
         {story.entry === "star" ? <span className="story-star" aria-hidden="true" /> : null}
         <span id={`${story.id}-title`} className="story-tooltip" role="tooltip" hidden={!showTitle}>
-          <small>合成演示</small>{story.title}
+          <small>MQ 故事</small>{story.title}
         </span>
       </button>
     );
@@ -137,7 +137,7 @@ export function Landscape({ stories, interactive = false, reading = false, onRea
       </div>
       {interactive ? <>
         {/* Visible stars and hit areas always share this exact camera transform. */}
-        <div className="scene-star-plane scene-plane--far" role="group" aria-label="演示故事星星">
+        <div className="scene-star-plane scene-plane--far" role="group" aria-label="公开故事星星">
           <div className="scene-dust" aria-hidden="true">
             {dust.map(([x, y, duration, delay], index) => <i key={index} style={{
               left: `${x}%`, top: `${y}%`, "--twinkle-duration": `${duration}s`, "--twinkle-delay": `${delay}s`,
