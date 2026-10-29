@@ -431,6 +431,13 @@ export async function runBrowser({ baseURL, evidenceDirectory, admin, regular,
       await page.getByRole("link", { name: "返回 MQ", exact: true }).click();
       const dialog = page.getByRole("dialog"); await dialog.waitFor();
       await dialog.getByRole("button", { name: "继续编辑", exact: true }).click();
+      // The component restores focus/selection in the next animation frame after
+      // native dialog closure. A fast Linux click may return before that frame.
+      await page.waitForFunction(before => {
+        const element = globalThis.document.querySelector('textarea[aria-label="段落内容"]');
+        return element === globalThis.document.activeElement && element.selectionStart === before.start
+          && element.selectionEnd === before.end && element.scrollTop === before.scroll;
+      }, before);
       assert.equal(await paragraphs(page).first().inputValue(), text);
       assert.equal(await paragraphs(page).first().evaluate(element => element === globalThis.document.activeElement), true);
       const after = await paragraphs(page).first().evaluate(element => ({ start: element.selectionStart, end: element.selectionEnd, scroll: element.scrollTop }));
@@ -558,6 +565,7 @@ export async function runBrowser({ baseURL, evidenceDirectory, admin, regular,
       ...(["number", "boolean"].includes(typeof error?.expected) ? { expected: error.expected } : {}),
       ...(["number", "boolean"].includes(typeof error?.actual) ? { actual: error.actual } : {}),
     };
+    console.error(`Editor browser failure: ${stage}; ${JSON.stringify(report.failure)}`);
     if (activePage) await shot(activePage, "failure").catch(() => {});
     // The parent runner emits only its stage/error code, never this cause.
     throw new Error(`Editor browser failed at ${stage}; sensitive details withheld`, { cause: error });
