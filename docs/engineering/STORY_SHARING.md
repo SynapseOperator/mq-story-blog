@@ -1,6 +1,6 @@
 # P2-07：故事分享与浏览器历史导航
 
-对应 [Issue #21](https://github.com/SynapseOperator/mq-story-blog/issues/21)，依据 PRD v1.1 §6、§7、§11 及 FN-11/12/13。P2-06 / PR #20 已获负责人验收，但仍待 SnorkelingBreather 正式独立 Review、尚未合并。本分支从 `feat/p2-06-public-stories` 的已验证提交 `648d9e5360951bd0c027aae410306469f8b5d2d7` 创建；P2-05 / PR #18 不属于本项依赖，也没有合并或修改授权。
+对应 [Issue #21](https://github.com/SynapseOperator/mq-story-blog/issues/21)，依据 PRD v1.1 §6、§7、§11 及 FN-11/12/13。本分支最初从 P2-06 的 `648d9e5360951bd0c027aae410306469f8b5d2d7` 创建。2026-10-31，PR #18/#20 均经匹配最新提交的独立 APPROVED 后普通合并，main 为 `3fae81f90e5987b439bc4b9ef988e117860247ed`，quality/database 成功。PR #22 现以 main 为 base，并同步上游管理员实现及测试；没有修改其权限逻辑或历史迁移。同步新提交须重新独立 Review。
 
 ## 分享路径与公开隔离
 
@@ -41,6 +41,8 @@ ID API 与目录仍保留 P2-06 契约。slug 查询同样使用单条参数化 
 ```sh
 npm run check
 npm run test:db
+npm run test:auth
+npm run test:admin
 # 先完成生产构建，再使用既有隔离 PostgreSQL runner。
 npm run test:public
 ```
@@ -63,8 +65,17 @@ npm run test:public
 
 首轮 `run-01` 暴露关闭后焦点恢复早于历史提交的问题：目录刷新移除了刚获得焦点的热点。现等待历史提交、目录刷新完成后恢复焦点，`run-02` 完整复测通过；失败证据保留。预期的 404、故障测试 503、受控关闭认证 503 与主动请求取消单独记录，不计为意外错误。技术验证不代替本项产品/独立 Review 验收。
 
+### 2026-10-31 同步 main 后的复验
+
+- `npm run check` 退出 0：62 项单元测试、lint、Schema、类型检查及 Next.js 16.4.2 生产构建通过。
+- `npm run test:db`、`npm run test:auth`、`npm run test:admin` 均退出 0：31 项数据库/生命周期检查、认证 35 项 HTTP / 8 项 HTTPS、管理员 18 项数据库 / 20 项 HTTP / 4 项 HTTPS；维护 CLI 身份、低权限、撤销/密码重置并发和日志保护同时通过。
+- `npm run test:public`（现有仓库外浏览器 hook）退出 0：15 项公开读取、10 项分享/metadata/RSC 检查；隔离空库执行 001→002→003→004、重复部署与 drift 验证。
+- Chromium 156：32 项真实浏览器检查通过、18 张截图；1536×1024、390×844、320×568、reduced-motion，覆盖直达/刷新、前进后退、关闭、焦点、草稿确认、嵌套账号窗、迟到响应、下架、故障与重试。运行错误和隐私违规均为 0。证据在仓库外 `mq-pr22-main-sync/run-01`；未测其他浏览器或实体手机。
+- 合并解决仅改变 README/AGENTS 的状态与边界说明；分享/场景/阅读器实现与原 `5c17dbe` 一致，管理员实现、Schema 和历史迁移与 main `3fae81f` 一致。全部测试使用隔离合成数据，本轮资源已清理。
+- 新提交 CI 和独立 Review 以 PR 的最新记录为准；本机复验不表示 P2-07 已合入 main，也不表示已完成 #24/#26 草稿编辑与公开分享联合验收。
+
 ## 依赖合并与边界
 
-PR 暂以 `feat/p2-06-public-stories` 为 base。PR #20 经独立 Review 且另行授权合并后，核对其实际合并方式和 main，再调整本 PR base；重新检查差异只含 P2-07、迁移顺序和 Schema 一致，重新运行 check、数据库/公开 HTTP、认证必要回归、浏览器与 CI。若提交发生变化，原审批不能冒充新提交的有效 Review。
+PR 已以 main 为 base；同步后的差异须只包含 P2-07 及本次依赖文档更新，Schema、历史 001→002→003→004 迁移和管理员权限实现与 main 保持一致。CI 同时保留管理员、认证、公开读取和分享测试，以及日志、限流、事务与持久化检查。重新运行 check、数据库/HTTP、浏览器与 CI，并取得匹配新提交的独立 APPROVED 后，才能按负责人授权合并；原 `5c17dbe` 审批不沿用。
 
-不自动合并本项、PR #20 或 PR #18，不开发编辑/发布/上传/点赞/留言审核或部署。认证继续默认关闭或受控启用；Session Token 原值存库、生产运行身份、HTTPS/可信代理、日志备份及独立安全审查门槛保留。手机标题单字换行是负责人确认的非阻塞后续视觉优化，本项不修改已验收布局。
+PR #24/#26 继续保持独立依赖和验收边界，本轮不合并它们，不将其草稿服务/编辑器视作 main 已有能力；公开读取/分享与草稿保存的联合验收仍待真实集成。不开发 P2-08C、发布/上传/点赞/留言审核或部署。认证继续默认关闭或受控启用；Session Token 原值存库、生产运行身份、HTTPS/可信代理、日志备份及独立安全审查门槛保留。手机标题单字换行是负责人确认的非阻塞后续视觉优化，本项不修改已验收布局。

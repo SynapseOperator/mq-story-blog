@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-07：故事分享与浏览器历史导航**（[Issue #21](https://github.com/SynapseOperator/mq-story-blog/issues/21)）。在 P2-06 公开读取基础上增加稳定 `/stories/[slug]` 分享地址、直达/刷新与前进/后退，复用同一 MQ 场景和羽毛信。网站仍采用 Better Auth 1.7.12 + Username；认证默认关闭或受控启用，未开放正式注册。
+当前分支为 **Phase 2 · P2-07：故事分享与浏览器历史导航**（[Issue #21](https://github.com/SynapseOperator/mq-story-blog/issues/21)）的 main 同步与重新评审。在 P2-06 公开读取基础上增加稳定 `/stories/[slug]` 分享地址、直达/刷新和前进/后退，复用同一 MQ 场景与羽毛信。认证默认关闭或受控启用，未开放正式注册。
 
-Phase 1 与 P2-01 至 P2-04 已验收并合入 main；P2-06 [PR #20](https://github.com/SynapseOperator/mq-story-blog/pull/20) 已获负责人技术与视觉验收，Ready for Review，等待 SnorkelingBreather 正式独立 Review，尚未合并。P2-07 从其已验证提交 `648d9e5360951bd0c027aae410306469f8b5d2d7` 创建，Draft PR 暂以 `feat/p2-06-public-stories` 为 base，不将依赖当作 main。[PR #18](https://github.com/SynapseOperator/mq-story-blog/pull/18) 仍待管理员安全评审、未合并，本任务不依赖或修改它。
+Phase 1 与 P2-01 至 P2-06 已正式合入。PR #18/#20 均经 SnorkelingBreather 对对应最新提交的独立 APPROVED 后普通 merge；当前 main 为 `3fae81f90e5987b439bc4b9ef988e117860247ed`，合并后 quality/database CI 成功。PR #22 已调整 base 为 main；本次同步保留管理员、认证、公开读取与分享测试，新提交必须重新取得独立审批，不能沿用 `5c17dbe` 的旧 Review。
 
-本轮仅增加公开分享与历史导航，保留场景、动画、阅读/草稿保护和认证 UI；没有管理或发布接口。页面、metadata、RSC 和 API 均不得返回非公开修订；空库/失败不回退演示文章。分享及历史行为见 [STORY_SHARING.md](docs/engineering/STORY_SHARING.md)，公开读取见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，认证与故事领域分别见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)、[STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。真实用户开放仍需独立安全与数据库最小权限审查。
+现有 `/admin` 是受保护权限检查入口，单例授权、离线维护及权限限制见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)。分享页面、metadata、RSC 和 API 只暴露公开版本；空库/失败不回退演示文章。分享与历史见 [STORY_SHARING.md](docs/engineering/STORY_SHARING.md)，公开契约见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，认证与生命周期分别见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)、[STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。场景、动画、信纸和账号视觉保持不变。
 
-Phase 2 沿用 Next.js 模块化单体、PostgreSQL 18 + Prisma 7、独立草稿与公开版本、显式发布及受限内容块。P2-01 至 P2-14 Roadmap 保留，后续细节按任务审查。本次完成 Stacked Draft PR 后停止，不自动合并、不继续其他任务。
+PR #22 尚未合入；PR #24/#26 的草稿服务/编辑器也不是 main 功能，相关联合验收仍待实际集成。本轮不合并 #24/#26、不开发新功能、不创建真实账号或正式故事、不开放生产。P2-01 至 P2-14 Roadmap 保留；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -69,7 +69,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-07-story-history` 对应 [#21 分享与历史导航](https://github.com/SynapseOperator/mq-story-blog/issues/21)，叠加待审 PR #20，不叠加 PR #18。PR #20 合并后必须调整 base、核对增量并重新执行完整检查，不沿用旧审批。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
+本分支 `feat/p2-07-story-history` 对应 [#21 分享与历史导航](https://github.com/SynapseOperator/mq-story-blog/issues/21)，现同步已包含 P2-05/P2-06 的 main。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
