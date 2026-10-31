@@ -4,7 +4,8 @@
 .scene-page--reading .scene-nav,
 .scene-page--reading .scene-footer,
 .scene-page--reading .skip-link,
-.scene-page--reading .memory-directory { visibility: hidden; pointer-events: none; }
+.scene-page--reading .memory-directory,
+.scene-page--reading .public-story-status { visibility: hidden; pointer-events: none; }
 .scene-page--reading .story-entry { pointer-events: none; }
 
 .memory-directory { display: none; }
@@ -48,6 +49,9 @@
 .letter-photo img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; }
 .letter-photo figcaption { padding-top: 6px; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 9px; line-height: 1.6; letter-spacing: 0; color: #795b3f; }
 .letter-image-fallback { min-height: 120px; display: grid; place-items: center; padding: 12px; font-size: 13px; line-height: 1.7; background: #d8bc90; }
+.letter-photo + .letter-photo { clear: both; }
+.letter-image-fallback button, .letter-load-state button { min-height: 44px; padding: 6px 14px; border: 1px solid #986b40; border-radius: 3px; background: transparent; color: #694626; font: inherit; cursor: pointer; }
+.letter-load-state { margin: 28px 0; font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
 .letter-prose .letter-signature { clear: both; padding: 17px 37px 0 0; text-align: right; color: #89603b; font-family: "STKaiti", "KaiTi", "Kaiti SC", serif; font-size: 17px; background: url("/letter/leaf-sprig.webp") right center / 28px auto no-repeat; }
 .letter-divider { height: 24px; margin: 15px 0 6px; background: url("/letter/divider-heart.webp") center / 100% 100% no-repeat; opacity: .8; }
 .letter-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 14px; margin-bottom: 19px; }

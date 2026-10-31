@@ -122,6 +122,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:admin
+      - name: Published-story privacy and real PostgreSQL HTTP tests
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:public
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'

@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前为 **Phase 2 · P2-05：唯一管理员授权与后台权限边界**（[Issue #17](https://github.com/SynapseOperator/mq-story-blog/issues/17)）。复用已验收的 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站只使用用户名和密码，内部占位邮箱不用于收发邮件或权限判断。
+当前分支为 **Phase 2 · P2-06：真实公开故事读取**（[Issue #19](https://github.com/SynapseOperator/mq-story-blog/issues/19)）的 main 同步与重新评审。首页从 PostgreSQL 获取已发布故事摘要，点击稳定故事星或篝火后按需读取公开正文，复用已验收的羽毛信组件。认证默认关闭或受控启用，未开放正式注册。
 
-Phase 1 与 P2-01 至 P2-04 已验收。[PR #13](https://github.com/SynapseOperator/mq-story-blog/pull/13)、[PR #16](https://github.com/SynapseOperator/mq-story-blog/pull/16) 均经独立 APPROVED 后普通 merge，main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`，合并后的 quality/database CI 成功。本分支直接基于该 main，不再是 Stacked PR。
+Phase 1 与 P2-01 至 P2-05 已正式合入。[PR #18](https://github.com/SynapseOperator/mq-story-blog/pull/18) 经 SnorkelingBreather 对 `c12e177` 的独立 APPROVED 后普通 merge，main 为 `8c7c83c31d0ff2aed0bbcc32325ee711aa288a4e`，合并后 quality/database CI 成功。本分支同步该 main，保留管理员与公开故事两套实现和实际测试；同步后的新 SHA 须重新独立 Review，不能沿用原 PR #20 的审批。
 
-本轮增加数据库单例管理员授权、受控离线维护、可复用服务端鉴权与 `/admin` 权限检查页；不提供文章编辑、发布或审核。场景和羽毛信继续使用四份合成故事，既有登录与阅读视觉不变。[管理员权限说明](docs/engineering/ADMIN_AUTHORIZATION.md) 记录模型、操作、权限矩阵与限制；认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，故事领域见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。所有管理员测试均使用临时库合成账号，尚未开放正式用户或创建真实管理员。
+现有 `/admin` 是受保护的权限检查入口，数据库单例授权、离线维护及权限限制见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)。本分支的公开目录与正文不会显示草稿；空库保持真实空状态，数据库/网络错误提示重试，不回退演示文章。公开契约与缓存策略见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，认证见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)，生命周期见 [STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。场景、动画、信纸和登录视觉保持不变。
 
-Phase 2 沿用 Next.js 模块化单体、PostgreSQL 18 + Prisma 7、独立草稿与公开版本、显式发布及受限内容块。P2-01 至 P2-14 Roadmap 保留，后续细节按任务审查。本次完成 Draft PR 后停止，必须独立 Review，不自动合并、不进入 P2-06。
+PR #20 尚未合入；PR #22 的分享功能和 PR #24/#26 的管理员草稿编辑也不属于当前 main，相关联合验收须等实际集成。保留 P2-01 至 P2-14 Roadmap；本轮不新增功能、不创建真实管理员或正式故事、不开放生产。正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -21,7 +21,7 @@ npm ci
 npm run dev
 ```
 
-普通场景预览打开 [http://localhost:3000](http://localhost:3000)。真实认证需先按 [认证配置](docs/engineering/AUTHENTICATION.md) 准备本地环境，使用 `npm run dev:auth` 或构建后的 `npm run start:auth`；默认地址为 http://127.0.0.1:3000，不能混用不同 Origin。Windows PowerShell 如受脚本执行策略限制，使用 `npm.cmd` 执行相同命令，不修改系统策略。
+普通场景预览打开 [http://localhost:3000](http://localhost:3000)。公开故事需要启动进程持有指向已迁移目标库的 `DATABASE_URL`；没有配置时显示可重试错误，不生成演示文章。仅查看公开故事时保持 `MQ_AUTH_ENABLED=false`，不要把连接串写入命令参数、仓库或日志；具体方式见 [公开读取说明](docs/engineering/PUBLIC_STORIES.md)。真实认证继续按 [认证配置](docs/engineering/AUTHENTICATION.md) 受控使用 `npm run dev:auth` / `npm run start:auth`，该现有工具不自动 seed 故事。其默认地址为 http://127.0.0.1:3000，不能混用不同 Origin。Windows PowerShell 可使用 `npm.cmd`，不修改系统执行策略。
 
 ```sh
 npm run lint
@@ -47,9 +47,9 @@ npm run check
 - `src/app/`：应用路由、MQ 场景首页与 M/Q 建设中页面。保持单仓库模块化单体，按实际需要增加模块。
 - `src/components/scene/`：独立场景图层、固定导航与建设中视图；七张本地美术素材及来源、处理与差异说明见 [public/scene](public/scene/README.md)。
 - `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
-- `src/lib/stories/`：独立阅读契约与稳定场景绑定；`src/data/` 提供当前合成演示数据，由首页路由适配后传给组件。后续真实数据在此页面边界接入，不让组件依赖演示数据源；本轮数据库基础尚不接入场景或阅读器。
+- `src/lib/stories/`：公开摘要/正文 DTO、客户端读取边界与稳定星位映射；`src/data/` 保留四份合成夹具供隔离演示/测试，默认首页不导入或回退这些文章。
 - `prisma/`：基础探针及故事/内容版本/星位 Schema，历史迁移保留，新领域约束使用新增 SQL 迁移；[数据库说明](docs/engineering/DATABASE.md) 记录环境与测试隔离。
-- `src/server/stories/`：受限内容块校验与内部生命周期事务服务，没有路由或 Server Action，尚未承担认证职责；不得在权限层完成前将写方法开放给浏览器。
+- `src/server/stories/`：受限内容块校验、内部生命周期事务服务及公开只读查询。`/api/stories` 与 `/api/stories/[id]` 只返回已发布版本；写方法仍无路由或 Server Action，不得在权限层完成前开放给浏览器。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 
@@ -69,26 +69,26 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-05-admin-boundary` 对应 [#17 管理员权限](https://github.com/SynapseOperator/mq-story-blog/issues/17)。历史记录见 [工作流](docs/engineering/WORKFLOW.md)；历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收的视觉参数。
+本分支 `feat/p2-06-public-stories` 对应 [#19 公开故事读取](https://github.com/SynapseOperator/mq-story-blog/issues/19)，现同步已包含 P2-05 的 main。历史记录见 [工作流](docs/engineering/WORKFLOW.md)；历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量与部署平台仍待后续决定；本轮保留已验收视觉参数。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
 ## 场景与阅读器原型操作
 
-首页三颗故事星支持鼠标悬停标题、键盘焦点与单次触屏点按；篝火悬停/键盘聚焦增强火焰和暖光，木柴不随之缩放。不同故事星打开各自的合成演示文章，篝火固定打开《我们在一起的故事》，所有入口复用同一个羽毛信组件。移动端辅助回忆目录可展开、收起，并打开同一阅读层；其位置和外观是试验方案。
+首页仅为已发布、绑定稳定星位的故事显示可点击故事星，支持鼠标悬停标题、键盘焦点与单次触屏点按；已发布的唯一 CAMPFIRE 故事提供篝火入口。没有公开篝火故事时，景物与基础动画仍保留，但没有无效读信控件。所有入口与移动端辅助回忆目录使用同一公开摘要并复用羽毛信；目录的位置和外观仍是原型参数。
 
 故事星用常驻的暖金四角星芒及薄光环区别于底图星点，最暗闪烁阶段仍保持可见；悬停/聚焦进一步增强。高密度竖屏选择原图的无损 WebP 编码，减少草地与银河纹理的压缩损失；未改变构图或生成新美术。原图分辨率、景深与首次加载体积的边界见 [素材说明](public/scene/README.md)。
 
 - `src/data/demo-stories.ts`：保留四个稳定 ID 和 `synthetic-demo` 来源标记，包含合成标题、虚构日期、正文与配图；《把日常写成诗》用于长文阅读检查，不含真实回忆或照片。`demo-bindings.ts` 单独按故事 ID 指定稳定星位及篝火身份，不依赖数组下标。
-- `src/lib/stories/story.ts`：独立的只读 `Story` 阅读契约；`scene-catalog.ts` 将显式绑定与可用故事适配为场景数据，并将逻辑 slot 映射到已有 CSS 位置。重排或过滤故事不会重新分配其他故事的位置；缺失的故事不生成入口。这里的绑定校验不代替后续数据库级约束。
-- `landscape.tsx`：背景/前景位移包装层、同层故事星与触区、独立火焰/暖光、局部草叶遮罩；按传入的稳定 slot 渲染现有位置。三颗演示星及其响应式位置不代表最终数量或星位策略。
+- `src/lib/stories/story.ts`：保留演示阅读契约，并接入真实公开段落/图片块；不捏造数据库未存储的日期、作者、引言或落款。`scene-catalog.ts` 将稳定逻辑 slot 映射到既有 CSS 位置，重排或过滤故事不重新分配其他故事的位置；服务端同时检查数据库星位映射。
+- `landscape.tsx`：背景/前景位移包装层、同层故事星与触区、独立火焰/暖光、局部草叶遮罩；按传入的稳定 slot 渲染现有位置。当前三个预设星位及其响应式位置不代表最终数量或星位策略。
 - `use-scene-motion.ts`：单个指针订阅与按需 rAF 平滑位移；触屏禁用视差，系统减少动态效果时关闭循环运动和视差，入口仍可操作。
 - `scene-page.tsx`：固定 Logo/导航/账号入口、阅读器入口状态及辅助目录。M/Q 保持建设中，不提供故事控件或循环动画。
 - `src/components/reader/feather-letter.tsx`：原生模态阅读层、内部滚动、草稿关闭确认与本地演示互动。`letter.css` 将固定纸张纹理、磨损边缘和羽毛装饰与内容分开。
 
 读信时保留并暗化同一 MQ 场景，隐藏导航和普通账号入口，暂停背景响应；正文、配图、点赞和「留言」在同一信纸内部连续滚动。关闭按钮、Esc 和外围暗区共用关闭逻辑；有演示留言输入时先确认，继续编辑保留内容，关闭后恢复场景与触发入口焦点。展开/关闭期间拒绝冲突操作，减少动态效果模式取消舒展动画。
 
-点赞只演示本次阅读的本地状态；「预览留言（不发送）」保留草稿并显示原型预览，不发送、公开或持久化评论，也不声称真实提交成功。关闭阅读器会丢弃这些临时状态。本轮已接入真实用户名认证；真实点赞/留言服务、真实分享 URL 与故事公开权限入口尚未实现。
+点赞只演示本次阅读的本地状态；「预览留言（不发送）」保留草稿并显示原型预览，不发送、公开或持久化评论，也不声称真实提交成功。关闭阅读器会丢弃这些临时状态。用户名认证仍受控启用；公开故事读取已经接入，真实点赞/留言服务及正式分享 URL（P2-07）尚未实现。
 
 当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
 

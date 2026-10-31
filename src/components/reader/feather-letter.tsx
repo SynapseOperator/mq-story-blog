@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Story } from "@/lib/stories/story";
+import type { Story, LetterContentState } from "@/lib/stories/story";
 import { AccountControls } from "../auth/account-controls";
 
 type ReaderPhase = "opening" | "reading" | "closing";
@@ -10,7 +10,40 @@ type ReaderPhase = "opening" | "reading" | "closing";
 const OPEN_DURATION = 1000;
 const CLOSE_DURATION = 400;
 
-export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () => void }) {
+function LetterImage({ src, alt, caption }: { src: string; alt: string; caption?: string }) {
+  const [failed, setFailed] = useState(false);
+  return <figure className="letter-photo">
+    {failed ? <div className="letter-image-fallback" role="status">
+      <span>配图暂时无法显示，正文仍可继续阅读。</span>
+      <button type="button" onClick={() => setFailed(false)}>重试图片</button>
+    </div> : <img src={src} alt={alt} width="768" height="512" loading="lazy" decoding="async"
+      referrerPolicy="no-referrer" onError={() => setFailed(true)} />}
+    {caption ? <figcaption>{caption}</figcaption> : null}
+  </figure>;
+}
+
+function LetterProse({ story }: { story: Story }) {
+  return <article className="letter-prose" aria-label={story.title}>
+    {story.source === "synthetic-demo" ? <>
+      <blockquote>{story.introduction}</blockquote>
+      <p>{story.paragraphs[0]}</p>
+      <LetterImage {...story.image} />
+      {story.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+      <p className="letter-signature">{story.closing}</p>
+    </> : story.content.blocks.map((block, index) => block.type === "image"
+      ? <LetterImage key={index} {...block} />
+      : <p key={index}>{block.style === "strong" ? <strong>{block.text}</strong>
+        : block.style === "emphasis" ? <em>{block.text}</em> : block.text}</p>)}
+  </article>;
+}
+
+export function FeatherLetter({ entry, content, onRetry, onClosed }: {
+  entry: { id: string; title: string };
+  content: LetterContentState;
+  onRetry: () => void;
+  onClosed: () => void;
+}) {
+  const story = content.status === "ready" ? content.story : null;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmationRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -27,7 +60,6 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
 
   const finishClose = useCallback(() => {
     if (finished.current) return;
@@ -118,8 +150,8 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
   }
 
   return (
-    <dialog ref={dialogRef} className="letter-dialog" data-phase={phase} data-story-id={story.id}
-      aria-labelledby="letter-title" aria-describedby="letter-demo-note" aria-busy={phase !== "reading"}
+    <dialog ref={dialogRef} className="letter-dialog" data-phase={phase} data-story-id={entry.id}
+      aria-labelledby="letter-title" aria-describedby="letter-demo-note" aria-busy={phase !== "reading" || content.status === "loading"}
       style={{ "--letter-open-duration": `${OPEN_DURATION}ms`, "--letter-close-duration": `${CLOSE_DURATION}ms` } as CSSProperties}
       onCancel={(event) => { event.preventDefault(); if (event.target === event.currentTarget) requestClose(); }}
       onPointerDown={(event) => { backdropPress.current = event.target === event.currentTarget; }}
@@ -135,21 +167,22 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
           disabled={phase !== "reading" || confirming} onClick={requestClose}>×</button>
         <div className="letter-scroll" tabIndex={0} aria-label="信纸阅读内容" inert={phase !== "reading" || confirming}>
           <header className="letter-heading">
-            <h2 id="letter-title">{story.title}</h2>
-            <p className="letter-meta"><span>{story.date}</span><span>MQ 演示书信</span></p>
-            <p id="letter-demo-note" className="letter-demo-note">合成演示 · 非真实回忆</p>
+            <h2 id="letter-title">{story?.title ?? entry.title}</h2>
+            <p className="letter-meta">{story?.source === "synthetic-demo" ? <span>{story.date}</span> : null}
+              <span>{story?.source === "synthetic-demo" ? "MQ 演示书信" : "MQ 公开书信"}</span></p>
+            <p id="letter-demo-note" className="letter-demo-note">{story?.source === "synthetic-demo"
+              ? "合成演示 · 非真实回忆" : "点赞与留言仍为演示，不会发送"}</p>
           </header>
-          <article className="letter-prose" aria-label={story.title}>
-            <blockquote>{story.introduction}</blockquote>
-            <p>{story.paragraphs[0]}</p>
-            <figure className="letter-photo">
-              {imageFailed ? <div className="letter-image-fallback" role="status">演示配图暂时无法显示，正文仍可继续阅读。</div> :
-                <img src={story.image.src} alt={story.image.alt} width="768" height="512" onError={() => setImageFailed(true)} />}
-              <figcaption>{story.image.caption}</figcaption>
-            </figure>
-            {story.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-            <p className="letter-signature">{story.closing}</p>
-          </article>
+          {content.status !== "ready" ? <div className="letter-load-state"
+            data-state={content.status === "loading" ? "loading" : content.unavailable ? "not-found" : "error"}
+            role={content.status === "loading" ? "status" : "alert"}>
+            <p>{content.status === "loading" ? "正在展开这封信的内容……" : content.unavailable
+              ? "这篇故事暂未公开或已下架。你可以重试，或关闭信纸返回星空。"
+              : "故事加载失败，请检查网络后重试。也可以关闭信纸，稍后再来。"}</p>
+            {content.status === "error" ? <button type="button" aria-label="重试加载故事" onClick={onRetry}>重试</button> : null}
+          </div> : null}
+          {story ? <>
+          <LetterProse story={story} />
           <div className="letter-divider" aria-hidden="true" />
           <div className="letter-reactions">
             <button type="button" className="letter-like" aria-pressed={liked} onClick={() => setLiked(!liked)}>
@@ -184,6 +217,7 @@ export function FeatherLetter({ story, onClosed }: { story: Story; onClosed: () 
             </div>
           </section>
           <p className="letter-end">这一页的故事，暂且写到这里。</p>
+          </> : null}
         </div>
       </div>
       <dialog ref={confirmationRef} className="letter-discard" role="alertdialog"
