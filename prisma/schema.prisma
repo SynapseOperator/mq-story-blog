@@ -72,9 +72,57 @@ model StoryRevision {
   story        Story    @relation("StoryRevisions", fields: [storyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   draftFor     Story[]  @relation("DraftRevision")
   publishedFor Story[]  @relation("PublishedRevision")
+  assets       StoryRevisionAsset[]
 
   @@unique([storyId, id])
   @@map("story_revision")
+}
+
+enum MediaAssetState {
+  PENDING
+  READY
+  FAILED
+  DELETING
+  DELETED
+}
+
+// Private storage identity and server-derived display/thumbnail metadata.
+// Native SQL makes identity immutable and freezes metadata after PENDING.
+model MediaAsset {
+  id                  String               @id @default(uuid()) @db.Uuid
+  storageKey          String               @unique @default(dbgenerated("gen_random_uuid()")) @map("storage_key") @db.Uuid
+  state               MediaAssetState      @default(PENDING)
+  displayMimeType     String?              @map("display_mime_type") @db.VarChar(32)
+  displayWidth        Int?                 @map("display_width")
+  displayHeight       Int?                 @map("display_height")
+  displayBytes        Int?                 @map("display_bytes")
+  displaySha256       String?              @map("display_sha256") @db.VarChar(64)
+  thumbnailMimeType   String?              @map("thumbnail_mime_type") @db.VarChar(32)
+  thumbnailWidth      Int?                 @map("thumbnail_width")
+  thumbnailHeight     Int?                 @map("thumbnail_height")
+  thumbnailBytes      Int?                 @map("thumbnail_bytes")
+  thumbnailSha256     String?              @map("thumbnail_sha256") @db.VarChar(64)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  revisionAssets      StoryRevisionAsset[]
+
+  // Composite FK key locks serialize historical references with deletion.
+  @@unique([id, state])
+  @@map("media_asset")
+}
+
+// Generated only by the revision INSERT trigger. Native SQL fixes requiredState
+// to READY; a historical reference prevents READY -> DELETING at the FK itself.
+model StoryRevisionAsset {
+  revisionId    String          @map("revision_id") @db.Uuid
+  assetId       String          @map("asset_id") @db.Uuid
+  requiredState MediaAssetState @default(READY) @map("required_state")
+  revision      StoryRevision   @relation(fields: [revisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  asset         MediaAsset      @relation(fields: [assetId, requiredState], references: [id, state], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([revisionId, assetId])
+  @@index([assetId, requiredState])
+  @@map("story_revision_asset")
 }
 
 // Authentication compatibility fields are server-only. Admin authorization is
