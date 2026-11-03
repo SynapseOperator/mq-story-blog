@@ -340,6 +340,9 @@ export async function runBrowser({ baseURL, admin, regular, publicStory, private
       await letter.waitFor({ state: "detached" }); assert.equal(new URL(publicPage.url()).pathname, "/");
       await publicPage.locator(`.story-entry--star[data-story-id="${publicStory.id}"]`).click();
       await imageReady(publicPage.locator('img[src^="/api/stories/"]').first());
+      // Image decoding may finish before the existing one-second opening lock.
+      // History navigation is tested in reading state, not during that lock.
+      await publicPage.locator('dialog[data-mode="public"][data-phase="reading"]').waitFor();
       const historyLength = await publicPage.evaluate(() => globalThis.history.length);
       await publicPage.goBack(); await letter.waitFor({ state: "detached" });
       assert.equal(new URL(publicPage.url()).pathname, "/");
