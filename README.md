@@ -2,13 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08A：管理员草稿服务与受保护 API**（[Issue #23](https://github.com/SynapseOperator/mq-story-blog/issues/23)）的 main 同步与联合验收。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7，提供四个私有草稿接口、同事务领域操作和精确列权限，不新增编辑器或预览 UI。认证默认关闭或受控启用，未开放正式注册。
+当前分支为 **Phase 2 · P2-08A：管理员草稿服务与受保护 API**（[Issue #23](https://github.com/SynapseOperator/mq-story-blog/issues/23)）的媒体 main 同步与联合验收。四个私有草稿接口复用 withAdmin 同一事务、expectedVersion 与精确列权限；不新增编辑器、预览或发布功能。认证和上传默认关闭或受控启用。
 
-Phase 1 与 P2-01 至 P2-07 已正式合入。PR #18/#20/#22 均经 SnorkelingBreather 对匹配最新提交的独立 APPROVED 后普通 merge；当前 main 为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，合并后 quality/database CI 成功。PR #24 以 main 为 base，同步新提交须重新取得独立 Review 和 CI，不能沿用 `aeeda411` 的旧审批。
+Phase 1、P2-01 至 P2-07 及 P2-09A/B 已正式合入。PR #30/#32 均经匹配 HEAD 的独立 APPROVED 后普通 merge；当前 main `d94587138a3e01a3b84c3b8dfc58bc06c27a5d10` 的 quality/database CI 成功。PR #24 仍未合入，新同步提交须重新取得独立 Review 与 CI，旧 `1f898372` 审批不覆盖新 HEAD。媒体基础和安全上传见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)、[MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
 首页读取 PostgreSQL 已发布摘要，正文按需获取；分享地址 `/stories/[slug]` 复用已验收 MQ 场景与羽毛信。公开 API、HTML/RSC 和 metadata 不得返回草稿/下架内容，保存新的未发布草稿不能改变原公开版本。接口、权限和联合测试见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)，分享与公开契约见 [STORY_SHARING.md](docs/engineering/STORY_SHARING.md)、[PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，基础鉴权与认证见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)、[AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)。场景、动画、信纸及账号视觉保持不变。
 
-PR #24 当前仍未合入；PR #26 编辑器仍依赖本分支，本轮不合并 #26，其视觉验收待确认。不开发 P2-08C、上传、发布或其他新功能，不创建真实管理员/私密故事，不开放生产。保留 P2-01 至 P2-14 Roadmap；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
+`test:admin-drafts`、`test:media` 与 `test:media:upload` 保留各自真实隔离测试，并验证同一低权限角色同时满足草稿与媒体列权限。001→005 历史迁移原字节不变；READY 不代表公开，当前 v1 阅读行为不变。v2 编辑器与访客图片功能属于尚未合并的 #34。
+
+#26 编辑器、#28 私有预览仍依赖 #24；编辑器页面视觉签收待负责人确认，本轮不合并 #26/#28/#34。后续须逐项同步、完整重验和独立 Review，不能整体合入临时 integration base。不创建真实管理员/私密故事、不开放生产，不开始 P2-09D/P2-10。生产最小权限、HTTPS/代理、Session Token 保护、日志备份及独立安全审查继续保留。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

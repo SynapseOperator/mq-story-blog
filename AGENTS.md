@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1 与 P2-01 至 P2-07 已正式合入 main；PR #18/#20/#22 均经匹配最新提交的独立 APPROVED 后普通 merge。当前 main 为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，quality/database CI 成功。本轮仅同步 P2-08A / PR #24 并补充草稿保存与公开/分享隔离的联合测试；base 为 main，新的同步提交须新 CI 与独立 Review，不能沿用 `aeeda411` 的审批。所有门禁满足后方可按负责人授权合并；不使用 Review Exception。保留故事、认证、管理员、草稿、公开读取/分享及全部安全测试。PR #26 编辑器未合入且本轮不合并，产品视觉验收仍待确认。只使用隔离合成数据，不新增功能、不创建真实账号/私密故事、不开放注册或部署，不改历史迁移和已验收视觉，不开始 P2-08C。
+- Phase 1、P2-01 至 P2-07 及 P2-09A/B 已正式合入 main；媒体 PR #30/#32 经匹配 HEAD 的独立 APPROVED 后普通 merge，当前 main `d94587138a3e01a3b84c3b8dfc58bc06c27a5d10` 的 quality/database CI 成功。本轮仅同步 P2-08A / PR #24 与媒体 main，保留 001→005、同事务草稿/CAS、媒体引用与最小权限、认证和公开分享测试。新同步 HEAD 必须重新取得 CI 和独立 Review，不能沿用 `1f898372` 审批，不使用 Review Exception。#26/#28/#34 仍未合并，编辑器视觉签收另行确认；不得整体合入 C 的临时 integration base。READY 不代表公开，图片 I/O 在 withAdmin 事务之外。本轮不新增功能、不改历史迁移或已验收视觉、不创建真实账号/照片、不开放注册或部署，不开始 P2-09D/P2-10。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
