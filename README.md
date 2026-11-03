@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-09A：私有媒体与 Revision 引用基础**（[Issue #29](https://github.com/SynapseOperator/mq-story-blog/issues/29)）。新增 MediaAsset、受约束的 Revision 图片引用和 005 迁移，以及项目外私有目录的本地存储接口。本轮没有上传、图片读取或删除管理 HTTP，也没有素材 UI、图片解码或发布功能；READY 不代表公开。
+当前分支为 **Phase 2 · P2-09B：安全图片上传与管理员私有素材接口**（[Issue #31](https://github.com/SynapseOperator/mq-story-blog/issues/31)）。Sharp 0.35.5 处理 JPEG/PNG/静态 WebP，生成去元数据派生图；上传、分页、状态及 GET/HEAD 图片都受管理员权限保护。没有访客图片接口、素材选择器或发布功能；READY 不代表公开。
 
-本分支直接基于 main `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`（Phase 1 与 P2-01 至 P2-07）。PR #24/#26/#28 仍待独立评审/合并，不将 P2-08 的草稿 API、编辑器或私有预览当作 main 功能，也不复制其实现。媒体基础与未来接入计划见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)。
+本分支 Stacked 于 PR #30 的 `092ec6c`，base `feat/p2-09a-media-foundation`；main 仍为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`。#30 已负责人阶段验收并请求正式独立 Review，但与 #24/#26/#28 一样尚未合并。媒体基础见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)，B 的接口、恢复、安全与受控运行见 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
 现有 `/admin` 是受保护权限检查入口，单例授权、离线维护及权限限制见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)。分享页面、metadata、RSC 和 API 只暴露公开版本；空库/失败不回退演示文章。分享与历史见 [STORY_SHARING.md](docs/engineering/STORY_SHARING.md)，公开契约见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，认证与生命周期分别见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)、[STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。场景、动画、信纸和账号视觉保持不变。
 
-`npm run test:media` 在两个随机 PostgreSQL 测试库验证空库迁移、004→005 升级、引用/状态约束、最小权限、并发与回滚；`npm test` 包含真实临时文件存储检查。既有故事、认证、管理员、公开读取/分享测试保留。原 v1 服务和阅读行为不变，v2 目前仅为数据库基础契约，编辑器与图片 HTTP 联合验收尚未实施。本轮不合并任何 PR，不开始 P2-09B/C/D；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
+`npm run test:media` 保留数据库基础检查；`npm run test:media:upload` 使用随机隔离 PostgreSQL 库、私有临时目录和生产 Next HTTP/HTTPS 验证上传、权限、恢复及真实服务中断。`npm test` 包含真实 Sharp 子进程和文件安全测试。故事、认证、管理员、公开读取/分享测试保留。原 v1 阅读行为不变；v2 编辑器及访客图片接入仍待后续。认证和上传均默认关闭/受控启用，不合并任何 PR、不开始 C/D；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
