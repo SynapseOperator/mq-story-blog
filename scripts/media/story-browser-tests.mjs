@@ -347,9 +347,11 @@ export async function runBrowser({ baseURL, admin, regular, publicStory, private
       await publicPage.goBack(); await letter.waitFor({ state: "detached" });
       assert.equal(new URL(publicPage.url()).pathname, "/");
       await publicPage.goForward(); await imageReady(publicPage.locator('img[src^="/api/stories/"]').first());
+      await publicPage.locator('dialog[data-mode="public"][data-phase="reading"]').waitFor();
       assert.equal(new URL(publicPage.url()).pathname, path);
       assert.equal(await publicPage.evaluate(() => globalThis.history.length), historyLength);
       await publicPage.locator("#letter-comment").fill("合成留言 · 图文历史切换保留输入");
+      assert.equal(await publicPage.locator("#letter-comment").inputValue(), "合成留言 · 图文历史切换保留输入");
       await publicPage.goBack();
       await publicPage.locator(".letter-discard").getByRole("button", { name: "继续编辑", exact: true }).click();
       await publicPage.waitForURL(`${baseURL}${path}`);
