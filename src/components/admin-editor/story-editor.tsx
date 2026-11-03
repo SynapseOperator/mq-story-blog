@@ -6,8 +6,14 @@ import { draftApi, DraftClientError } from "../../lib/admin-editor/api";
 import { canSave, createEditor, editorReducer, imageBlock, isDirty, needsLeaveProtection, openEditor, paragraphBlock,
   validateDocument, type EditorAction, type EditorState } from "../../lib/admin-editor/state";
 import type { DraftSummary, EditorBlock, EditorDocument, StoryKind } from "../../lib/admin-editor/types";
+import { createPreviewSnapshot } from "../../lib/admin-editor/preview";
+import type { LetterPreviewSnapshot } from "../../lib/stories/story";
+import { FeatherLetter } from "../reader/feather-letter";
+import { Landscape } from "../scene/landscape";
+import "../reader/letter.css";
 
-type ReturnPoint = { element: HTMLElement; start: number | null; end: number | null; scroll: number; x: number; y: number };
+type ReturnPoint = { element: HTMLElement; start: number | null; end: number | null;
+  direction: "forward" | "backward" | "none" | null; scroll: number; scrollLeft: number; x: number; y: number };
 const kindName = { STAR: "星空故事", CAMPFIRE: "篝火故事" };
 const stateName = { DRAFT: "未发布", PUBLISHED: "已发布 · 编辑草稿", WITHDRAWN: "已下架" };
 
@@ -29,6 +35,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
   const [listOpen, setListOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
+  const [previewSnapshot, setPreviewSnapshot] = useState<LetterPreviewSnapshot | null>(null);
   const listRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
   const detailGeneration = useRef(0);
@@ -37,6 +44,21 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
   const pendingNavigation = useRef<(() => void) | null>(null);
   const returnPoint = useRef<ReturnPoint | null>(null);
   const mounted = useRef(false);
+
+  const restoreReturnPoint = useCallback(() => {
+    const point = returnPoint.current;
+    requestAnimationFrame(() => {
+      if (!point?.element.isConnected) return;
+      point.element.focus({ preventScroll: true });
+      if (point.start !== null && (point.element instanceof HTMLInputElement || point.element instanceof HTMLTextAreaElement)) {
+        point.element.setSelectionRange(point.start, point.end, point.direction ?? undefined);
+      }
+      point.element.scrollTop = point.scroll; point.element.scrollLeft = point.scrollLeft;
+      window.scrollTo(point.x, point.y);
+    });
+  }, []);
+  // Stable across a save ACK: it must not restart the mounted reader's effect.
+  const closePreview = useCallback(() => { setPreviewSnapshot(null); restoreReturnPoint(); }, [restoreReturnPoint]);
 
   const commit = useCallback((next: EditorState | null) => { current.current = next; setEditor(next); }, []);
   const dispatch = useCallback((action: EditorAction) => {
@@ -117,19 +139,22 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
   function remember(element: HTMLElement) {
     const input = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element : null;
     returnPoint.current = { element, start: input?.selectionStart ?? null, end: input?.selectionEnd ?? null,
-      scroll: element.scrollTop, x: window.scrollX, y: window.scrollY };
+      direction: input?.selectionDirection ?? null, scroll: element.scrollTop, scrollLeft: element.scrollLeft,
+      x: window.scrollX, y: window.scrollY };
   }
   function cancelLeave() {
     dialog.current?.close(); setLeaving(false); pendingNavigation.current = null;
-    const point = returnPoint.current;
-    requestAnimationFrame(() => {
-      if (!point?.element.isConnected) return;
-      point.element.focus({ preventScroll: true });
-      if (point.start !== null && (point.element instanceof HTMLInputElement || point.element instanceof HTMLTextAreaElement)) {
-        point.element.setSelectionRange(point.start, point.end);
-      }
-      point.element.scrollTop = point.scroll; window.scrollTo(point.x, point.y);
-    });
+    restoreReturnPoint();
+  }
+  function openPreview(trigger: HTMLButtonElement) {
+    if (!current.current || accessLost || leaving || detailBusy || previewSnapshot) return;
+    if (!returnPoint.current?.element.isConnected) remember(trigger);
+    const point = returnPoint.current!;
+    // Keep the text selection, but capture the view at this opening, not an old blur.
+    returnPoint.current = { ...point, scroll: point.element.scrollTop, scrollLeft: point.element.scrollLeft,
+      x: window.scrollX, y: window.scrollY };
+    // A separate, immutable local view; no reducer action, validation or API call.
+    setPreviewSnapshot(createPreviewSnapshot(current.current.working, isDirty(current.current) || !current.current.confirmed));
   }
   function navigate(action: () => void) {
     if (current.current?.pending) { setNotice("保存正在进行，请等待结果后再切换故事。"); return; }
@@ -185,7 +210,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     uncertain: "保存结果未知 · 请先核对", error: "未能保存 · 内容保留", dirty: "有未保存的修改", saved: editor?.confirmed ? `已保存 · 版本 ${editor.confirmed.story.version}` : "尚未创建" }[status];
   const invalid = editor ? validateDocument(editor.working) : null;
 
-  return <main className="editor-workspace" data-testid="story-editor">
+  return <><main className="editor-workspace" data-testid="story-editor">
     <header className="editor-topbar"><a className="editor-home" aria-label="返回 MQ" href="/" onClick={event => { event.preventDefault(); navigate(() => window.location.assign("/")); }}><span className="editor-brand">MQ</span><span>返回 MQ</span></a>
       <span className="editor-private">私有工作区 <span aria-hidden="true">·</span> 仅管理员</span></header>
     <div className="editor-heading"><div><p className="editor-eyebrow">OUR STORIES / MANUSCRIPTS</p><h1>把回忆写下来</h1><p>慢慢写，手动保存。这里的修改不会自动发布。</p></div><span className="editor-chapter" aria-hidden="true">手 稿</span></div>
@@ -215,7 +240,12 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
         {detailBusy && <p role="status" className="editor-feedback">正在读取服务器草稿…</p>}
         {!editor ? <div className="editor-welcome"><span aria-hidden="true">✧</span><p className="editor-eyebrow">A PLACE FOR MEMORIES</p><h2>每一篇故事，都从这里开始</h2><p>选择一份手稿继续写，或新建一篇故事。<br />只有明确保存的内容才会留在服务器。</p><button className="editor-primary" disabled={accessLost || detailBusy} onClick={() => newStory("STAR")}>开始写故事</button>{initial && notice && <button onClick={() => void loadDetail(initial!)}>重试读取草稿</button>}</div>
           : <>
-            <div className="editor-savebar"><div><span className="editor-eyebrow">{kindName[editor.working.kind]} / {editor.confirmed ? stateName[editor.confirmed.story.state] : "新手稿"}</span><p data-testid="editor-status" data-state={status} role="status"><i aria-hidden="true" />{statusText}</p></div><button className="editor-primary" disabled={accessLost || detailBusy || !canSave(editor)} onClick={() => void save()}>保存草稿</button></div>
+            <div className="editor-savebar"><div><span className="editor-eyebrow">{kindName[editor.working.kind]} / {editor.confirmed ? stateName[editor.confirmed.story.state] : "新手稿"}</span><p data-testid="editor-status" data-state={status} role="status"><i aria-hidden="true" />{statusText}</p></div><div className="editor-save-actions"><button type="button" disabled={accessLost || detailBusy || leaving}
+              onPointerDown={() => {
+                const active = document.activeElement;
+                if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) remember(active);
+              }} onClick={event => openPreview(event.currentTarget)}>预览羽毛信</button>
+              <button className="editor-primary" disabled={accessLost || detailBusy || !canSave(editor)} onClick={() => void save()}>保存草稿</button></div></div>
             {editor.error && <p className="editor-feedback" role="alert">{editor.error}</p>}
             {["uncertain", "conflict"].includes(editor.status) && <div className="editor-recovery"><h2>先核对，再决定</h2><p>本地修改完整保留。不会自动重复提交或覆盖服务器版本。</p>
               {editor.confirmed ? <button disabled={detailBusy || accessLost} onClick={() => void loadDetail(editor.confirmed!.story.id, true)}>读取服务器版本</button>
@@ -239,5 +269,10 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
       </section>
     </div>
     <dialog className="editor-leave-dialog" ref={dialog} aria-labelledby="editor-leave-title" onCancel={event => { event.preventDefault(); cancelLeave(); }}><p className="editor-eyebrow">LEAVE MANUSCRIPT?</p><h2 id="editor-leave-title">还有内容没有确认保存</h2><p>离开会丢弃本地编辑。结果未知的请求可能已在服务器完成，离开不会撤销它。</p><div><button className="editor-primary" onClick={cancelLeave}>继续编辑</button><button onClick={() => { const action = pendingNavigation.current; pendingNavigation.current = null; dialog.current?.close(); setLeaving(false); commit(null); action?.(); }}>放弃并离开</button></div></dialog>
-  </main>;
+  </main>
+    {previewSnapshot ? <>
+      <div className="editor-preview-scene" aria-hidden="true"><Landscape stories={[]} reading /></div>
+      <FeatherLetter mode="private-preview" snapshot={previewSnapshot} onClosed={closePreview} />
+    </> : null}
+  </>;
 }

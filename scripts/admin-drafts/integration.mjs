@@ -162,9 +162,18 @@ async function main() {
         publicStory = await lifecycle.publish({ storyId: draft.id, expectedVersion: draft.version });
       } finally { await fixtureClient.$disconnect(); }
       const { runBrowser, runFreshCampfireBrowser } = await import(pathToFileURL(process.env.MQ_DRAFT_BROWSER_MODULE).href);
+      async function snapshotDatabase() {
+        const pool = new pg.Pool({ connectionString: application.connectionString, max: 1 });
+        try {
+          const stories = (await pool.query('SELECT id, version, published_revision_id FROM story ORDER BY id')).rows;
+          const revisions = (await pool.query('SELECT count(*)::int AS count FROM story_revision')).rows[0].count;
+          return { stories, revisions };
+        } finally { await pool.end(); }
+      }
       await runBrowser({ baseURL: tls.origin, evidenceDirectory: process.env.DRAFT_BROWSER_EVIDENCE_DIR,
         admin: httpResult.admin, regular: httpResult.regular, privateCanaries: httpResult.privateCanaries,
         publicStory: { id: publicStory.id, slug: publicStory.slug, title: "合成公开故事 · 编辑器返回验收" },
+        snapshotDatabase,
         ignoreHTTPSErrors: true, expectedSecure: true });
       console.log("PASS real production desktop/mobile draft and existing-reader browser regression");
       if (runFreshCampfireBrowser) {

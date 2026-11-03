@@ -2,15 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08B：管理员简单结构化故事编辑器**（[Issue #25](https://github.com/SynapseOperator/mq-story-blog/issues/25)），同步 P2-08A 最新提交后的集成验证。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站仅使用用户名和密码，认证默认关闭或受控启用。
+当前分支为 **Phase 2 · P2-08C：管理员私有羽毛信预览**（[Issue #27](https://github.com/SynapseOperator/mq-story-blog/issues/27)）。管理员在 `/admin/stories` 点击“预览羽毛信”，无需保存即可查看当前编辑快照；使用同一张已验收信纸、图文渲染和动效，关闭后回到原编辑内容、光标及滚动位置。预览明确标注未发布，不提供点赞、留言、登录或分享，不产生写请求或改变保存版本、URL/history。
 
-main 为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，已包含 P2-05/06/07。本分支以未合并 PR #24 的 `1f898372a2f6660778930a0a8c05885505bd53c9` 为基线，PR #26 仍以 `feat/p2-08a-admin-drafts` 为 base。上游和本 PR 均未合入 main；新同步提交须重新匹配 CI 与独立 Review，旧 APPROVED 不自动覆盖。
+本分支从同步并验证通过的 P2-08B `3f161bf519321edf209e5ee706f731a670e8cd2b` 派生，PR 暂以 `feat/p2-08b-story-editor` 为 base；其父 PR #24 为 `1f89837`。PR #24/#26 仍未合并，main 仍为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`（P2-05/06/07）。继续编码许可不代表合并许可，旧 APPROVED 不覆盖新 head；本轮不合并任何 PR，不使用 Review Exception。
 
-受控管理员可从 `/admin` 进入 `/admin/stories`，手动创建和编辑结构化草稿。所有数据操作复用四个私有草稿 API；同事务鉴权与列权限不变。界面区分当前编辑、发送快照和服务器确认版本，冲突或结果未知时保留输入，先核对再保存。编辑器说明见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务与权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。
+私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。场景、羽毛信和登录视觉不重新设计；本轮预览及编辑器的产品视觉验收仍需负责人确认。
 
-首页读取 PostgreSQL 已发布摘要，正文按需获取；分享地址 `/stories/[slug]` 复用现有 MQ 场景与羽毛信。公开 API、HTML/RSC 和 metadata 不能返回草稿/下架内容；保存未发布草稿不改变公开版本。见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。已验收的场景、信纸和账号视觉保持不变。
-
-本次只在 PR #26 同步依赖并重验。负责人允许验证通过后从本分支另建 P2-08C 私有预览 Draft PR（Issue #27），但本 PR 不混入预览代码。PR #24/#26/C 均不合并、不使用 Review Exception；编辑器视觉验收仍待确认。只用隔离合成账号/内容，不开放生产、不开发上传或发布。生产身份、HTTPS/代理、日志备份及安全审查门槛继续保留。
+只用隔离合成账号/内容，认证默认关闭或受控启用；不上传图片、选位、发布或部署，不开始 P2-09/P2-10。生产身份、HTTPS/代理、日志备份及独立安全审查门槛继续保留。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
