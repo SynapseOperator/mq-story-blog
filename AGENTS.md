@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1 与 P2-01 至 P2-05 已合入；PR #18 经对应最新提交的独立 APPROVED 后普通 merge，main 为 `8c7c83c31d0ff2aed0bbcc32325ee711aa288a4e`，quality/database CI 成功。当前处理 P2-06 / PR #20 与 main 的同步及测试整合；同步会产生新提交，必须重新获得独立 Review，不能沿用 `648d9e5` 的旧审批。不得跳过任何管理员或公开读取测试，不使用 Review Exception。PR #22 依赖 #20；#24/#26 尚未合并，不能视为 main 功能。仅隔离合成数据，保留已验收场景、动画、信纸及账号 UI；不开发新功能、创建真实管理员或开放生产。
+- Phase 1 与 P2-01 至 P2-06 已正式合入 main；PR #18/#20 均经对应最新提交的独立 APPROVED 后普通 merge。当前 main 为 `3fae81f90e5987b439bc4b9ef988e117860247ed`，quality/database CI 成功。本轮仅同步 P2-07 / PR #22 的依赖并回归；PR 已改以 main 为 base，同步新提交必须取得新 CI 和独立 Review，不能沿用 `5c17dbe` 审批。保留管理员、认证、公开读取与分享全部测试，不使用 Review Exception。PR #24/#26 尚未合并，不冒充 main 功能；本轮不合并它们。仅隔离合成数据，不创建真实账号或私密内容，不部署或开放注册，不开发 P2-08C 等新功能，不改变已验收视觉。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -23,8 +23,8 @@
 ## 数据与协作边界
 
 - 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开 API 保持只读与 no-store，任何未来管理写入口必须复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
+- 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
 - 管理权限见 `docs/engineering/ADMIN_AUTHORIZATION.md`。管理 Route Handler/服务必须通过 `withAdmin(request, async (tx, principal) => ...)`，在回调同一事务内使用 tx 完成受保护数据库操作；不能缓存一次鉴权或信任客户端角色。运行时不得使用迁移/维护身份；离线凭据不得作为命令参数，生产账号/角色配置需单独授权。
-
 - 认证边界与本地运行见 `docs/engineering/AUTHENTICATION.md`。公开 HTTP 路径严格白名单，内部邮箱/密码/Session Token 不进入日志或客户端 DTO；不能为了测试关闭 CSRF/Origin。默认 token 原值存库，正式用户开放前必须完成独立安全与数据库最小权限审查。
 - 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
 - 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。

@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FeatherLetter } from "../reader/feather-letter";
+import { FeatherLetter, type LetterNavigationHandle } from "../reader/feather-letter";
 import type { LetterContentState } from "@/lib/stories/story";
 import type { PublicStorySummary } from "@/lib/stories/public-story";
-import { PublicStoryReadError, readPublicCatalog, readPublicStory } from "@/lib/stories/public-client";
+import { PublicStoryReadError, readPublicCatalog, readPublicStoryBySlug } from "@/lib/stories/public-client";
+import { createStoryHistory } from "@/lib/stories/story-history";
 import { Landscape } from "./landscape";
 import { AccountControls } from "../auth/account-controls";
 
 type Section = "mq" | "m" | "q";
 type Catalog = { status: "loading" | "error" | "ready"; stories: PublicStorySummary[] };
-type Reading = { entry: PublicStorySummary; content: LetterContentState };
+type Reading = { slug: string; entry: { id: string; title: string }; content: LetterContentState };
+
+function loadingStory(slug: string): Reading {
+  return { slug, entry: { id: `slug:${slug}`, title: "MQ · 书信" }, content: { status: "loading" } };
+}
 
 const navigation = [
   { section: "mq", href: "/", label: "MQ", name: "MQ 共同主页" },
@@ -42,15 +47,20 @@ function NavigationIcon({ home = false }: { home?: boolean }) {
   );
 }
 
-export function ScenePage({ section }: { section: Section }) {
+export function ScenePage({ section, initialStorySlug }: { section: Section; initialStorySlug?: string }) {
   const isHome = section === "mq";
   const [catalog, setCatalog] = useState<Catalog>({ status: "loading", stories: [] });
-  const [reading, setReading] = useState<Reading | null>(null);
+  const [reading, setReading] = useState<Reading | null>(() => initialStorySlug ? loadingStory(initialStorySlug) : null);
   const [directoryOpen, setDirectoryOpen] = useState(false);
-  const readerOpen = useRef(false);
+  const readerOpen = useRef(Boolean(initialStorySlug));
+  const history = useRef<ReturnType<typeof createStoryHistory> | null>(null);
+  const letterNavigation = useRef<LetterNavigationHandle | null>(null);
+  const initialSlug = useRef(initialStorySlug);
   const catalogRequest = useRef<AbortController | null>(null);
   const storyRequest = useRef<AbortController | null>(null);
+  const selectedSummary = useRef<PublicStorySummary | null>(null);
   const readerTrigger = useRef<HTMLButtonElement | null>(null);
+  const restoreFocus = useRef(false);
   const directoryTrigger = useRef<HTMLButtonElement | null>(null);
 
   const loadCatalog = useCallback(() => {
@@ -76,55 +86,80 @@ export function ScenePage({ section }: { section: Section }) {
     return () => { catalogRequest.current?.abort(); storyRequest.current?.abort(); };
   }, [isHome, loadCatalog]);
 
-  async function loadStory(entry: PublicStorySummary) {
+  const loadStory = useCallback((slug: string, initial = false) => {
     storyRequest.current?.abort();
     const request = new AbortController();
     storyRequest.current = request;
-    setReading({ entry, content: { status: "loading" } });
-    try {
-      const story = await readPublicStory(entry.id, request.signal);
+    readerOpen.current = true;
+    const known = selectedSummary.current?.slug === slug ? selectedSummary.current : null;
+    if (!initial) { setReading({ ...loadingStory(slug), ...(known ? { entry: known } : {}) }); setDirectoryOpen(false); }
+    document.title = "MQ · 书信";
+    return readPublicStoryBySlug(slug, request.signal).then((story) => {
       if (!request.signal.aborted && storyRequest.current === request && readerOpen.current) {
-        setReading({ entry, content: { status: "ready", story: { ...story, source: "published" } } });
+        document.title = `${story.title} · MQ`;
+        setReading({ slug, entry: { id: story.id, title: story.title }, content: { status: "ready", story: { ...story, source: "published" } } });
       }
-    } catch (error) {
+    }).catch((error: unknown) => {
       if (!request.signal.aborted && storyRequest.current === request && readerOpen.current) {
-        setReading({ entry, content: { status: "error", unavailable: error instanceof PublicStoryReadError && error.unavailable } });
+        document.title = "MQ · 书信";
+        setReading({ ...loadingStory(slug), entry: { id: known?.id ?? `slug:${slug}`, title: "MQ · 书信" },
+          content: { status: "error", unavailable: error instanceof PublicStoryReadError && error.unavailable } });
       }
-    }
-  }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isHome) return;
+    const navigation = createStoryHistory(window, {
+      hasReader: () => readerOpen.current,
+      requestClose: () => letterNavigation.current?.requestClose() ?? false,
+      onRoute: (slug, initial) => {
+        if (slug) { void loadStory(slug, initial && slug === initialSlug.current); return; }
+        storyRequest.current?.abort();
+        storyRequest.current = null;
+        readerOpen.current = false;
+        document.title = "MQ · Our Stories";
+        if (!initial || initialSlug.current) {
+          restoreFocus.current = true;
+          setReading(null);
+          void refreshCatalog();
+        }
+      },
+    }, crypto.randomUUID());
+    history.current = navigation;
+    return () => { navigation.dispose(); history.current = null; storyRequest.current?.abort(); };
+  }, [isHome, loadStory, refreshCatalog]);
 
   function openStory(next: PublicStorySummary, trigger: HTMLButtonElement) {
     // The synchronous guard also covers multiple clicks before React commits.
     if (readerOpen.current) return;
-    readerOpen.current = true;
+    selectedSummary.current = next;
     readerTrigger.current = trigger;
-    setDirectoryOpen(false);
-    void loadStory(next);
+    history.current?.open(next.slug);
   }
 
   const closeStory = useCallback(() => {
     storyRequest.current?.abort();
     storyRequest.current = null;
-    setReading(null);
-    readerOpen.current = false;
-    // A close is a new visit to the scene: observe publication changes rather
-    // than reusing a catalog indefinitely. It does not refetch an open letter.
-    void refreshCatalog();
-  }, [refreshCatalog]);
+    // Keep the closed layer mounted until history commits. Clearing it before
+    // popstate would restore focus to a hotspot that catalog refresh then removes.
+    history.current?.closed();
+  }, []);
 
   useEffect(() => {
-    if (reading || !readerTrigger.current || catalog.status === "loading") return;
+    if (reading || (!readerTrigger.current && !restoreFocus.current) || catalog.status === "loading") return;
     // React must commit the restored visibility/disabled state before focus.
     // A requestAnimationFrame from closeStory can run before that commit.
     const trigger = readerTrigger.current;
-    const renewedTrigger = trigger.dataset.storyId
+    const renewedTrigger = trigger?.dataset.storyId
       ? document.querySelector<HTMLButtonElement>(`.story-entry[data-story-id="${CSS.escape(trigger.dataset.storyId)}"]`) : null;
-    const target = trigger.isConnected && trigger.getClientRects().length
+    const target = trigger?.isConnected && trigger.getClientRects().length
       ? trigger : renewedTrigger ?? document.querySelector<HTMLButtonElement>(".story-entry--star")
         ?? document.querySelector<HTMLButtonElement>(".public-story-status button")
         ?? (directoryTrigger.current?.getClientRects().length ? directoryTrigger.current : document.getElementById("main-content"));
     target?.focus({ preventScroll: true });
     readerTrigger.current = null;
+    restoreFocus.current = false;
   }, [reading, catalog.status]);
 
   return (
@@ -190,8 +225,9 @@ export function ScenePage({ section }: { section: Section }) {
         <span>{isHome ? "MQ · 公开故事" : "建设中"}</span>
         <span className="scene-footer-brand">MQ · Our Stories</span>
       </footer>
-      {reading ? <FeatherLetter key={reading.entry.id} entry={reading.entry} content={reading.content}
-        onRetry={() => { if (reading.content.status === "error") void loadStory(reading.entry); }} onClosed={closeStory} /> : null}
+      {reading ? <FeatherLetter key={reading.slug} entry={reading.entry} content={reading.content}
+        navigationRef={letterNavigation} onCloseCancelled={() => history.current?.cancel()}
+        onRetry={() => { if (reading.content.status === "error") void loadStory(reading.slug); }} onClosed={closeStory} /> : null}
     </div>
   );
 }
