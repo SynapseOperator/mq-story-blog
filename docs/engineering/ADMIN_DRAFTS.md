@@ -4,9 +4,9 @@
 
 ## 依赖与范围
 
-负责人于 2026-10-29 放宽开发启动条件，允许从 PR #18 的已核实提交 `c12e17725ae1dddcc0d53357a6c76f10f62e64ae` 创建 Stacked PR。base 为 `feat/p2-05-admin-boundary`，main 仍为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。PR #18 仍须独立安全 Review；没有 Review Exception 或合并授权。其权限实现和历史 SQL 不由本增量修改。
+本分支最初按负责人 2026-10-29 授权从 PR #18 的 `c12e17725ae1dddcc0d53357a6c76f10f62e64ae` 创建 Stacked PR。2026-11-03，PR #18/#20/#22 均经匹配最新提交的独立 APPROVED 后普通合并；main 为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，quality/database 成功。本 PR 现以 main 为 base，同步后新增真实草稿/公开分享联合测试，不修改管理员权限实现和历史 SQL。新提交须重新取得独立 Review 和 CI，不能沿用 `aeeda411` 的旧审批。
 
-PR #20/#22 未引入本分支。四份演示故事及场景、羽毛信、登录窗口保持不变。公开读取/分享 HTML、RSC、metadata 的联合验收待依赖集成，不能把现有演示首页冒充已验证的数据库公开路由。
+公开读取/分享实现来自已合并的 PR #20/#22，首页使用真实公开摘要，场景、羽毛信与登录窗口保持不变，不回退演示数据。联合测试在同一个生产构建 HTTP 进程中使用受保护草稿 API 和匿名公开 API/HTML/RSC/metadata，不以两个独立套件通过代替真实联验。PR #26 编辑器尚未合并，本轮仅准备后续同步方案，不开发 P2-08C 或其他功能。
 
 ## 四个 HTTP 接口
 
@@ -64,13 +64,16 @@ npm run test:db
 npm run test:auth
 npm run test:admin
 npm run test:admin-drafts
+npm run test:public
 ```
 
 `test:admin-drafts` 使用已构建的生产服务器，只在指定 `mq_test` 实例创建两个随机临时库与非 owner runtime/maintenance 身份。从空库部署全部历史迁移、重复部署和 drift 检查，执行真实权限/并发/HTTP/HTTPS/日志隔离测试，最后仅清理本次创建的库、角色、进程与 TLS 文件。不重置共享库、不 seed 开发库。
 
 可选浏览器 hook 用 `MQ_DRAFT_BROWSER_MODULE` 指向仓库外的 `runBrowser` 模块，`DRAFT_BROWSER_EVIDENCE_DIR` 指定截图目录。合成凭据只以内存参数传入，不写入截图/录屏/HAR。默认 CI 执行真实 HTTP/HTTPS，浏览器证据单独记录，不能把二者混称。
 
-实际结果和截图在本 PR 验收记录中列出。CI 保留故事、认证、管理员、限流、日志与持久化套件，再新增草稿套件；PR #20/#22 集成后必须保留 `test:public` 与分享回归，重新检查 CI/package.json/日志白名单和工程文档冲突。
+实际结果和截图在本 PR 验收记录中列出。CI 同时执行故事、认证、管理员、草稿、公开读取/分享、限流、日志、事务与持久化套件。PR #18/#20 已合并，原 Stacked parent 的触发条件收敛为 main；PR #26 仍由其自身分支工作流覆盖 P2-08A base，未删除测试或降低检查要求。
+
+联合测试通过现有管理员 HTTP PUT 保存已发布故事的新标题/正文，再经受保护 GET 确认草稿实际保存，并检查公开版本指针、slug 和星位保持不变。匿名目录、ID/slug API、分享 HTML、RSC 和 bot metadata 只能看到原公开版本；下架后的新请求不得继续暴露原公开标题或正文，新草稿也始终不能泄漏。仅使用测试 runner 创建的隔离合成故事和现有低权限 runtime，不添加权限、路由或发布 API。
 
 ### 2026-10-29 Windows 本机结果
 
@@ -90,4 +93,23 @@ Node 24.19.0 / Prisma 7.10.1 / PostgreSQL 18.6。以下命令最终均退出 0�
 
 实施中真实发现并修复：原生 SQL 的 Prisma 7 pg 错误包装未映射唯一冲突（曾返回 503，现精确映射 409）；扩展年份游标可越过 JavaScript 日期检查（现输入层返回 400）；测试自身误授权限探针撤销后未恢复列权限（现精确恢复后重验）。首轮失败保留在任务工具记录，不以最后成功掩盖失败过程。
 
-这些结果不是负责人技术验收或独立 APPROVED。仍待 PR #18 安全评审、依赖同步，以及本 Draft PR 的技术/安全 Review。P2-06/P2-07 公开 HTTP、HTML/RSC/metadata/分享联验和 P2-08B 的真实编辑内容保留检查尚未完成。
+以上为原 `aeeda411` 的历史结果，后续已获负责人技术验收和匹配该提交的正式独立 APPROVED。本次 main 同步及新增联合测试的实际结果、CI 和新审批另行记录，不能由旧验收推定。P2-08B 编辑器与最新 main 的联合验收、产品视觉验收仍未完成；生产最小权限、正式 HTTPS/代理、日志备份及整体安全审查门槛继续保留。
+
+### 2026-11-03 main 同步与联合验收
+
+同步 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3` 后，Windows / Node 24.19.0 / npm 11.17.0 / Prisma 7.10.1 / PostgreSQL 18.6 上实际执行，最终退出码均为 0：
+
+| 命令 | 实际结果 |
+| --- | --- |
+| `npm run check` | lint、Schema、typecheck、72 项单元测试、生产构建 |
+| `npm run test:db` | 31 项基础/生命周期检查 |
+| `npm run test:auth` | 35 HTTP + 8 HTTPS |
+| `npm run test:admin` | 3 CLI + 18 DB + 20 HTTP + 4 HTTPS |
+| `npm run test:admin-drafts` | 12 DB + 20 HTTP + 4 HTTPS，包含新增真实受保护保存与匿名公开/分享隔离联合测试 |
+| `npm run test:public` | 15 项公开 PostgreSQL/HTTP + 10 项分享检查；通过仓库外 hook 执行 32 项真实浏览器回归 |
+
+草稿套件继续验证两个隔离空库的 001→002→003→004、重复部署、drift、列级权限、CAS、回滚、撤销锁顺序及应用日志隐私。联合测试首轮及两次定位运行失败于测试 transport 不自动跟随 Next.js 的 RSC 307 规范化跳转；之后仅在新测试中验证同源、同路径且唯一 `_rsc` 查询并跟随一次，保留最终 200/RSC/no-store/隐私断言。`test-admin-drafts-rerun3.log` 全套通过，前三份失败日志保留；没有修改应用、鉴权或通用认证 transport 来消除失败。
+
+Chromium 156.0.8078.4 的 32 项回归覆盖桌面 1536×1024、390×844 和 320×568、触屏及 reduced-motion；包含直达/刷新/前进后退、关闭返回首页、草稿确认、嵌套登录、长文、错误重试、空库与下架。18 张生产构建截图及脱敏报告在本机 `mq-pr24-main-sync/run-01` 证据目录，意外运行错误和隐私违规均为 0。Browser 插件 Skill 未列出，按工程工作流复用已有 V1 Playwright；未测试其他浏览器或实体手机，不将本机浏览器证据称为 CI 浏览器测试。
+
+场景/阅读器/登录、管理员授权实现、Schema 和历史 SQL 均未修改。测试只清理各自临时数据库、角色、图片和进程，不写开发故事或真实账号。此次同步产生新 head，须重新匹配 CI 与独立 APPROVED；旧 `aeeda411` 审批不覆盖本提交。PR #26 尚未同步本次增量，也不因此视作已经完成编辑器联合验收。
