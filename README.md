@@ -2,13 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08C：管理员私有羽毛信预览**（[Issue #27](https://github.com/SynapseOperator/mq-story-blog/issues/27)）。管理员在 `/admin/stories` 点击“预览羽毛信”，无需保存即可查看当前编辑快照；使用同一张已验收信纸、图文渲染和动效，关闭后回到原编辑内容、光标及滚动位置。预览明确标注未发布，不提供点赞、留言、登录或分享，不产生写请求或改变保存版本、URL/history。
-
-本分支从同步并验证通过的 P2-08B `3f161bf519321edf209e5ee706f731a670e8cd2b` 派生，PR 暂以 `feat/p2-08b-story-editor` 为 base；其父 PR #24 为 `1f89837`。PR #24/#26 仍未合并，main 仍为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`（P2-05/06/07）。继续编码许可不代表合并许可，旧 APPROVED 不覆盖新 head；本轮不合并任何 PR，不使用 Review Exception。
+当前分支为 **P2-09C 集成基线**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)）：从 P2-08C 5249c396 以普通非快进 merge 汇入 P2-09B 59c676e4。草稿编辑/私有羽毛信与媒体上传基础同时存在，但尚未实现 v2 编辑和公开图片集成。main 仍为 42ef1821；#24/#26/#28/#30/#32 均未合并，任何旧审批不自动覆盖本集成。媒体数据与接口见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md) 和 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
 私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。场景、羽毛信和登录视觉不重新设计；本轮预览及编辑器的产品视觉验收仍需负责人确认。
 
-只用隔离合成账号/内容，认证默认关闭或受控启用；不上传图片、选位、发布或部署，不开始 P2-09/P2-10。生产身份、HTTPS/代理、日志备份及独立安全审查门槛继续保留。
+基线保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试。所有测试使用随机隔离库、受限身份和合成数据；认证与上传仍默认关闭/受控启用。只有基线验证通过后才创建 C 功能分支。无发布、星位、删除管理或生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
