@@ -13,7 +13,7 @@ async function fixture(t) {
   for (const path of [projectRoot, roots.development, roots.test]) await mkdir(path, { mode: 0o700 });
   await mkdir(join(projectRoot, ".git"));
   // Cleanup is confined to the unique fixture root created by this exact test;
-  // the storage API itself never exposes a delete operation.
+  // the storage API has only per-FAILED-object recovery, no recursive deletion.
   t.after(() => rm(sandbox, { recursive: true, force: true }));
   const config = { projectRoot, roots, environment: "test", maxVariantBytes: 1024 };
   return { sandbox, config, projectRoot, roots, store: await createLocalMediaStore(config) };
@@ -28,7 +28,7 @@ test("LOCAL storage round-trips only processed display/thumbnail bytes with no p
   const key = randomUUID();
   const display = Buffer.from("synthetic already-processed display bytes");
   const thumbnail = Buffer.from("synthetic already-processed thumbnail bytes");
-  assert.deepEqual(Object.keys(store), ["write", "read"]);
+  assert.deepEqual(Object.keys(store), ["write", "read", "removeFailed"]);
   assert.deepEqual(await store.write(key, "display", display), { byteLength: display.length });
   assert.deepEqual(await store.write(key, "thumbnail", thumbnail), { byteLength: thumbnail.length });
   assert.deepEqual(await store.read(key, "display"), display);
@@ -122,6 +122,50 @@ test("reads are bounded and missing objects expose only a fixed error code", asy
   await mkdir(join(roots.test, key), { mode: 0o700 });
   await writeFile(join(roots.test, key, "display.webp"), Buffer.alloc(1025), { mode: 0o600 });
   await assert.rejects(store.read(key, "display"), code("TOO_LARGE"));
+});
+
+test("FAILED recovery removes only one object's known outputs and abandoned temporary files", async t => {
+  const { store, roots } = await fixture(t);
+  const failed = randomUUID(), retained = randomUUID();
+  await store.write(failed, "display", Buffer.from("failed display"));
+  await store.write(failed, "thumbnail", Buffer.from("failed thumbnail"));
+  await writeFile(join(roots.test, failed, `.pending-${randomUUID()}`), "partial synthetic output", { mode: 0o600 });
+  await store.write(retained, "display", Buffer.from("retained READY stand-in"));
+  await store.removeFailed(failed);
+  await store.removeFailed(failed); // Status-query recovery is safely repeatable.
+  assert.deepEqual(await readdir(roots.test), [retained]);
+  assert.equal((await store.read(retained, "display")).toString(), "retained READY stand-in");
+  assert.deepEqual(await readdir(roots.development), []);
+  await assert.rejects(store.removeFailed("../outside"), code("INVALID_OBJECT"));
+});
+
+test("FAILED recovery refuses unexpected entries before removing any valid output", async t => {
+  const { store, roots } = await fixture(t);
+  for (const name of ["original.jpg", ".pending-not-a-uuid", "other-directory"]) {
+    const key = randomUUID();
+    await store.write(key, "display", Buffer.from("keep on unsafe cleanup"));
+    if (name === "other-directory") await mkdir(join(roots.test, key, name), { mode: 0o700 });
+    else await writeFile(join(roots.test, key, name), "unknown synthetic file", { mode: 0o600 });
+    await assert.rejects(store.removeFailed(key), code("UNSAFE_PATH"));
+    assert.equal((await store.read(key, "display")).toString(), "keep on unsafe cleanup");
+    assert.deepEqual((await readdir(join(roots.test, key))).sort(), ["display.webp", name].sort());
+  }
+});
+
+test("FAILED recovery refuses object and output junctions without touching their targets", async t => {
+  const { store, roots, sandbox } = await fixture(t);
+  const outside = join(sandbox, "cleanup-outside");
+  await mkdir(outside, { mode: 0o700 });
+  await writeFile(join(outside, "sentinel"), "untouched", { mode: 0o600 });
+  const redirected = randomUUID();
+  await symlink(outside, join(roots.test, redirected), process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(store.removeFailed(redirected), code("UNSAFE_PATH"));
+  const key = randomUUID();
+  await store.write(key, "display", Buffer.from("keep valid output"));
+  await symlink(outside, join(roots.test, key, "thumbnail.webp"), process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(store.removeFailed(key), code("UNSAFE_PATH"));
+  assert.equal((await store.read(key, "display")).toString(), "keep valid output");
+  assert.equal(await readFile(join(outside, "sentinel"), "utf8"), "untouched");
 });
 
 test("root and ancestor junctions/symlinks are refused", async t => {

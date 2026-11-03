@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, realpath, mkdir, open, link, unlink } from "node:fs/promises";
+import { lstat, realpath, mkdir, open, link, unlink, readdir, rmdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
@@ -27,6 +27,10 @@ export type LocalMediaConfiguration = {
 export type LocalMediaStore = Readonly<{
   write(storageKey: string, variant: MediaVariant, processedWebp: Uint8Array): Promise<{ byteLength: number }>;
   read(storageKey: string, variant: MediaVariant): Promise<Buffer>;
+  /** Internal recovery only. The caller must first authorize and establish a
+   * terminal FAILED state in the database; never call for READY/referenced data.
+   * This primitive does not grant permission or inspect database state. */
+  removeFailed(storageKey: string): Promise<void>;
 }>;
 
 const keyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -85,7 +89,7 @@ async function outsideGit(path: string) {
 }
 
 /** Private LOCAL storage for ALREADY processed WebP variants. No upload parsing,
- * image decoding, MIME validation, original variant, public URL or deletion API.
+ * image decoding, MIME validation, original variant or public/deletion HTTP API.
  * Roots must be pre-created, separate, absolute, outside every Git checkout and
  * the project/build/public tree. No environment/cwd fallback is permitted.
  */
@@ -124,7 +128,9 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
   function objectPath(storageKey: string, variant: MediaVariant) {
     if (typeof storageKey !== "string" || !keyPattern.test(storageKey)
       || typeof variant !== "string" || !Object.hasOwn(variantNames, variant)) throw new MediaStorageError("INVALID_OBJECT");
-    return { directory: join(root, storageKey), file: join(root, storageKey, variantNames[variant]) };
+    // Runtime-only private volume: never trace its files into a deployment.
+    return { directory: join(/* turbopackIgnore: true */ root, storageKey),
+      file: join(/* turbopackIgnore: true */ root, storageKey, variantNames[variant]) };
   }
 
   async function write(storageKey: string, variant: MediaVariant, processedWebp: Uint8Array) {
@@ -167,7 +173,7 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
       const entry = await inspectPath(target.file, false);
       privateMode(entry.mode, 0o600);
       if (entry.size > maxBytes) throw new MediaStorageError("TOO_LARGE");
-      const handle = await open(target.file, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW));
+      const handle = await open(/* turbopackIgnore: true */ target.file, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW));
       try {
         const opened = await handle.stat();
         if (!opened.isFile() || opened.size === 0) throw new MediaStorageError("INVALID_OBJECT");
@@ -184,5 +190,29 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
     } catch (error) { throw storageError(error); }
   }
 
-  return Object.freeze({ write, read });
+  async function removeFailed(storageKey: string) {
+    const target = objectPath(storageKey, "display");
+    try {
+      privateMode((await inspectPath(root, true)).mode, 0o700);
+      try { privateMode((await inspectPath(target.directory, true)).mode, 0o700); }
+      catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+        throw error;
+      }
+      const entries = await readdir(target.directory);
+      // Validate every entry before deleting any. Unexpected files/directories
+      // remain untouched for an operator; no recursive or cross-asset cleanup.
+      for (const name of entries) {
+        if (name !== "display.webp" && name !== "thumbnail.webp"
+          && !(name.startsWith(".pending-") && keyPattern.test(name.slice(9)))) {
+          throw new MediaStorageError("UNSAFE_PATH");
+        }
+        privateMode((await inspectPath(join(target.directory, name), false)).mode, 0o600);
+      }
+      for (const name of entries) await unlink(join(target.directory, name));
+      await rmdir(target.directory);
+    } catch (error) { throw storageError(error); }
+  }
+
+  return Object.freeze({ write, read, removeFailed });
 }
