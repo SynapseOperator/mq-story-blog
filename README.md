@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-07：故事分享与浏览器历史导航**（[Issue #21](https://github.com/SynapseOperator/mq-story-blog/issues/21)）的 main 同步与重新评审。在 P2-06 公开读取基础上增加稳定 `/stories/[slug]` 分享地址、直达/刷新和前进/后退，复用同一 MQ 场景与羽毛信。认证默认关闭或受控启用，未开放正式注册。
+当前分支为 **Phase 2 · P2-09A：私有媒体与 Revision 引用基础**（[Issue #29](https://github.com/SynapseOperator/mq-story-blog/issues/29)）。新增 MediaAsset、受约束的 Revision 图片引用和 005 迁移，以及项目外私有目录的本地存储接口。本轮没有上传、图片读取或删除管理 HTTP，也没有素材 UI、图片解码或发布功能；READY 不代表公开。
 
-Phase 1 与 P2-01 至 P2-06 已正式合入。PR #18/#20 均经 SnorkelingBreather 对对应最新提交的独立 APPROVED 后普通 merge；当前 main 为 `3fae81f90e5987b439bc4b9ef988e117860247ed`，合并后 quality/database CI 成功。PR #22 已调整 base 为 main；本次同步保留管理员、认证、公开读取与分享测试，新提交必须重新取得独立审批，不能沿用 `5c17dbe` 的旧 Review。
+本分支直接基于 main `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`（Phase 1 与 P2-01 至 P2-07）。PR #24/#26/#28 仍待独立评审/合并，不将 P2-08 的草稿 API、编辑器或私有预览当作 main 功能，也不复制其实现。媒体基础与未来接入计划见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)。
 
 现有 `/admin` 是受保护权限检查入口，单例授权、离线维护及权限限制见 [ADMIN_AUTHORIZATION.md](docs/engineering/ADMIN_AUTHORIZATION.md)。分享页面、metadata、RSC 和 API 只暴露公开版本；空库/失败不回退演示文章。分享与历史见 [STORY_SHARING.md](docs/engineering/STORY_SHARING.md)，公开契约见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)，认证与生命周期分别见 [AUTHENTICATION.md](docs/engineering/AUTHENTICATION.md)、[STORY_LIFECYCLE.md](docs/engineering/STORY_LIFECYCLE.md)。场景、动画、信纸和账号视觉保持不变。
 
-PR #22 尚未合入；PR #24/#26 的草稿服务/编辑器也不是 main 功能，相关联合验收仍待实际集成。本轮不合并 #24/#26、不开发新功能、不创建真实账号或正式故事、不开放生产。P2-01 至 P2-14 Roadmap 保留；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
+`npm run test:media` 在两个随机 PostgreSQL 测试库验证空库迁移、004→005 升级、引用/状态约束、最小权限、并发与回滚；`npm test` 包含真实临时文件存储检查。既有故事、认证、管理员、公开读取/分享测试保留。原 v1 服务和阅读行为不变，v2 目前仅为数据库基础契约，编辑器与图片 HTTP 联合验收尚未实施。本轮不合并任何 PR，不开始 P2-09B/C/D；正式开放仍需生产最小权限、HTTPS/代理、日志备份及独立安全审查。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
