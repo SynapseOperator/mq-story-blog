@@ -246,6 +246,112 @@ export async function runDraftHttpTests({ connectionString, maintenanceUrl, runt
       assert.equal(after.published_revision_id, before.published_revision_id); assert.equal(after.slot_id, before.slot_id);
       assert.equal(await lifecycle.getPublicStory(story.slug), null);
     });
+    await run("protected draft save preserves anonymous public APIs, share HTML, RSC and metadata until withdrawal", async () => {
+      const publicTitle = `Synthetic joint original ${randomUUID()}`;
+      const publicBody = `PUBLIC_JOINT_BODY_${randomUUID()}`;
+      const privateTitle = `PRIVATE_JOINT_TITLE_${randomUUID()}`;
+      const privateBody = `PRIVATE_JOINT_BODY_${randomUUID()}`;
+      privateCanaries.push(privateTitle, privateBody);
+      // Only the fixture setup publishes, through the internal lifecycle in
+      // this runner's disposable database. The actual draft save uses HTTP
+      // and the application's restricted runtime identity and withAdmin tx.
+      stage = "joint public isolation: fixture publication";
+      let story = await lifecycle.createDraft({ slug: `story-${randomUUID().replaceAll("-", "")}`,
+        kind: "STAR", slotId: "star-2", title: publicTitle, content: content(publicBody) });
+      story = await lifecycle.publish({ storyId: story.id, expectedVersion: story.version });
+      const before = await snapshot(story.id);
+      const publicDetail = { id: story.id, slug: story.slug, title: publicTitle, content: content(publicBody) };
+      async function assertPublicVersion(visible, phase) {
+        // No administrator/ordinary Cookie, auth header or Origin is sent to
+        // any public surface; a logged-in caller must not mask an isolation bug.
+        stage = `joint public isolation ${phase}: catalog request`;
+        const catalog = await request("/api/stories", { requestOrigin: null });
+        stage = `joint public isolation ${phase}: catalog DTO`;
+        assert.equal(catalog.status, 200);
+        const summary = catalog.data.stories.find(item => item.id === story.id);
+        assert.deepEqual(summary, visible
+          ? { id: story.id, slug: story.slug, title: publicTitle, entry: "star", slotId: "star-2" }
+          : undefined);
+        assert.ok(!catalog.data.stories.some(item => item.id === draft.id));
+        const responses = [catalog];
+        for (const [surface, route] of [["ID", `/api/stories/${story.id}`], ["slug", `/api/stories/by-slug/${story.slug}`]]) {
+          stage = `joint public isolation ${phase}: ${surface} API request`;
+          const result = await request(route, { requestOrigin: null });
+          stage = `joint public isolation ${phase}: ${surface} API DTO`;
+          assert.equal(result.status, visible ? 200 : 404);
+          assert.deepEqual(result.data, visible ? { story: publicDetail } : { code: "PUBLIC_STORY_NOT_FOUND" });
+          responses.push(result);
+        }
+        for (const [surface, headers] of [["HTML", {}], ["RSC", { RSC: "1" }], ["metadata", { "user-agent": "Twitterbot/1.0" }]]) {
+          stage = `joint public isolation ${phase}: ${surface} request`;
+          let page = await request(`/stories/${story.slug}`, { requestOrigin: null, headers });
+          // Unlike fetch in the sharing suite, this credential-aware Node
+          // transport does not follow redirects. Next normalizes bare RSC
+          // requests to a cache-busting query before serving the component.
+          if (headers.RSC && page.status === 307) {
+            stage = `joint public isolation ${phase}: same-story RSC canonical redirect`;
+            const canonical = new URL(page.headers.location, origin);
+            assert.equal(canonical.origin, origin);
+            assert.equal(canonical.pathname, `/stories/${story.slug}`);
+            assert.deepEqual([...canonical.searchParams.keys()], ["_rsc"]);
+            assert.equal(canonical.hash, "");
+            assert.equal(page.headers["set-cookie"], undefined);
+            assert.equal(page.text, "");
+            page = await request(`${canonical.pathname}${canonical.search}`, { requestOrigin: null, headers });
+          }
+          stage = `joint public isolation ${phase}: ${surface} status`;
+          assert.equal(page.status, 200); // Unavailable stories retain the MQ shell.
+          stage = `joint public isolation ${phase}: ${surface} content type`;
+          if (headers.RSC) assert.match(page.headers["content-type"] ?? "", /text\/x-component/);
+          else {
+            assert.match(page.headers["content-type"] ?? "", /text\/html/);
+            stage = `joint public isolation ${phase}: ${surface} title`;
+            assert.ok(page.text.includes(visible
+              ? `<title>${publicTitle} · MQ · Our Stories</title>`
+              : "<title>故事暂不可用 · MQ · Our Stories</title>"));
+            stage = `joint public isolation ${phase}: ${surface} robots`;
+            assert.ok(page.text.includes("noindex"));
+          }
+          stage = `joint public isolation ${phase}: ${surface} deferred body`;
+          assert.ok(!page.text.includes(publicBody), "Share shell must not preload the full public body");
+          responses.push(page);
+        }
+        for (const [index, response] of responses.entries()) {
+          stage = `joint public isolation ${phase}: response ${index} privacy and cache`;
+          assert.match(response.headers["cache-control"] ?? "", /no-store/);
+          assert.equal(response.headers["set-cookie"], undefined);
+          for (const marker of privateCanaries) assert.ok(!response.text.includes(marker));
+          assert.ok(!/"(?:draftRevisionId|publishedRevisionId|draftTitle|hasUnpublishedChanges)"\s*:/.test(response.text));
+          if (!visible) {
+            assert.ok(!response.text.includes(publicTitle));
+            assert.ok(!response.text.includes(publicBody));
+          }
+        }
+      }
+      await assertPublicVersion(true, "before save");
+      stage = "joint public isolation: protected draft save";
+      const saved = await request(path(story.id), { method: "PUT", jar: adminJar,
+        body: { expectedVersion: story.version, title: privateTitle, content: content(privateBody) } });
+      assert.equal(saved.status, 200); privateHeaders(saved); assertSummary(saved.data.story);
+      assert.equal(saved.data.story.state, "PUBLISHED");
+      assert.equal(saved.data.story.slug, story.slug);
+      assert.equal(saved.data.story.hasUnpublishedChanges, true);
+      stage = "joint public isolation: private draft readback";
+      const details = await request(path(story.id), { jar: adminJar });
+      assert.equal(details.status, 200); privateHeaders(details);
+      assert.deepEqual(details.data.draft, { title: privateTitle, content: content(privateBody) });
+      stage = "joint public isolation: persisted revision pointers";
+      const after = await snapshot(story.id);
+      assert.equal(after.version, before.version + 1);
+      assert.equal(after.revisions, before.revisions + 1);
+      assert.equal(after.published_revision_id, before.published_revision_id);
+      assert.notEqual(after.draft_revision_id, after.published_revision_id);
+      assert.equal(after.slot_id, before.slot_id);
+      await assertPublicVersion(true, "after save");
+      stage = "joint public isolation: withdrawal";
+      await lifecycle.withdraw({ storyId: story.id, expectedVersion: saved.data.story.version });
+      await assertPublicVersion(false, "after withdrawal");
+    });
     await run("database failure after revision insert returns safe 503 and fully rolls back", async () => {
       const before = await snapshot(draft.id);
       await owner.query(`CREATE FUNCTION public.mq_test_draft_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'SYNTHETIC_DATABASE_FAILURE' USING ERRCODE='P0001'; END; $$`);
@@ -360,10 +466,10 @@ export async function runDraftHttpTests({ connectionString, maintenanceUrl, runt
         const response = await request(route);
         for (const canary of privateCanaries) assert.ok(!response.text.includes(canary));
       }
-      // P2-06/P2-07 are separate unmerged dependencies: this is a negative
-      // smoke check only, not a claim that their API/RSC suites were integrated.
+      // This remains a negative smoke check. The separate joint test above
+      // verifies real public/share routes before and after a protected save.
     });
-    return { passed, total: 19, secrets: [...secrets], admin, regular, privateCanaries, grant };
+    return { passed, total: 20, secrets: [...secrets], admin, regular, privateCanaries, grant };
   } catch {
     console.error(`Draft HTTP failed at: ${stage} (raw values withheld)`);
     throw new Error("Draft HTTP regression failed");

@@ -48,18 +48,20 @@ async function installFetchAudit(context, report, secrets, privateCanaries = [])
 // credentials and TLS processes. This suite never creates production identities,
 // changes authorization, saves Cookie/HAR/storageState, or prints private bodies.
 export async function runBrowser({ baseURL, evidenceDirectory, admin, regular,
-  privateCanaries = [], ignoreHTTPSErrors = true, expectedSecure = true } = {}) {
+  publicStory, privateCanaries = [], ignoreHTTPSErrors = true, expectedSecure = true } = {}) {
   const origin = new URL(baseURL);
   assert.equal(origin.hostname, "127.0.0.1");
   assert.equal(origin.protocol, "https:");
   assert.equal(expectedSecure, true);
   assert.ok(admin?.password && regular?.password && evidenceDirectory);
+  assert.match(publicStory?.id ?? "", /^[a-f0-9-]{36}$/i);
+  assert.ok(publicStory.slug && publicStory.title);
   const browser = await chromium.launch({ headless: true,
     ...(process.env.MQ_PLAYWRIGHT_EXECUTABLE ? { executablePath: process.env.MQ_PLAYWRIGHT_EXECUTABLE } : {}) });
   await mkdir(evidenceDirectory, { recursive: true });
   const report = { checkedAt: new Date().toISOString(), browser: browser.version(),
     browserPath: "Browser plugin not available; locked Playwright Chromium",
-    scope: "P2-08B stacked on unmerged P2-08A/P2-05; no P2-06/P2-07 joint validation or private feather-letter preview",
+    scope: "P2-08B editor and return to an isolated published story; no private feather-letter preview",
     origin: origin.origin, checks: [], screenshots: [], errors: [], privacyViolations: [], expectedFailures: [], passed: false };
   const contexts = [], allowedFailures = new Set(), allowedNetworkPaths = new Set();
   const secrets = [admin.password, regular.password];
@@ -534,10 +536,12 @@ export async function runBrowser({ baseURL, evidenceDirectory, admin, regular,
         assert.equal(await title(device).inputValue(), `合成未保存稿 · ${variant.name}`);
         await device.getByRole("link", { name: "返回 MQ", exact: true }).click();
         await device.getByRole("dialog").getByRole("button", { name: "放弃并离开", exact: true }).click();
-        await device.locator(".story-entry--star").first().waitFor();
-        assert.equal(await device.locator(".story-entry--star").count(), 3);
-        await device.locator(".story-entry--campfire").click(); await device.locator('.letter-dialog[data-phase="reading"]').waitFor();
-        assert.equal(await device.locator("#letter-title").textContent(), "我们在一起的故事");
+        const publicEntry = device.locator(`.story-entry--star[data-story-id="${publicStory.id}"]`);
+        await publicEntry.waitFor();
+        assert.equal(await device.locator(".story-entry--star").count(), 1);
+        await publicEntry.click(); await device.locator('.letter-dialog[data-phase="reading"]').waitFor();
+        assert.equal(await device.locator("#letter-title").textContent(), publicStory.title);
+        assert.equal(new URL(device.url()).pathname, `/stories/${publicStory.slug}`);
         assert.equal(await device.locator(".scene-nav").isVisible(), false);
         await shot(device, `${variant.name}-unchanged-letter`);
         await device.locator("#letter-comment").fill("合成留言 · 不发送");

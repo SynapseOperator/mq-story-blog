@@ -15,6 +15,7 @@ import { runDraftDatabaseTests } from "./database-tests.mjs";
 import { runDraftHttpTests, runDraftHttpsTests } from "./http-tests.mjs";
 import { createAuthDatabaseClient } from "../../src/server/auth/database.ts";
 import { initializeAdmin } from "../../src/server/admin/maintenance.ts";
+import { createStoryService } from "../../src/server/stories/service.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -150,9 +151,20 @@ async function main() {
       const counters = new pg.Pool({ connectionString: application.connectionString, max: 1 });
       try { await counters.query('DELETE FROM "AuthRateLimit"; DELETE FROM "RateLimit"'); }
       finally { await counters.end(); }
+      // The editor returns to the real public catalog, not the former demo data.
+      // Publish one synthetic star only in this invocation's isolated database.
+      const fixtureClient = createAuthDatabaseClient(application.connectionString);
+      let publicStory;
+      try {
+        const lifecycle = createStoryService(fixtureClient);
+        const draft = await lifecycle.createDraft({ slug: `editor-public-${id()}`, kind: "STAR", slotId: "star-3",
+          title: "合成公开故事 · 编辑器返回验收", content: { version: 1, blocks: [{ type: "paragraph", text: "仅用于隔离浏览器回归的合成公开正文。" }] } });
+        publicStory = await lifecycle.publish({ storyId: draft.id, expectedVersion: draft.version });
+      } finally { await fixtureClient.$disconnect(); }
       const { runBrowser, runFreshCampfireBrowser } = await import(pathToFileURL(process.env.MQ_DRAFT_BROWSER_MODULE).href);
       await runBrowser({ baseURL: tls.origin, evidenceDirectory: process.env.DRAFT_BROWSER_EVIDENCE_DIR,
         admin: httpResult.admin, regular: httpResult.regular, privateCanaries: httpResult.privateCanaries,
+        publicStory: { id: publicStory.id, slug: publicStory.slug, title: "合成公开故事 · 编辑器返回验收" },
         ignoreHTTPSErrors: true, expectedSecure: true });
       console.log("PASS real production desktop/mobile draft and existing-reader browser regression");
       if (runFreshCampfireBrowser) {

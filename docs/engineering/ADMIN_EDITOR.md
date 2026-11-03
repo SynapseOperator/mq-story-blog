@@ -4,7 +4,7 @@
 
 ## 依赖与入口
 
-本分支从 PR #24 的 `aeeda4115530a030960ed469d9c1e564304c73fa` 派生，暂以 `feat/p2-08a-admin-drafts` 为 base，依赖 PR #18 → #24。它们未合入 main；PR #20/#22 也没有进入本分支。依赖修改后须同步、检查增量和完整回归；独立 Review 不由自动化或辅助审查代替。
+本分支最初从 PR #24 的 `aeeda4115530a030960ed469d9c1e564304c73fa` 派生，2026-11-03 同步其最新 `1f898372a2f6660778930a0a8c05885505bd53c9`，仍以 `feat/p2-08a-admin-drafts` 为 base。main `42ef1821dd03881388f0bcc14c288a89a2e3dbe3` 已包含 P2-05/06/07；PR #24/#26 尚未合并。同步提交须新的 CI 与匹配提交的正式独立 Review，旧 APPROVED 不自动覆盖；本次允许继续编码，不是 Review Exception 或合并授权。
 
 `/admin` 经原权限检查后提供 `/admin/stories` 链接。新页面使用可信认证 Origin 和真实请求头调用 `withAdmin`，只返回界面框架。未授权时显示拒绝页面（页面 HTTP 200，不声称为 401/403）；四个 API 实际返回 401/403/503 等状态。页面动态渲染，静态 metadata/noindex、private/no-store、禁止嵌入，不序列化私人标题、正文、Session 或授权数据到 HTML/RSC。
 
@@ -46,6 +46,7 @@ npm run test:db
 npm run test:auth
 npm run test:admin
 npm run test:admin-drafts
+npm run test:public
 npx playwright install chromium
 npm run test:admin-editor
 ```
@@ -56,9 +57,19 @@ npm run test:admin-editor
 
 证据目录默认在系统临时目录，可用 `DRAFT_BROWSER_EVIDENCE_DIR` 指定。可用 `MQ_PLAYWRIGHT_EXECUTABLE` 指向 V1 已有 Chromium；CI 使用锁定 Playwright 1.64.1 与安装的 Chromium。没有 HAR、trace、Cookie/storageState 或真实凭据产物；失败记录只包含步骤、源码行号、固定错误类型/数字及合成页面截图。
 
-CI 保留 quality、story、auth、admin、admin-drafts 全部原检查，增加编辑器真实浏览器用例。公开故事 API、分享链接与其 RSC/metadata 的联合验收仍待 PR #20/#22 集成，不能以当前分支不存在这些路由来宣称通过。
+CI 同时保留 quality、story、auth、admin、admin-drafts、public/分享及编辑器真实浏览器套件。编辑器浏览器 hook 在自身隔离库中发布一篇合成 star-3，用其真实身份验证返回 MQ、分享地址、羽毛信及留言草稿保护；不再假定首页回退四份演示文章。不会修改开发库，也不删除原单例篝火测试。草稿保存与匿名公开 API、HTML/RSC/metadata 隔离联合用例来自 PR #24，继续执行。
 
 技术检查与产品视觉验收分别报告；本编辑器视觉仍待负责人评审。
+
+### 2026-11-03 上游同步验证
+
+同步 PR #24 的 `1f89837`，合并 CI/工程说明冲突，保留 A 的事务和列级权限以及 B 的完整编辑器实现。浏览器 fixture 改为使用本次隔离库中真实发布的合成 star-3，没有更改生产状态机、UI 或历史迁移。
+
+Windows / Node 24.19.0 / npm 11.17.0 / PostgreSQL 18.6 上，`npm run check`（88 单元测试及生产构建）、`test:db`（31）、`test:auth`（35 HTTP + 8 HTTPS）、`test:admin`（3 CLI + 18 DB + 20 HTTP + 4 HTTPS）、`test:admin-drafts`（12 DB + 20 HTTP + 4 HTTPS）、`test:public`（15 公开 + 10 分享）及 `test:admin-editor` 均实际退出 0。后者复跑草稿套件，并执行 21 组编辑器及 4 组独立空库首次篝火浏览器验证；另通过公开/分享浏览器 32 组。
+
+Chromium 156 本机证据在 `mq-p2-08c/b-sync`：编辑器 18 张、公开阅读 18 张生产截图，包含 1536×1024、390×844、320×568、触屏、reduced-motion。未发现意外运行错误或敏感响应；所有临时库/角色/图片/进程按本次作用域清理。浏览器证据不是产品视觉签收，旧 head 的 APPROVED 也不覆盖新同步提交。新 CI 及正式 Review 以 PR #26 最新记录为准。
+
+负责人允许验证通过后从同步分支独立实施 Issue #27 私有羽毛信预览；本次 B 同步不包含 C，不合并 PR #24/#26，不使用 Review Exception。
 
 ### 2026-10-29 Windows 本机结果
 

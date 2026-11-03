@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1 与 P2-01 至 P2-04 已合入；main 基础为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。当前仅实施 P2-08B（Issue #25）：管理员结构化草稿编辑器，复用 P2-08A 四个 API。分支从 PR #24 已核实的 `aeeda411` 派生，base 为 `feat/p2-08a-admin-drafts`；PR #18 → #24 依赖尚未合并，不能当作 main 已有功能。PR #20/#22 未引入，公开读取/分享联合测试待集成。只用隔离合成数据；不开发 C 私有预览、上传、发布/选位或真实管理员。保留现有视觉、四份演示故事与历史迁移。交付 Draft PR 后停止，不自动合并或使用 Review Exception。
+- Phase 1 与 P2-01 至 P2-07 已合入 main `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`。本分支为 P2-08B / PR #26，现同步 P2-08A / PR #24 的 `1f898372a2f6660778930a0a8c05885505bd53c9`；两者均未合并，不将它们视作 main 已有功能。保留编辑器 working/sent/confirmed 状态、全部权限/列级授权、公开读取/分享及所有 CI 测试。新提交须新 CI 与独立 Review，不能沿用旧 head 的 APPROVED。负责人允许同步验证通过后在独立分支实施 P2-08C（Issue #27）；本 PR 不混入 C，不合并任何 PR、不使用 Review Exception。仅隔离合成数据，保留已验收视觉与历史迁移，不创建真实管理员/私密故事，不开放注册或部署，不开始上传/发布。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -22,10 +22,11 @@
 
 ## 数据与协作边界
 
+- 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开 API 保持只读与 no-store，任何未来管理写入口必须复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
+- 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
 - 管理权限见 `docs/engineering/ADMIN_AUTHORIZATION.md`。管理 Route Handler/服务必须通过 `withAdmin(request, async (tx, principal) => ...)`，在回调同一事务内使用 tx 完成受保护数据库操作；不能缓存一次鉴权或信任客户端角色。运行时不得使用迁移/维护身份；离线凭据不得作为命令参数，生产账号/角色配置需单独授权。
 - 编辑器见 `docs/engineering/ADMIN_EDITOR.md`：working / sent / confirmed 分离，未知写入不能盲目重发，409 须人工处理；私人草稿不进 SSR/RSC、metadata、公开 API 或本地持久存储。
-- 草稿接口见 `docs/engineering/ADMIN_DRAFTS.md`；使用 `createStoryOperations(tx)`，不得调用另开事务的根服务包装器。业务错误须抛出并在回滚后映射，不能在事务内吞错返回成功。PR #18 评审变更后必须同步重验；合并后改 base 并复核差异与全部测试。
-
+- 草稿接口见 `docs/engineering/ADMIN_DRAFTS.md`；使用 `createStoryOperations(tx)`，不得调用另开事务的根服务包装器。业务错误须抛出并在回滚后映射，不能在事务内吞错返回成功。管理员保存新草稿不能改变公开版本；联合验证须通过真实受保护写入及匿名公开 API/HTML/RSC/metadata，不能以独立套件通过代替。
 - 认证边界与本地运行见 `docs/engineering/AUTHENTICATION.md`。公开 HTTP 路径严格白名单，内部邮箱/密码/Session Token 不进入日志或客户端 DTO；不能为了测试关闭 CSRF/Origin。默认 token 原值存库，正式用户开放前必须完成独立安全与数据库最小权限审查。
 - 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
 - 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。
