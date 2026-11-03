@@ -21,6 +21,7 @@ export type EditorState = {
 };
 export type EditorAction =
   | { type: "edit"; document: EditorDocument }
+  | { type: "select-media"; instanceId: string; blockKey: string | null; assetId: string; newBlockKey: string }
   | { type: "begin-save"; requestId: string }
   | { type: "save-ok"; requestId: string; story: DraftSummary }
   | { type: "save-error"; requestId: string; kind: FailureKind; message: string }
@@ -30,31 +31,44 @@ export type EditorAction =
   | { type: "use-remote" };
 
 function copy(document: EditorDocument): EditorDocument {
-  return { kind: document.kind, title: document.title, blocks: document.blocks.map(block => ({ ...block })) };
+  return { kind: document.kind, title: document.title, contentVersion: document.contentVersion,
+    blocks: document.blocks.map(block => ({ ...block })) };
 }
 
-/** This is the exact payload normalization used by the HTTP client. Empty
- * optional captions are omitted; title whitespace follows the server's trim. */
-export function toRevision(document: EditorDocument): DraftRevision {
-  return { title: document.title.trim(), content: { version: 1, blocks: document.blocks.map(block =>
+function normalized(document: EditorDocument) {
+  const asset = document.blocks.some(block => block.type === "image" && "assetId" in block);
+  const legacy = document.blocks.some(block => block.type === "image" && "src" in block);
+  return { title: document.title.trim(), content: {
+    version: asset ? 2 as const : legacy ? 1 as const : document.contentVersion ?? 1,
+    blocks: document.blocks.map(block =>
     block.type === "paragraph"
       ? { type: "paragraph" as const, text: block.text, style: block.style ?? "normal" }
-      : { type: "image" as const, src: block.src, alt: block.alt,
+      : { type: "image" as const, ...("assetId" in block ? { assetId: block.assetId } : { src: block.src }), alt: block.alt,
         ...(block.caption?.trim() ? { caption: block.caption } : {}) }) } };
 }
 
+/** Exact write payload. The mixed migration state stays in memory, never HTTP. */
+export function toRevision(document: EditorDocument): DraftRevision {
+  const result = normalized(document);
+  if (result.content.version === 2 && result.content.blocks.some(block => "src" in block)) {
+    throw new Error("Replace legacy images before saving version 2");
+  }
+  return result as DraftRevision;
+}
+
 function same(left: EditorDocument, right: EditorDocument): boolean {
-  return left.kind === right.kind && JSON.stringify(toRevision(left)) === JSON.stringify(toRevision(right));
+  return left.kind === right.kind && JSON.stringify(normalized(left)) === JSON.stringify(normalized(right));
 }
 
 function fromDetail(detail: DraftDetail, instanceId: string): EditorDocument {
-  return { kind: detail.story.kind, title: detail.draft.title,
+  return { kind: detail.story.kind, title: detail.draft.title, contentVersion: detail.draft.content.version,
     blocks: detail.draft.content.blocks.map((block, index) => ({ ...block, key: `${instanceId}-block-${index}` })) };
 }
 
 /** instanceId is generated at a client event/mount, never during SSR rendering. */
 export function createEditor(kind: StoryKind, instanceId = globalThis.crypto.randomUUID()): EditorState {
-  const working: EditorDocument = { kind, title: "", blocks: [{ key: `${instanceId}-block-0`, type: "paragraph", text: "", style: "normal" }] };
+  const working: EditorDocument = { kind, title: "", contentVersion: 2,
+    blocks: [{ key: `${instanceId}-block-0`, type: "paragraph", text: "", style: "normal" }] };
   return { instanceId, working, baseline: copy(working), confirmed: null,
     lastSent: null, pending: null, status: "ready", error: null, remote: null };
 }
@@ -78,6 +92,10 @@ export function validateDocument(document: EditorDocument): string | null {
   if (!["STAR", "CAMPFIRE"].includes(document.kind)) return "请选择故事类型。";
   if (!document.title.trim() || document.title.length > 160 || document.title.includes("\0")) return "标题不能为空，且最多 160 个字符。";
   if (document.blocks.length < 1 || document.blocks.length > 200) return "正文需要 1 至 200 个内容块。";
+  if (document.blocks.some(block => block.type === "image" && "assetId" in block)
+    && document.blocks.some(block => block.type === "image" && "src" in block)) {
+    return "已加入素材图片。请逐一替换剩余的旧合成图片，再保存；原图片不会自动导入或删除。";
+  }
   const keys = new Set<string>();
   for (const block of document.blocks) {
     if (!block.key || keys.has(block.key)) return "内容块标识异常，请保留文本并重新读取草稿。";
@@ -86,7 +104,9 @@ export function validateDocument(document: EditorDocument): string | null {
       if (!block.text.trim() || block.text.length > 10000 || block.text.includes("\0")) return "每段文字不能为空，且最多 10000 个字符。";
       if (block.style !== undefined && !["normal", "emphasis", "strong"].includes(block.style)) return "段落样式暂不支持。";
     } else if (block.type === "image") {
-      if (block.src !== EDITOR_SYNTHETIC_IMAGE) return "当前只支持已有的合成星空图片。";
+      if ("assetId" in block) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(block.assetId)) return "请选择处理完成的素材图片。";
+      } else if (block.src !== EDITOR_SYNTHETIC_IMAGE) return "旧图片仅支持已有的合成星空图片，请从素材库重新选择。";
       if (!block.alt.trim() || block.alt.length > 300 || block.alt.includes("\0")) return "请填写图片说明，最多 300 个字符。";
       if ((block.caption?.length ?? 0) > 1000 || block.caption?.includes("\0")) return "图片附注最多 1000 个字符。";
     } else return "正文仅支持段落和图片。";
@@ -102,7 +122,7 @@ export function canSave(state: EditorState): boolean {
 
 function normalizedSnapshot(document: EditorDocument): EditorDocument {
   const revision = toRevision(document);
-  return { kind: document.kind, title: revision.title,
+  return { kind: document.kind, title: revision.title, contentVersion: revision.content.version,
     blocks: revision.content.blocks.map((block, index) => ({ ...block, key: document.blocks[index].key })) };
 }
 
@@ -114,6 +134,18 @@ function matchesPending(state: EditorState, requestId: string): state is EditorS
  * retries a write: reconciliation must be an explicit user action. */
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
+    case "select-media": {
+      if (action.instanceId !== state.instanceId || state.status === "denied") return state;
+      const previous = action.blockKey === null ? null : state.working.blocks.find(block => block.key === action.blockKey);
+      if (action.blockKey !== null && previous?.type !== "image") return state;
+      if (action.blockKey === null && state.working.blocks.length >= 200) return state;
+      const image = { key: previous?.key ?? action.newBlockKey,
+        type: "image" as const, assetId: action.assetId, alt: previous?.type === "image" ? previous.alt : "",
+        ...(previous?.type === "image" && previous.caption !== undefined ? { caption: previous.caption } : {}) };
+      const document = { ...state.working, contentVersion: 2 as const, blocks: previous
+        ? state.working.blocks.map(block => block.key === previous.key ? image : block) : [...state.working.blocks, image] };
+      return { ...state, working: document, error: state.status === "ready" ? null : state.error };
+    }
     case "edit": {
       // A persisted story's kind cannot be changed by an editor action.
       const document = copy(action.document);
@@ -159,8 +191,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       if (state.confirmed && action.detail.story.id !== state.confirmed.story.id) return state;
       if (!state.confirmed && !["uncertain", "conflict"].includes(state.status)) return state;
       if (action.detail.story.kind !== state.working.kind) return state;
-      return { ...state, remote: { story: { ...action.detail.story }, draft: {
-        title: action.detail.draft.title, content: { version: 1, blocks: action.detail.draft.content.blocks.map(block => ({ ...block })) } } } };
+      return { ...state, remote: globalThis.structuredClone(action.detail) };
     }
     case "keep-local": {
       if (!state.remote || state.pending !== null) return state;

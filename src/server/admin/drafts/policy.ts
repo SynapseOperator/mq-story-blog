@@ -37,9 +37,11 @@ function revision(input: Record<string, unknown>) {
   try {
     const title = validateStoryTitle(input.title);
     const content = validateStoryContent(input.content);
-    // This increment stores existing same-origin references only. It neither
-    // fetches URLs nor establishes media ownership/access rules (P2-09).
-    if (content.blocks.some(block => block.type === "image" && !SYNTHETIC_STORY_IMAGES.includes(block.src))) invalid();
+    // Historical v1 images remain explicit synthetic references. In v2 the
+    // content validator accepts only assetId; 005 projects the references and
+    // enforces READY in the same revision/CAS transaction, without a pre-query.
+    if (content.version === 1
+      && content.blocks.some(block => block.type === "image" && !SYNTHETIC_STORY_IMAGES.includes(block.src))) invalid();
     return { title, content };
   } catch (error) {
     if (error instanceof ContentValidationError) invalid();

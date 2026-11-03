@@ -30,12 +30,29 @@ function storage() {
     environment: process.env.MQ_MEDIA_ENV as "development" | "test", maxVariantBytes: MEDIA_DISPLAY_LIMIT });
 }
 function assetId(value: string) { if (!uuid.test(value)) fail("INVALID_ASSET_ID", 400); return value; }
-function metadata(asset: MediaAsset) {
+function metadata(asset: MediaAsset, publishedStoryCount = 0) {
   return { id: asset.id, state: asset.state, createdAt: asset.createdAt.toISOString(),
+    publishedStoryCount,
     display: asset.state === "READY" ? { mimeType: asset.displayMimeType, width: asset.displayWidth,
       height: asset.displayHeight, byteLength: asset.displayBytes, sha256: asset.displaySha256 } : null,
     thumbnail: asset.state === "READY" ? { mimeType: asset.thumbnailMimeType, width: asset.thumbnailWidth,
       height: asset.thumbnailHeight, byteLength: asset.thumbnailBytes, sha256: asset.thumbnailSha256 } : null };
+}
+
+/** A live aggregate, not an isPublic flag or an authorization decision. Batch
+ * the bounded page in one query; private story identities never enter the DTO. */
+async function metadataWithUsage(tx: Prisma.TransactionClient, assets: MediaAsset[]) {
+  if (!assets.length) return [];
+  const ids = assets.map(asset => asset.id);
+  const counts = await tx.$queryRaw<{ assetId: string; count: number }[]>`
+    SELECT binding.asset_id AS "assetId", count(DISTINCT story.id)::int AS count
+    FROM public.story_revision_asset binding
+    JOIN public.story_revision revision ON revision.id = binding.revision_id
+    JOIN public.story story ON story.id = revision.story_id AND story.published_revision_id = revision.id
+    WHERE story.state = 'PUBLISHED'::public."StoryState" AND binding.asset_id = ANY(${ids}::uuid[])
+    GROUP BY binding.asset_id`;
+  const byId = new Map(counts.map(row => [row.assetId, row.count]));
+  return assets.map(asset => metadata(asset, byId.get(asset.id) ?? 0));
 }
 function failure(request: Request, error: unknown) {
   const status = error instanceof AdminAccessError || error instanceof MediaProcessingError ? error.status : 503;
@@ -97,7 +114,7 @@ export async function settleUploadFailure(tx: Prisma.TransactionClient, id: stri
   const changed = await tx.$executeRaw`UPDATE public.media_asset SET state='FAILED' WHERE id=${id}::uuid AND state='PENDING'`;
   if (changed === 1) return { failed: true, asset: null };
   const current = await tx.mediaAsset.findUniqueOrThrow({ where: { id } });
-  return { failed: current.state === "FAILED", asset: current.state === "READY" ? metadata(current) : null };
+  return { failed: current.state === "FAILED", asset: current.state === "READY" ? (await metadataWithUsage(tx, [current]))[0] : null };
 }
 
 export async function uploadMedia(request: Request) {
@@ -187,7 +204,7 @@ export async function listMedia(request: Request) {
       const rows = await tx.mediaAsset.findMany({ where: cursor ? { id: { lt: cursor } } : {},
         orderBy: { id: "desc" }, take: limit + 1 });
       const page = rows.slice(0, limit);
-      return { items: page.map(metadata), nextCursor: rows.length > limit ? page.at(-1)!.id : null,
+      return { items: await metadataWithUsage(tx, page), nextCursor: rows.length > limit ? page.at(-1)!.id : null,
         cleanupKeys: [...new Set([...expired.map(row => row.storage_key), ...page.filter(row => row.state === "FAILED").map(row => row.storageKey)])] };
     });
     if (result.cleanupKeys.length) await cleanup(await storage(), result.cleanupKeys);
@@ -208,11 +225,12 @@ export async function getMedia(request: Request, id: string, content = false) {
       const asset = await tx.mediaAsset.findUnique({ where: { id } });
       if (!asset) fail("MEDIA_NOT_FOUND", 404);
       if (content && asset.state !== "READY") fail("MEDIA_NOT_READY", 404);
-      return { asset, variant: variant as "display" | "thumbnail" };
+      return { asset, variant: variant as "display" | "thumbnail",
+        metadata: content ? null : (await metadataWithUsage(tx, [asset]))[0] };
     });
     if (!content) {
       if (result.asset.state === "FAILED") await cleanup(await storage(), [result.asset.storageKey]);
-      return Response.json({ asset: metadata(result.asset) }, { headers });
+      return Response.json({ asset: result.metadata }, { headers });
     }
     const bytes = await (await storage()).read(result.asset.storageKey, result.variant);
     const expected = result.variant === "display" ? result.asset.displaySha256 : result.asset.thumbnailSha256;

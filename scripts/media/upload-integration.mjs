@@ -6,7 +6,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath, URL } from "node:url";
+import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import pg from "pg";
 import { databaseUrl } from "../db/environment.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
@@ -139,11 +139,31 @@ async function main() {
     assert.equal(httpResult.passed, httpResult.total); await stopServer(plain);
     stage = "certificate-verified TLS and private cookie/cache boundaries";
     const backendPort = await unusedPort(); tls = await startHttpsProxy(backendPort); secrets.add(tls.proxySecret);
-    await startServer(backendPort, { ...env, AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
+    const secure = await startServer(backendPort, { ...env, AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
       { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" });
     const tlsResult = await runMediaUploadHttpsTests({ origin: tls.origin, ca: tls.ca,
       backendOrigin: `http://127.0.0.1:${backendPort}`, credentials: httpResult, secrets });
     assert.equal(tlsResult.passed, tlsResult.total); console.log(`Media upload HTTPS integration: ${tlsResult.passed}/${tlsResult.total} checks passed`);
+    if (process.env.MQ_MEDIA_STORY_TESTS === "true") {
+      stage = "third isolated database for managed story images and private editor integration";
+      const stories = await isolatedDatabase({ drafts: true });
+      const storyRoot = join(workspace, "private-story-images"); await mkdir(storyRoot, { mode: 0o700 });
+      await stopServer(secure);
+      await startServer(backendPort, { ...env, DATABASE_URL: stories.runtimeUrl, MQ_MEDIA_TEST_ROOT: storyRoot,
+        AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret }, servers,
+        { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" });
+      const { runMediaStoryHttpTests } = await import("./story-http-tests.mjs");
+      let runBrowser;
+      if (process.env.MQ_MEDIA_STORY_BROWSER_MODULE) {
+        assert.ok(process.env.MEDIA_STORY_EVIDENCE_DIR);
+        ({ runBrowser } = await import(pathToFileURL(process.env.MQ_MEDIA_STORY_BROWSER_MODULE).href));
+        assert.equal(typeof runBrowser, "function");
+      }
+      const result = await runMediaStoryHttpTests({ ...stories, runtimeRole, origin: tls.origin, ca: tls.ca,
+        storageRoot: storyRoot, runBrowser, evidenceDirectory: process.env.MEDIA_STORY_EVIDENCE_DIR });
+      assert.equal(result.passed, result.total); console.log(`Managed story media integration: ${result.passed}/${result.total} checks passed`);
+      [...result.secrets, ...result.privateCanaries, stories.connectionString, stories.runtimeUrl, storyRoot].forEach(value => secrets.add(value));
+    }
     stage = "production logs contain no synthetic sensitive values or private storage identity";
     const inspect = new pg.Pool({ connectionString: application.connectionString, max: 1 });
     try {

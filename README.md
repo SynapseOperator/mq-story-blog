@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-09C 集成基线**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)）：从 P2-08C 5249c396 以普通非快进 merge 汇入 P2-09B 59c676e4。草稿编辑/私有羽毛信与媒体上传基础同时存在，但尚未实现 v2 编辑和公开图片集成。main 仍为 42ef1821；#24/#26/#28/#30/#32 均未合并，任何旧审批不自动覆盖本集成。媒体数据与接口见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md) 和 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
+当前分支为 **P2-09C 受管图文编辑与公开读取**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)），基于已验证的独立集成基线 `02c33cb8`（P2-08C + P2-09B 普通 merge）。编辑器可上传或选择私有素材、在内存中预览，并手动保存 v2 assetId 引用；公开图片逐次校验当前发布版本。main 仍为 42ef1821；#24/#26/#28/#30/#32 均未合并，任何旧审批不自动覆盖本集成。契约与权限见 [MEDIA_STORY_INTEGRATION.md](docs/engineering/MEDIA_STORY_INTEGRATION.md)，上传基础见 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
 私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。场景、羽毛信和登录视觉不重新设计；本轮预览及编辑器的产品视觉验收仍需负责人确认。
 
-基线保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试。所有测试使用随机隔离库、受限身份和合成数据；认证与上传仍默认关闭/受控启用。只有基线验证通过后才创建 C 功能分支。无发布、星位、删除管理或生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
+保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。无发布、星位、删除管理或生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -67,7 +67,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-08a-admin-drafts` 对应 [#23 管理员草稿](https://github.com/SynapseOperator/mq-story-blog/issues/23)，现同步已包含 P2-05/P2-06/P2-07 的 main。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
+本分支 `feat/p2-09c-managed-story-images` 的 PR 暂以 `integration/p2-09c-baseline` 为 base，仅审查 C 增量。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 

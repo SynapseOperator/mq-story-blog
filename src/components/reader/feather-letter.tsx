@@ -22,9 +22,11 @@ function LetterImage({ src, alt, caption }: { src: string; alt: string; caption?
   </figure>;
 }
 
-function StructuredBlocks({ blocks }: { blocks: LetterPreviewSnapshot["content"]["blocks"] }) {
+function StructuredBlocks({ blocks, storyId }: { blocks: LetterPreviewSnapshot["content"]["blocks"]; storyId?: string }) {
   return blocks.map((block, index) => block.type === "image"
-    ? <LetterImage key={index} {...block} />
+    ? <LetterImage key={`${index}-${"assetId" in block ? block.assetId : block.src}`} {...block}
+      src={"assetId" in block ? storyId ? `/api/stories/${storyId}/media/${block.assetId}`
+        : `/api/admin/media/${block.assetId}/content` : block.src} />
     : <p key={index}>{block.style === "strong" ? <strong>{block.text}</strong>
       : block.style === "emphasis" ? <em>{block.text}</em> : block.text}</p>);
 }
@@ -37,7 +39,7 @@ function LetterProse({ story }: { story: Story }) {
       <LetterImage {...story.image} />
       {story.paragraphs.slice(1).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
       <p className="letter-signature">{story.closing}</p>
-    </> : <StructuredBlocks blocks={story.content.blocks} />}
+    </> : <StructuredBlocks blocks={story.content.blocks} storyId={story.id} />}
   </article>;
 }
 

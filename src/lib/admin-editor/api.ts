@@ -55,9 +55,9 @@ function summary(value: unknown): DraftSummary {
 }
 function content(value: unknown): DraftContent {
   const raw = object(value, ["version", "blocks"]);
-  if (raw.version !== 1 || !Array.isArray(raw.blocks) || raw.blocks.length < 1 || raw.blocks.length > 200) return malformed();
+  if (![1, 2].includes(raw.version as number) || !Array.isArray(raw.blocks) || raw.blocks.length < 1 || raw.blocks.length > 200) return malformed();
   const blocks: DraftBlock[] = raw.blocks.map((value: unknown) => {
-    const row = object(value, ["type"], ["text", "style", "src", "alt", "caption"]);
+    const row = object(value, ["type"], ["text", "style", "src", "assetId", "alt", "caption"]);
     if (row.type === "paragraph") {
       object(row, ["type", "text"], ["style"]);
       const paragraph = { type: "paragraph" as const, text: text(row.text, 10_000) };
@@ -68,6 +68,12 @@ function content(value: unknown): DraftContent {
       return paragraph;
     }
     if (row.type === "image") {
+      if (raw.version === 2) {
+        object(row, ["type", "assetId", "alt"], ["caption"]);
+        if (typeof row.assetId !== "string" || !uuid.test(row.assetId)) return malformed();
+        return { type: "image", assetId: row.assetId.toLowerCase(), alt: text(row.alt, 300),
+          ...(Object.hasOwn(row, "caption") ? { caption: text(row.caption, 1000) } : {}) };
+      }
       object(row, ["type", "src", "alt"], ["caption"]);
       if (row.src !== EDITOR_SYNTHETIC_IMAGE) return malformed();
       return { type: "image", src: row.src, alt: text(row.alt, 300),
@@ -75,7 +81,7 @@ function content(value: unknown): DraftContent {
     }
     return malformed();
   });
-  const result: DraftContent = { version: 1, blocks };
+  const result = { version: raw.version, blocks } as DraftContent;
   if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 256 * 1024) return malformed();
   return result;
 }
