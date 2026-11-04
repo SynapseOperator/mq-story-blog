@@ -15,7 +15,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
   const browser = await chromium.launch({ headless: true,
     ...(process.env.MQ_PLAYWRIGHT_EXECUTABLE ? { executablePath: process.env.MQ_PLAYWRIGHT_EXECUTABLE } : {}) });
   const owner = new pg.Pool({ connectionString, max: 1 }), contexts = [];
-  let passed = 0, screenshots = 0, stage = "setup";
+  let passed = 0, screenshots = 0, stage = "setup", lastLayout;
   const errors = [];
   const url = `${baseURL}/stories/${fixtures.first.slug}`, endpoint = `${baseURL}${likePath(fixtures.first.id)}`;
   if (evidenceDirectory) await mkdir(evidenceDirectory, { recursive: true });
@@ -30,9 +30,10 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
   async function screenshot(page, name) {
     if (!evidenceDirectory) return;
     await page.screenshot({ path: resolve(evidenceDirectory, `${name}.png`), scale: "css" }); screenshots++;
+    await page.screenshot({ path: resolve(evidenceDirectory, `${name}-dpr2.png`), scale: "device" }); screenshots++;
   }
   async function makePage(viewport, extra = {}) {
-    const context = await browser.newContext({ viewport, ignoreHTTPSErrors: true, ...extra }); contexts.push(context);
+    const context = await browser.newContext({ viewport, deviceScaleFactor: 2, ignoreHTTPSErrors: true, ...extra }); contexts.push(context);
     const page = await context.newPage(); page.setDefaultTimeout(20_000);
     page.on("pageerror", () => errors.push("pageerror"));
     page.on("console", message => {
@@ -54,6 +55,10 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
     assert.equal(page.url(), url); await reader(page).waitFor();
     assert.equal(await originalReader.evaluate(element => element === globalThis.document.querySelector('dialog.letter-dialog[data-mode="public"]')), true);
     const after = await position(page);
+    if (Math.abs(after.top - before.top) > 2) {
+      lastLayout = { readingBefore: before, readingAfter: after };
+      await screenshot(page, "failed-reading-position");
+    }
     assert.ok(Math.abs(after.top - before.top) <= 2, "Nested authentication must retain the same reading position");
     assert.equal(after.body, before.body);
     assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
@@ -69,6 +74,28 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
   async function persisted(count) {
     assert.equal((await owner.query("SELECT count(*)::int AS n FROM story_like WHERE story_id=$1", [fixtures.first.id])).rows[0].n, count);
   }
+  async function dialogLayout(page, mode) {
+    const auth = page.locator(`.auth-dialog[open][data-appearance="reader"][data-mode="${mode}"]`);
+    await auth.waitFor();
+    lastLayout = await auth.evaluate(dialog => {
+      const rect = dialog.getBoundingClientRect();
+      const targets = [...dialog.querySelectorAll("input,.auth-close,.auth-submit,.auth-switch button")].map(element => {
+        const bounds = element.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      });
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+        viewportWidth: globalThis.innerWidth, viewportHeight: globalThis.innerHeight,
+        clientWidth: dialog.clientWidth, scrollWidth: dialog.scrollWidth,
+        clientHeight: dialog.clientHeight, scrollHeight: dialog.scrollHeight,
+        pageOverflow: globalThis.document.documentElement.scrollWidth - globalThis.innerWidth, targets };
+    });
+    assert.ok(lastLayout.width <= Math.min(328, lastLayout.viewportWidth - 56) + 1, "Reader authentication retains visible paper at both sides");
+    assert.ok(lastLayout.x >= 27 && lastLayout.x + lastLayout.width <= lastLayout.viewportWidth - 27);
+    assert.ok(lastLayout.y >= 0 && lastLayout.y + lastLayout.height <= lastLayout.viewportHeight + 1);
+    assert.ok(lastLayout.scrollWidth <= lastLayout.clientWidth + 1 && lastLayout.pageOverflow <= 1, "Only vertical dialog scrolling is allowed");
+    assert.ok(lastLayout.targets.every(target => target.width >= 44 && target.height >= 44), "Authentication inputs and buttons retain 44px touch targets");
+    return auth;
+  }
   try {
     for (const [name, viewport, extra] of [
       ["desktop", { width: 1536, height: 1024 }, {}],
@@ -77,6 +104,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
     ]) {
       await owner.query('DELETE FROM "AuthRateLimit"; DELETE FROM "RateLimit"');
       const page = await makePage(viewport, extra); await ready(page, 0, false);
+      if (name === "desktop") await screenshot(page, "desktop-reader");
       const originalReader = await reader(page).elementHandle(); assert.ok(originalReader);
       const draft = `仅演示、不发送：${name} 的合成留言草稿。`;
       await page.getByLabel("演示留言", { exact: true }).fill(draft);
@@ -101,6 +129,21 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       });
       await check(`${name}: confirmed like and unlike preserve comment content and PostgreSQL count`, async () => {
         await heart(page).click(); await ready(page, 1, true); await persisted(1);
+        if (name !== "desktop") {
+          const targets = await reader(page).locator(".letter-like,.letter-close,.reader-account button,.letter-comment-actions button").evaluateAll(elements => elements.map(element => {
+            const rect = element.getBoundingClientRect(); return { width: rect.width, height: rect.height };
+          }));
+          assert.ok(targets.every(target => target.width >= 44 && target.height >= 44), "Mobile reader actions, including logout, retain 44px touch targets");
+          const identityWidth = await reader(page).locator(".reader-account").evaluate(element => {
+            const label = element.querySelector(".account-username"), button = element.querySelector("button");
+            const gap = Number.parseFloat(globalThis.getComputedStyle(element).columnGap);
+            const nameMaxWidth = Number.parseFloat(globalThis.getComputedStyle(label).maxWidth), buttonWidth = button.getBoundingClientRect().width;
+            return { containerWidth: element.clientWidth, currentNameWidth: label.getBoundingClientRect().width,
+              nameMaxWidth, buttonWidth, gap, remainingNameWidth: element.clientWidth - buttonWidth - gap,
+              maximumNameFitsOneRow: nameMaxWidth + buttonWidth + gap <= element.clientWidth + 1 };
+          });
+          console.log(`Likes reader identity width ${name}: ${JSON.stringify(identityWidth)}`);
+        }
         await unchanged(page, before, draft, originalReader); await screenshot(page, `${name}-confirmed-like`);
         await heart(page).click(); await ready(page, 0, false); await persisted(0);
         assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
@@ -184,7 +227,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
           await returning.context().close();
         });
         await check("failed initial count displays unknown instead of a fabricated zero, and retry recovers", async () => {
-          const context = await browser.newContext({ viewport, ignoreHTTPSErrors: true }); contexts.push(context);
+          const context = await browser.newContext({ viewport, deviceScaleFactor: 2, ignoreHTTPSErrors: true }); contexts.push(context);
           const unavailable = await context.newPage(); unavailable.setDefaultTimeout(20_000);
           unavailable.on("pageerror", () => errors.push("pageerror"));
           const handler = route => route.fulfill({ status: 503, contentType: "application/json", body: '{"code":"LIKES_UNAVAILABLE"}' });
@@ -208,8 +251,107 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       await page.waitForURL(`${baseURL}/`); await reader(page).waitFor({ state: "detached" });
       await page.context().close();
     }
+    for (const [name, viewport, shortViewport] of [
+      ["mobile-390", { width: 390, height: 844 }, { width: 390, height: 420 }],
+      ["mobile-320", { width: 320, height: 568 }, { width: 320, height: 360 }],
+    ]) {
+      const page = await makePage(viewport, { isMobile: true, hasTouch: true }); await ready(page, 0, false);
+      const originalReader = await reader(page).elementHandle(); assert.ok(originalReader);
+      const draft = `合成留言：${name} 紧凑窗口切换后仍保留。`;
+      await page.getByLabel("演示留言", { exact: true }).fill(draft);
+      await heart(page).scrollIntoViewIfNeeded(); const before = await position(page);
+      const comments = await reader(page).locator(".letter-comments").evaluate(section => {
+        const fonts = ["p#letter-comment-help", ".reader-account", "textarea", ".letter-comment-actions > span", ".letter-comment-actions button", ".letter-sample-comment"]
+          .map(selector => Number.parseFloat(globalThis.getComputedStyle(section.querySelector(selector)).fontSize));
+        const count = section.querySelector(".letter-comment-actions > span").getBoundingClientRect();
+        const submit = section.querySelector(".letter-comment-actions button").getBoundingClientRect();
+        const targets = [...section.querySelectorAll(".reader-account button,.letter-comment-actions button")].map(element => {
+          const rect = element.getBoundingClientRect(); return { width: rect.width, height: rect.height };
+        });
+        return { fonts, targets, actionsOverlap: count.left < submit.right && submit.left < count.right && count.top < submit.bottom && submit.top < count.bottom };
+      });
+      assert.ok(comments.fonts.every((size, index) => size >= [12, 14, 16, 12, 14, 14][index]), "Mobile comment copy and input keep the intended readable sizes");
+      assert.ok(comments.targets.every(target => target.width >= 44 && target.height >= 44));
+      assert.equal(comments.actionsOverlap, false, "Comment count and preview button must wrap without overlap");
+      for (const mode of ["login", "register"]) {
+        await check(`${name}: compact ${mode} stays usable in a shortened viewport and preserves reading state`, async () => {
+          await heart(page).click();
+          if (mode === "register") await page.locator(".auth-dialog[open] .auth-switch button").click();
+          let auth = await dialogLayout(page, mode);
+          if (mode === "register") {
+            const originalAuth = await auth.elementHandle(); assert.ok(originalAuth);
+            await auth.locator(".auth-switch button").click(); await dialogLayout(page, "login");
+            await page.locator(".auth-dialog[open] .auth-switch button").click(); auth = await dialogLayout(page, "register");
+            assert.equal(await originalAuth.evaluate(element => element === globalThis.document.querySelector(".auth-dialog[open]")), true);
+          }
+          await screenshot(page, `${name}-compact-${mode}`);
+          await auth.getByLabel("用户名", { exact: true }).focus();
+          for (let index = 0; index < (mode === "register" ? 6 : 5); index++) {
+            await page.keyboard.press("Tab");
+            const focus = await auth.evaluate(dialog => ({ inside: dialog.contains(globalThis.document.activeElement),
+              browserBoundary: globalThis.document.activeElement === globalThis.document.body }));
+            // Native Chromium dialogs allow Tab through the browser chrome;
+            // activeElement is BODY at that boundary, never a background control.
+            assert.ok(focus.inside || focus.browserBoundary, "Keyboard focus cannot enter the underlying reader or page");
+            if (focus.browserBoundary) {
+              await page.keyboard.press("Tab");
+              assert.equal(await auth.evaluate(dialog => dialog.contains(globalThis.document.activeElement)), true, "Tab returns from the browser boundary to the account dialog");
+            }
+          }
+          const inertReader = await auth.evaluate(dialog => {
+            const focused = globalThis.document.activeElement, close = dialog.closest(".letter-dialog").querySelector(".letter-close");
+            close.focus({ preventScroll: true });
+            return { enabled: !close.disabled, focusPreserved: globalThis.document.activeElement === focused };
+          });
+          assert.equal(inertReader.enabled, true); assert.equal(inertReader.focusPreserved, true, "The underlying reader remains inert while the account modal is open");
+          // A shortened layout viewport approximates reduced available space;
+          // this is not an actual operating-system keyboard or IME test.
+          await page.setViewportSize(shortViewport);
+          await page.evaluate(() => new Promise(done => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(done))));
+          auth = await dialogLayout(page, mode);
+          const field = auth.getByLabel(mode === "register" ? "确认密码" : "密码", { exact: true });
+          await field.focus(); await field.scrollIntoViewIfNeeded();
+          assert.equal(await field.evaluate(element => globalThis.document.activeElement === element), true);
+          const visible = await field.evaluate(element => {
+            const rect = element.getBoundingClientRect(), dialog = element.closest("dialog").getBoundingClientRect();
+            return rect.top >= Math.max(0, dialog.top) && rect.bottom <= Math.min(globalThis.innerHeight, dialog.bottom) + 1;
+          });
+          assert.equal(visible, true, "Focused field is reachable within the shortened viewport");
+          await screenshot(page, `${name}-compact-${mode}-short-viewport`);
+          await auth.locator(".auth-submit").scrollIntoViewIfNeeded();
+          await auth.locator(".auth-submit").click({ trial: true });
+          await auth.locator(".auth-close").scrollIntoViewIfNeeded();
+          await auth.locator(".auth-close").click(); await auth.waitFor({ state: "detached" });
+          await page.setViewportSize(viewport);
+          await page.evaluate(() => new Promise(done => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(done))));
+          await unchanged(page, before, draft, originalReader);
+          assert.equal(await heart(page).evaluate(element => globalThis.document.activeElement === element), true);
+          await persisted(0);
+        });
+      }
+      await page.context().close();
+    }
+    await check("homepage login retains the normal appearance, introduction and complete footer", async () => {
+      const context = await browser.newContext({ viewport: { width: 1536, height: 1024 }, deviceScaleFactor: 2, ignoreHTTPSErrors: true }); contexts.push(context);
+      const page = await context.newPage(); page.setDefaultTimeout(20_000);
+      page.on("pageerror", () => errors.push("pageerror"));
+      await page.goto(`${baseURL}/`);
+      await page.locator(".account-controls").getByRole("button", { name: "登录", exact: true }).click();
+      const auth = page.locator('.auth-dialog[open][data-appearance="default"]'); await auth.waitFor();
+      assert.equal(await auth.locator(".auth-intro").isVisible(), true);
+      assert.equal(await auth.locator(".auth-footnote-full").isVisible(), true);
+      assert.match(await auth.locator(".auth-footnote-full").textContent(), /无需邮箱/);
+      await page.keyboard.press("Escape"); await auth.waitFor({ state: "detached" });
+      assert.equal(page.url(), `${baseURL}/`); await context.close();
+    });
     assert.deepEqual(errors, []); await persisted(0);
-    return { passed, total: 15, screenshots };
-  } catch (error) { error.likesStage = `browser: ${stage}`; throw error; }
+    return { passed, total: 20, screenshots };
+  } catch (error) {
+    const location = error.stack?.split("\n").filter(line => line.trim().startsWith("at ") && /scripts[\\/]likes[\\/]/.test(line)).slice(0, 2);
+    console.error(`Likes browser diagnostic: ${JSON.stringify({ layout: lastLayout, location,
+      actual: typeof error.actual === "number" || typeof error.actual === "boolean" ? error.actual : undefined,
+      expected: typeof error.expected === "number" || typeof error.expected === "boolean" ? error.expected : undefined })}`);
+    error.likesStage = `browser: ${stage}`; throw error;
+  }
   finally { await Promise.allSettled(contexts.map(context => context.close())); await browser.close(); await owner.end(); }
 }

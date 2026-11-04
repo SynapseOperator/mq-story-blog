@@ -30,11 +30,11 @@ export function AccountControls({ reader = false }: { reader?: boolean }) {
           <span>{reader ? "登录账号" : "登录"}</span>
         </button>
         {!reader ? <button className="register-placeholder" type="button" disabled={status === "loading"} onClick={() => setMode("register")}>注册</button> : null}
-        {reader ? <span className="reader-account-note">阅读与演示留言无需登录</span> : null}
+        {reader ? <span className="reader-account-note">留言无需登录</span> : null}
       </>}
       {status === "unavailable" ? <button className="account-retry" type="button" onClick={() => { void refresh().catch(() => {}); }}>账号服务暂不可用 · 重试</button> : null}
       {error ? <span className="account-error" role="alert">{error}</span> : null}
     </div>
-    {mode ? <AuthDialog initialMode={mode} onClosed={() => setMode(null)} /> : null}
+    {mode ? <AuthDialog initialMode={mode} appearance={reader ? "reader" : "default"} onClosed={() => setMode(null)} /> : null}
   </>;
 }

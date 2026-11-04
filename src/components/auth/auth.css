@@ -28,6 +28,7 @@
 .auth-switch { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 14px 0 0; color: #cbc7be; font-size: 12px; }
 .auth-switch button { min-height: 32px; padding: 4px 6px; border: 0; background: none; color: #f1d2a0; font: inherit; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 .auth-footnote { margin: 15px 0 0; padding-top: 15px; border-top: 1px solid #dfc49230; color: #bfc0bd; font-size: 10px; line-height: 1.9; text-align: center; }
+.auth-footnote-compact { display: none; }
 @media (max-width: 600px) {
   .account-controls > .account-username { max-width: 130px; padding-left: 14px; font-size: 11px; }
   .auth-panel { padding: 22px 22px 20px; }
@@ -41,4 +42,42 @@
   .auth-intro { margin: 6px 0 14px; }
   .auth-panel label { margin-top: 10px; }
   .auth-footnote { margin-top: 10px; padding-top: 10px; }
+}
+
+/* The letter's account panel is quieter and smaller; the scene's normal login
+   retains its existing layout. No changes to the paper or reading animation. */
+@media (max-width: 600px) {
+  .auth-dialog[data-appearance="reader"] {
+    width: min(328px, calc(100vw - 56px));
+    max-height: calc(var(--auth-viewport-height, 100dvh) - 24px);
+    top: calc(var(--auth-viewport-top, 0px) + var(--auth-viewport-height, 100dvh) / 2);
+    bottom: auto;
+    margin-block: 0;
+    transform: translateY(-50%);
+    scroll-padding-block: 48px 16px;
+    border-color: #cfb18475;
+    border-radius: 12px;
+    background: #172431;
+    box-shadow: 0 12px 36px #02081270, inset 0 1px 0 #ead0a51a;
+  }
+  .auth-dialog[data-appearance="reader"]::backdrop { background: #08121c66; }
+  .auth-dialog[data-appearance="reader"] .auth-panel { padding: 26px 22px 18px; }
+  .auth-dialog[data-appearance="reader"] .auth-close { top: 3px; right: 3px; width: 44px; height: 44px; font-size: 24px; }
+  .auth-dialog[data-appearance="reader"] .auth-mark,
+  .auth-dialog[data-appearance="reader"] .auth-intro { display: none; }
+  .auth-dialog[data-appearance="reader"] h2 { font-size: 23px; line-height: 1.4; margin-bottom: 18px; letter-spacing: .08em; }
+  .auth-dialog[data-appearance="reader"] label { margin: 12px 0 6px; font-size: 13px; }
+  .auth-dialog[data-appearance="reader"] input { min-height: 44px; padding: 9px 11px; border-color: #bba78780; background: #0b19256b; }
+  .auth-dialog[data-appearance="reader"] input:focus-visible,
+  .auth-dialog[data-appearance="reader"] button:focus-visible { outline-color: #ecd0a1; outline-offset: 2px; }
+  .auth-dialog[data-appearance="reader"] .auth-field-help { margin-top: 6px; color: #c9c7c0; font-size: 12px; line-height: 1.55; }
+  .auth-dialog[data-appearance="reader"][data-mode="login"] .auth-field-help { display: none; }
+  .auth-dialog[data-appearance="reader"] .auth-error { font-size: 13px; line-height: 1.6; margin-block: 12px; }
+  .auth-dialog[data-appearance="reader"] .auth-error:empty { margin: 16px 0 0; }
+  .auth-dialog[data-appearance="reader"] .auth-submit { min-height: 44px; padding-block: 9px; background: #d8bc88; border-color: #e4c998; }
+  .auth-dialog[data-appearance="reader"] .auth-switch { margin-top: 6px; font-size: 13px; }
+  .auth-dialog[data-appearance="reader"] .auth-switch button { min-height: 44px; min-width: 44px; }
+  .auth-dialog[data-appearance="reader"] .auth-footnote { margin-top: 5px; padding-top: 12px; font-size: 12px; line-height: 1.65; color: #c5c6c1; }
+  .auth-dialog[data-appearance="reader"] .auth-footnote-full { display: none; }
+  .auth-dialog[data-appearance="reader"] .auth-footnote-compact { display: inline; }
 }

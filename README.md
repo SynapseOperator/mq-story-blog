@@ -4,7 +4,7 @@ MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 D
 
 当前分支为 **P2-11 真实点赞**（[Issue #41](https://github.com/SynapseOperator/mq-story-blog/issues/41)），基于已合并 P2-10B 的 main `0bbe77a1c42a13ee2e10da7384da818d1ffe90ac`。公开羽毛信的点赞数与账号状态来自 PostgreSQL；点赞和取消使用独立幂等请求，游客点击爱心复用当前信纸内的登录窗口。管理员私有预览不显示点赞，留言仍是明确标注的演示。接口、数据库约束及测试见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。
 
-已验收的星空、信纸、登录窗口与后台保留原样。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
+星空、信纸美术与后台保持不变；本轮仅精修信纸内的手机登录窗口和点赞/留言排版，详见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
 本轮保留全部故事、认证、管理员、草稿、编辑器、私有预览、媒体、发布和备份测试，新增 `npm run test:likes`。仅使用随机隔离数据库、受限身份与合成数据；认证和发布的默认关闭/受控启用机制不变。交付 Draft PR，不自动合并、不部署、不开始真实留言。生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放前门槛。
 

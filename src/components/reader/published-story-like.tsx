@@ -98,7 +98,6 @@ export function PublishedStoryLike({ storyId }: { storyId: string }) {
       {current.value?.liked ? "已点赞" : "点赞"} <span className="letter-like-count">{current.value?.count ?? "—"}</span>
     </button>
     <span className="letter-comment-count">留言示例 1</span>
-    <span className="letter-reaction-note">留言仅供演示，不会发送</span>
     <span className="letter-like-status" role={current.error ? "alert" : "status"}>
       {current.phase === "loading" ? "正在读取点赞状态…" : current.phase === "saving" ? "正在保存点赞状态…"
         : current.phase === "checking" ? "请求结果暂未确认，正在核对点赞状态…"
@@ -108,6 +107,6 @@ export function PublishedStoryLike({ storyId }: { storyId: string }) {
       ? <button type="button" className="letter-like-retry" onClick={() => {
         setView({ ...current, phase: "loading", error: "" }); void readState(current.uncertain);
       }}>重新读取点赞状态</button> : null}
-    {loginOpen ? <AuthDialog initialMode="login" onClosed={() => { restoreLikeFocus.current = true; setLoginOpen(false); }} /> : null}
+    {loginOpen ? <AuthDialog initialMode="login" appearance="reader" onClosed={() => { restoreLikeFocus.current = true; setLoginOpen(false); }} /> : null}
   </div>;
 }
