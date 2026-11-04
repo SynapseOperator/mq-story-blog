@@ -84,7 +84,7 @@ async function main() {
     try {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
-      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation"]);
+      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication"]);
       const configure = drafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges;
       await configure(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
@@ -124,7 +124,7 @@ async function main() {
       assert.equal(combined.passed, combined.total);
       console.log(`Combined draft/media database privileges: ${combined.passed}/${combined.total} checks passed`);
     } finally { await combinedRuntime.end(); }
-    console.log("PASS two independent databases apply 001 -> 005, repeated deploy, schema drift and private error logging");
+    console.log("PASS two independent databases apply 001 -> 006, repeated deploy, schema drift and private error logging");
     workspace = await mkdtemp(join(tmpdir(), "mq-media-upload-"));
     const devRoot = join(workspace, "private-development"), testRoot = join(workspace, "private-test");
     await mkdir(devRoot, { mode: 0o700 }); await mkdir(testRoot, { mode: 0o700 });

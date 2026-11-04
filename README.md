@@ -2,15 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-09D 素材生命周期与备份恢复**（[Issue #35](https://github.com/SynapseOperator/mq-story-blog/issues/35)）。提供明确确认的无引用素材删除、失败/中断状态的定点维护，以及 PostgreSQL 与私有派生图片的联合备份和隔离恢复。操作手册见 [MEDIA_LIFECYCLE.md](docs/engineering/MEDIA_LIFECYCLE.md) 和 [MEDIA_BACKUP.md](docs/engineering/MEDIA_BACKUP.md)。
+当前分支为 **P2-10A 管理员发布操作后端**（[Issue #37](https://github.com/SynapseOperator/mq-story-blog/issues/37)）。查询预设星位、草稿选位、首次发布、显式发布更新、下架与恢复均通过服务端权限边界；独立 HMAC 凭证绑定事务与操作，运行时无发布字段直接写权限。接口、权限矩阵和威胁模型见 [STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)。发布默认关闭，本轮仅使用隔离合成数据。
 
-P2-08A/B/C、P2-09A/B/C 已正式合入 main 1850610510928df9459420d4ffa1de671d2b4f9f，[主分支 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41783449546) 成功。本分支直接从该 main 创建，不再依赖临时集成分支。
+已同步 P2-09D 合并后的 main `4f46e2988d7b5109fa37b53110e7ccbe0ef54d6c`，[main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41812969659) 的 quality/database 均成功。素材删除与备份恢复说明见 [MEDIA_LIFECYCLE.md](docs/engineering/MEDIA_LIFECYCLE.md)、[MEDIA_BACKUP.md](docs/engineering/MEDIA_BACKUP.md)。P2-10A / PR #38 保持待独立安全评审，本轮不合并、不部署，不开发发布界面。
 
 私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。负责人已完成编辑器与私有预览的技术、视觉及交互签收；本次同步不调整界面。
 
-首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→005 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
+首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→006 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
-保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。不提供正式发布、星位管理或生产部署；素材删除与恢复仅按本轮受控流程运行；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
+保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。发布与选位接口默认关闭；删除和备份仅通过受控入口执行，不包含生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -51,7 +51,7 @@ npm run check
 - `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
 - `src/lib/stories/`：公开摘要/正文 DTO、客户端读取边界与稳定星位映射；`src/data/` 保留四份合成夹具供隔离演示/测试，默认首页不导入或回退这些文章。
 - `prisma/`：基础探针及故事/内容版本/星位 Schema，历史迁移保留，新领域约束使用新增 SQL 迁移；[数据库说明](docs/engineering/DATABASE.md) 记录环境与测试隔离。
-- `src/server/stories/`：受限内容块、共享事务操作、内部生命周期工厂与公开只读查询；目录、ID/slug API 和分享 metadata 只读取公开版本。`src/app/api/admin/stories/` 的四个草稿接口复用 `withAdmin` 同一事务；发布/选位等仍仅内部可用，不提供 HTTP 写入口。
+- `src/server/stories/`：受限内容块、共享事务操作、内部生命周期工厂与公开只读查询；目录、ID/slug API 和分享 metadata 只读取公开版本。`src/app/api/admin/stories/` 的四个草稿接口复用 `withAdmin` 同一事务；发布/选位接口使用单独受控签名与数据库函数，不授予通用发布字段写权限。
 - `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
 - `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
 

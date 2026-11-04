@@ -12,7 +12,7 @@ P2-09D 使用 PostgreSQL 原生 `pg_dump`/`pg_restore` 和本地私有目录。�
 
 每次备份新建 `mq-backup-<uuid>`，不会覆盖既有目录。Linux 目录/文件为 0700/0600；Windows 新备份目录移除继承，仅当前用户、SYSTEM、本机 Administrators 有访问权限，后续读备份时检查有效允许项。只修改本次新子目录的 DACL，不改系统策略或已有根目录。Windows PowerShell 子进程使用自身模块路径，不继承 PowerShell 7 的 `PSModulePath`。
 
-备份包含内部邮箱、密码哈希、故事正文及可能仍有效的原值 Session Token。备份根必须在 Git、项目/public 之外；不得上传 GitHub CI Artifacts、邮件、公开网盘或调试日志。持有同一 OS 管理权限的攻击者不在文件 ACL 的防护范围内。当前没有加密归档、签名、异地备份或防勒索能力，正式环境还需磁盘加密、存储访问控制和独立安全审查。
+备份包含内部邮箱、密码哈希、故事正文及可能仍有效的原值 Session Token。应用 006 后，完整数据库归档还包含 `mq_publish_private` 的发布签名密钥；不能将备份当作普通测试产物。备份根必须在 Git、项目/public 之外；不得上传 GitHub CI Artifacts、邮件、公开网盘或调试日志。持有同一 OS 管理权限的攻击者不在文件 ACL 的防护范围内。当前没有加密归档、签名、异地备份或防勒索能力，正式环境还需磁盘加密、存储访问控制和独立安全审查。
 
 ## 操作
 
@@ -50,14 +50,18 @@ node scripts/media/backup-cli.mjs verify mq_test
 node scripts/media/backup-cli.mjs restore mq_test
 ```
 
-使用 `pg_restore --single-transaction --exit-on-error --no-owner --no-acl`。恢复库首先撤销 PUBLIC CONNECT；导入后撤销 PUBLIC 表/函数权限及 Schema CREATE，避免 SECURITY DEFINER 函数获得默认 PUBLIC EXECUTE。不会复活旧部署角色或把维护身份当作应用身份。只有数据库清单和文件验证全部成功才生成 `RESTORE_COMPLETE.json`；失败时删除本次新建的隔离数据库，保留无完成标记的私有诊断目录。
+使用 `pg_restore --single-transaction --exit-on-error --no-owner --no-acl`。恢复库首先撤销 PUBLIC CONNECT；导入后撤销所有非系统 Schema 的 PUBLIC Schema、表、序列和函数权限，包括 006 的 `mq_publish_private` 及 pgcrypto 函数，避免恢复扩展后留下默认 PUBLIC EXECUTE。不会复活旧部署角色或把维护身份当作应用身份。只有数据库清单和文件验证全部成功才生成 `RESTORE_COMPLETE.json`；失败时删除本次新建的隔离数据库，保留无完成标记的私有诊断目录。
 
-恢复后 **不能直接开放服务**：需要在隔离库重新应用既有管理员、草稿与媒体权限配置，以新的受限 runtime/maintenance 身份做 HTTP/HTTPS 验证。正式切换之前还要明确会话撤销策略；归档确实保留当时可能有效的 Session Token，脚本不会暗中改变归档数据冒充完整恢复。最终生产切换、旧库处理、密钥和角色配置均不在本轮授权内。
+恢复后 **不能直接开放服务**：需要在隔离库重新应用既有管理员、草稿与媒体权限配置，以受限 runtime/maintenance 身份做 HTTP/HTTPS 验证。上述配置不授予发布权限；原签名密钥和原 Cookie 即使仍匹配，也不能自动启用发布。恢复后的发布函数 owner 是恢复身份，不满足 006 的受限 NOLOGIN 所有者检查，误授 EXECUTE 仍会拒绝。恢复工具不配置发布 owner、不轮换或重用密钥来开放服务。
+
+正式切换之前须明确密钥轮换、会话撤销及权限重建策略；归档确实保留当时的签名密钥和可能有效的 Session Token，脚本不会暗中改变归档数据冒充完整恢复。最终生产切换、旧库处理、密钥和角色配置均不在本轮授权内。
 
 ## 自动化证据
 
 `scripts/media/backup-tests.mjs` 使用随机隔离库、合成 WebP 和随机临时私有目录，真实执行全部历史迁移及 native dump/restore。覆盖 PENDING/DELETING 拒绝、同快照和真实删除锁等待、失败不产生完成标记、缺失/损坏/篡改、独立恢复数据库清单比对、Session 合成 token 还原、PUBLIC 函数权限撤销。联合 runner 通过 `verifyRestored` 回调重配低权限身份，再启动生产构建 HTTP/HTTPS 验证公开图片 200、私人图片 404、未授权管理员读取 401/403。
 
-Windows 首轮发现并修复：测试库前缀不符合既有日志隔离白名单；PowerShell 5 子进程继承 PowerShell 7 模块路径导致 ACL 模块加载失败。修复仅调整测试命名和子进程环境，未降低 ACL 检查或修改系统配置。Windows 独立备份/恢复 7/7 已真实通过，Linux 与完整 HTTP 联合结果以本次 PR 的 CI 记录为准，不能用本段预先宣称成功。
+P2-09D 的 Windows 首轮发现并修复：测试库前缀不符合既有日志隔离白名单；PowerShell 5 子进程继承 PowerShell 7 模块路径导致 ACL 模块加载失败。修复仅调整测试命名和子进程环境，未降低 ACL 检查或修改系统配置。该阶段 Windows 独立备份/恢复 7/7 已真实通过；[PR #36](https://github.com/SynapseOperator/mq-story-blog/pull/36) 已合并，main [CI #41812969659](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41812969659) 的 quality/database 成功。
+
+P2-10A 同步增加 `scripts/publishing/backup-tests.mjs`，Windows 真实执行 6/6 通过，覆盖非空签名 Schema 与 Session 的完整恢复、非系统 Schema 的 PUBLIC 权限清除、原运行身份连接拒绝、普通权限配置后的密钥隔离与 HTTPS 发布拒绝，以及有效旧密钥签名下的 owner 检查。完整回归与 Linux CI 记录在 PR #38 的对应提交；不以原 P2-09D 结果代替 006 的联合恢复验收。
 
 官方依据：[PostgreSQL 18 pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html)、[导出快照](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-SNAPSHOT-SYNCHRONIZATION)、[pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html)。

@@ -12,6 +12,13 @@ export class StoryDomainError extends Error {
 export type RevisionInput = { title: unknown; content: unknown };
 export type VersionInput = { storyId: string; expectedVersion: number };
 export type CreateDraftInput = RevisionInput & { slug: string; kind: "STAR" | "CAMPFIRE"; slotId?: string | null };
+export type PublicationChange = {
+  action: "slot" | "publish" | "withdraw" | "restore";
+  story: Story;
+  targetRevisionId: string | null;
+  slotId: string | null;
+};
+export type PublicationWriter = (change: PublicationChange) => Promise<Story>;
 
 /** Only understood database categories are mapped; unknown errors must remain
  * failures for the caller's redacting boundary, never generic input errors. */
@@ -81,7 +88,12 @@ function requireState(condition: boolean, message: string): asserts condition {
 
 /** No root client, connection creation or nested transaction. The caller owns
  * rollback and must propagate failures; administrators supply withAdmin's tx. */
-export function createStoryOperations(tx: Prisma.TransactionClient) {
+export function createStoryOperations(tx: Prisma.TransactionClient, publicationWriter?: PublicationWriter) {
+  // Existing internal lifecycle tests retain the owner-backed writer. HTTP
+  // publishing supplies a narrowly authorized writer in this SAME transaction.
+  function publishChange(input: PublicationChange, data: Prisma.StoryUncheckedUpdateManyInput) {
+    return publicationWriter ? publicationWriter(input) : change(tx, input.story, data);
+  }
   async function operation<T>(action: () => Promise<T>): Promise<T> {
     try { return await action(); } catch (error) { throw mapStoryError(error); }
   }
@@ -126,7 +138,7 @@ export function createStoryOperations(tx: Prisma.TransactionClient) {
       return operation(async () => {
         const story = await current(tx, input);
         requireState(story.kind === "STAR" && story.state === "DRAFT", "只有未发布的普通故事可以调整预留星位。");
-        return change(tx, story, { slotId });
+        return publishChange({ action: "slot", story, targetRevisionId: null, slotId }, { slotId });
       });
     },
     async publish(input: VersionInput) {
@@ -136,7 +148,8 @@ export function createStoryOperations(tx: Prisma.TransactionClient) {
         requireState(story.state !== "WITHDRAWN", "下架故事须先恢复；恢复不会发布尚未确认的新草稿。");
         requireState(story.kind === "CAMPFIRE" || story.slotId !== null, "普通故事必须预留星位后才能发布。");
         requireState(story.draftRevisionId !== story.publishedRevisionId, "当前草稿已经发布，无待发布更新。");
-        return change(tx, story, { state: "PUBLISHED", publishedRevisionId: story.draftRevisionId });
+        return publishChange({ action: "publish", story, targetRevisionId: story.draftRevisionId, slotId: story.slotId },
+          { state: "PUBLISHED", publishedRevisionId: story.draftRevisionId });
       });
     },
     async withdraw(input: VersionInput) {
@@ -144,7 +157,8 @@ export function createStoryOperations(tx: Prisma.TransactionClient) {
       return operation(async () => {
         const story = await current(tx, input);
         requireState(story.state === "PUBLISHED", "只有已发布故事可以下架。");
-        return change(tx, story, { state: "WITHDRAWN" });
+        return publishChange({ action: "withdraw", story, targetRevisionId: story.publishedRevisionId, slotId: story.slotId },
+          { state: "WITHDRAWN" });
       });
     },
     async restore(input: VersionInput) {
@@ -152,7 +166,8 @@ export function createStoryOperations(tx: Prisma.TransactionClient) {
       return operation(async () => {
         const story = await current(tx, input);
         requireState(story.state === "WITHDRAWN", "只有已下架故事可以恢复。");
-        return change(tx, story, { state: "PUBLISHED" });
+        return publishChange({ action: "restore", story, targetRevisionId: story.publishedRevisionId, slotId: story.slotId },
+          { state: "PUBLISHED" });
       });
     },
   };

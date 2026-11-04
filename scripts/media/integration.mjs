@@ -13,6 +13,7 @@ import { provisionMediaTestRuntime, runMediaDatabaseTests, MEDIA_MIGRATION } fro
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const historical = ["202610230001_database_foundation", "202610230002_story_lifecycle",
   "202610230003_username_auth", "202610250004_admin_authorization"];
+const publicationMigration = "202611040006_story_publication";
 const checksum = value => createHash("sha256").update(value).digest("hex");
 let stage = "validate isolated PostgreSQL test target";
 
@@ -61,13 +62,13 @@ async function main() {
     });
     await runPrisma(["migrate", "deploy"], fresh);
     const firstHistory = await migrationHistory(fresh);
-    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION]);
+    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration]);
     assert.ok(firstHistory.every(row => row.finished_at && row.rolled_back_at === null));
     await runPrisma(["migrate", "deploy"], fresh);
     await runPrisma(["migrate", "status"], fresh);
     await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], fresh);
     assert.deepEqual(await migrationHistory(fresh), firstHistory);
-    console.log("PASS media migrations: empty 001 -> 005, repeated deploy, status and schema drift");
+    console.log("PASS media migrations: empty 001 -> 006, repeated deploy, status and schema drift");
 
     stage = "construct a byte-identical temporary 001 through 004 migration tree";
     temporaryMigrations = await mkdtemp(join(tmpdir(), "mq-media-migrations-"));
@@ -106,7 +107,13 @@ async function main() {
     });
     stage = "upgrade a real 004 database without rewriting historical migrations or v1 content";
     const legacyBefore = await withPool(upgrade, async pool => (await pool.query("SELECT * FROM story_revision WHERE id=$1", [legacyRevisionId])).rows[0]);
-    await runPrisma(["migrate", "deploy"], upgrade);
+    // Stop at 005 first: preserve the original media migration upgrade proof
+    // instead of silently turning it into a direct 004 -> latest deployment.
+    await mkdir(join(migrationDirectory, MEDIA_MIGRATION));
+    const mediaSource = join(root, "prisma", "migrations", MEDIA_MIGRATION, "migration.sql");
+    await copyFile(mediaSource, join(migrationDirectory, MEDIA_MIGRATION, "migration.sql"), 1);
+    originalChecksums.set(MEDIA_MIGRATION, checksum(await readFile(mediaSource)));
+    await runPrisma(["migrate", "deploy", "--config", config], upgrade);
     const afterUpgrade = await migrationHistory(upgrade);
     assert.deepEqual(afterUpgrade.map(row => row.migration_name), [...historical, MEDIA_MIGRATION]);
     assert.deepEqual(afterUpgrade.slice(0, 4), beforeUpgrade);
@@ -121,6 +128,51 @@ async function main() {
     });
     console.log("PASS media migrations: real 004 -> 005 preserves v1 bytes and all historical migration checksums");
 
+    stage = "upgrade a populated 005 database and preserve public v2 revision references";
+    const assetId = randomUUID(), managedStoryId = randomUUID(), managedRevisionId = randomUUID();
+    const managedContent = { version: 2, blocks: [{ type: "paragraph", text: "Synthetic pre-006 public version" },
+      { type: "image", assetId, alt: "Synthetic managed image" }] };
+    await withPool(upgrade, async pool => {
+      await pool.query("BEGIN");
+      try {
+        await pool.query("INSERT INTO media_asset(id) VALUES ($1)", [assetId]);
+        await pool.query(`UPDATE media_asset SET state='READY',display_mime_type='image/webp',display_width=800,display_height=600,
+          display_bytes=1000,display_sha256=repeat('a',64),thumbnail_mime_type='image/webp',thumbnail_width=400,thumbnail_height=300,
+          thumbnail_bytes=300,thumbnail_sha256=repeat('b',64) WHERE id=$1`, [assetId]);
+        await pool.query("INSERT INTO story(id,slug,kind,draft_revision_id,slot_id) VALUES ($1,$2,'STAR',$3,'star-1')",
+          [managedStoryId, `managed-${randomUUID()}`, managedRevisionId]);
+        await pool.query("INSERT INTO story_revision(id,story_id,title,content) VALUES ($1,$2,$3,$4::jsonb)",
+          [managedRevisionId, managedStoryId, "Synthetic pre-006 published story", JSON.stringify(managedContent)]);
+        await pool.query("UPDATE story SET state='PUBLISHED',published_revision_id=draft_revision_id,version=version+1 WHERE id=$1", [managedStoryId]);
+        await pool.query("COMMIT");
+      } catch (error) { await pool.query("ROLLBACK"); throw error; }
+    });
+    const managedSnapshot = async () => withPool(upgrade, async pool => ({
+      story: (await pool.query("SELECT * FROM story WHERE id=$1", [managedStoryId])).rows,
+      revision: (await pool.query("SELECT * FROM story_revision WHERE id=$1", [managedRevisionId])).rows,
+      asset: (await pool.query("SELECT * FROM media_asset WHERE id=$1", [assetId])).rows,
+      references: (await pool.query("SELECT * FROM story_revision_asset WHERE revision_id=$1", [managedRevisionId])).rows,
+    }));
+    const managedBefore = await managedSnapshot();
+    assert.equal(managedBefore.references.length, 1);
+    await runPrisma(["migrate", "deploy"], upgrade);
+    await runPrisma(["migrate", "status"], upgrade);
+    await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], upgrade);
+    const publicationHistory = await migrationHistory(upgrade);
+    assert.deepEqual(publicationHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration]);
+    assert.deepEqual(publicationHistory.slice(0, 5), afterUpgrade);
+    for (const [name, original] of originalChecksums) {
+      assert.equal(checksum(await readFile(join(root, "prisma", "migrations", name, "migration.sql"))), original);
+      assert.equal(publicationHistory.find(row => row.migration_name === name).checksum, original);
+    }
+    assert.deepEqual(await managedSnapshot(), managedBefore);
+    await withPool(upgrade, async pool => {
+      assert.deepEqual((await pool.query("SELECT * FROM story_revision WHERE id=$1", [legacyRevisionId])).rows[0], legacyBefore);
+    });
+    await runPrisma(["migrate", "deploy"], upgrade);
+    assert.deepEqual(await migrationHistory(upgrade), publicationHistory);
+    console.log("PASS publication migration: real 005 -> 006 preserves v1/v2, public state, media references and historical checksums; no drift");
+
     stage = "provision runtime only in this run's disposable database";
     await withPool(fresh, pool => provisionMediaTestRuntime(pool, runtimeRole, new URL(fresh).pathname.slice(1)));
     const runtime = new URL(fresh); runtime.username = runtimeRole; runtime.password = password;
@@ -128,7 +180,7 @@ async function main() {
     const result = await runMediaDatabaseTests({ connectionString: fresh, runtimeUrl: runtime.href });
     assert.equal(result.passed, result.total);
     console.log(`Media PostgreSQL integration: ${result.passed}/${result.total} checks passed`);
-    await withPool(upgrade, async pool => assert.equal((await pool.query("SELECT count(*)::int AS n FROM media_asset")).rows[0].n, 0));
+    await withPool(upgrade, async pool => assert.deepEqual((await pool.query("SELECT id FROM media_asset")).rows, [{ id: assetId }]));
     console.log("PASS media databases: foundation fixtures cannot cross the isolated upgrade database");
   } catch (error) { failure = error; }
   finally {
