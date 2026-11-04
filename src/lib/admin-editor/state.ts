@@ -1,5 +1,5 @@
 import { EDITOR_SYNTHETIC_IMAGE, type DraftDetail, type DraftRevision, type DraftSummary,
-  type EditorBlock, type EditorDocument, type FailureKind, type StoryKind } from "./types.ts";
+  type EditorBlock, type EditorDocument, type FailureKind, type PublicationAck, type PublicationAction, type StoryKind } from "./types.ts";
 
 export type SaveAttempt = Readonly<{
   requestId: string;
@@ -8,6 +8,14 @@ export type SaveAttempt = Readonly<{
   expectedVersion: number | null;
   document: EditorDocument;
 }>;
+export type PublicationAttempt = Readonly<{
+  requestId: string;
+  instanceId: string;
+  storyId: string;
+  expectedVersion: number;
+  action: PublicationAction;
+  slotId?: string | null;
+}>;
 export type EditorState = {
   instanceId: string;
   working: EditorDocument;
@@ -15,7 +23,9 @@ export type EditorState = {
   confirmed: { story: DraftSummary; document: EditorDocument } | null;
   lastSent: SaveAttempt | null;
   pending: SaveAttempt | null;
-  status: "ready" | "saving" | "conflict" | "uncertain" | "denied";
+  publication: PublicationAttempt | null;
+  lastPublication: PublicationAttempt | null;
+  status: "ready" | "saving" | "publishing" | "conflict" | "uncertain" | "denied";
   error: string | null;
   remote: DraftDetail | null;
 };
@@ -25,6 +35,9 @@ export type EditorAction =
   | { type: "begin-save"; requestId: string }
   | { type: "save-ok"; requestId: string; story: DraftSummary }
   | { type: "save-error"; requestId: string; kind: FailureKind; message: string }
+  | { type: "begin-publication"; requestId: string; action: PublicationAction; slotId?: string | null }
+  | { type: "publication-ok"; requestId: string; story: PublicationAck }
+  | { type: "publication-error"; requestId: string; kind: FailureKind; message: string }
   | { type: "access-denied"; message?: string }
   | { type: "remote-read"; detail: DraftDetail }
   | { type: "keep-local" }
@@ -70,14 +83,14 @@ export function createEditor(kind: StoryKind, instanceId = globalThis.crypto.ran
   const working: EditorDocument = { kind, title: "", contentVersion: 2,
     blocks: [{ key: `${instanceId}-block-0`, type: "paragraph", text: "", style: "normal" }] };
   return { instanceId, working, baseline: copy(working), confirmed: null,
-    lastSent: null, pending: null, status: "ready", error: null, remote: null };
+    lastSent: null, pending: null, publication: null, lastPublication: null, status: "ready", error: null, remote: null };
 }
 
 export function openEditor(detail: DraftDetail, instanceId = globalThis.crypto.randomUUID()): EditorState {
   const working = fromDetail(detail, instanceId);
   return { instanceId, working, baseline: copy(working),
     confirmed: { story: { ...detail.story }, document: copy(working) },
-    lastSent: null, pending: null, status: "ready", error: null, remote: null };
+    lastSent: null, pending: null, publication: null, lastPublication: null, status: "ready", error: null, remote: null };
 }
 
 export function isDirty(state: EditorState): boolean {
@@ -85,7 +98,7 @@ export function isDirty(state: EditorState): boolean {
 }
 
 export function needsLeaveProtection(state: EditorState): boolean {
-  return isDirty(state) || state.pending !== null || state.status === "uncertain" || state.status === "conflict";
+  return isDirty(state) || state.pending !== null || state.publication !== null || state.status === "uncertain" || state.status === "conflict";
 }
 
 export function validateDocument(document: EditorDocument): string | null {
@@ -116,8 +129,20 @@ export function validateDocument(document: EditorDocument): string | null {
 }
 
 export function canSave(state: EditorState): boolean {
-  return state.status === "ready" && state.pending === null && (isDirty(state) || state.confirmed === null)
+  return state.status === "ready" && state.pending === null && state.publication === null && (isDirty(state) || state.confirmed === null)
     && validateDocument(state.working) === null;
+}
+
+/** UI eligibility only. The existing server checks lifecycle, slots and authority. */
+export function canPublishAction(state: EditorState, action: PublicationAction): boolean {
+  if (state.status !== "ready" || state.pending || state.publication || !state.confirmed) return false;
+  const story = state.confirmed.story;
+  switch (action) {
+    case "slot": return story.kind === "STAR" && story.state === "DRAFT";
+    case "publish": return story.state !== "WITHDRAWN" && story.hasUnpublishedChanges && !isDirty(state);
+    case "withdraw": return story.state === "PUBLISHED";
+    case "restore": return story.state === "WITHDRAWN";
+  }
 }
 
 function normalizedSnapshot(document: EditorDocument): EditorDocument {
@@ -159,7 +184,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       Object.freeze(document.blocks); Object.freeze(document);
       const attempt = Object.freeze({ requestId: action.requestId, instanceId: state.instanceId,
         storyId: state.confirmed?.story.id ?? null, expectedVersion: state.confirmed?.story.version ?? null, document });
-      return { ...state, lastSent: attempt, pending: attempt, status: "saving", error: null, remote: null };
+      return { ...state, lastSent: attempt, pending: attempt, lastPublication: null, status: "saving", error: null, remote: null };
     }
     case "save-ok": {
       if (!matchesPending(state, action.requestId)) return state;
@@ -179,32 +204,65 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         ? action.kind as "conflict" | "uncertain" | "denied" : "ready";
       return { ...state, pending: null, status, error: action.message, remote: null };
     }
+    case "begin-publication": {
+      if (!action.requestId || !canPublishAction(state, action.action)
+        || (action.action === "slot" && action.slotId === undefined)) return state;
+      const attempt = Object.freeze({ requestId: action.requestId, instanceId: state.instanceId,
+        storyId: state.confirmed!.story.id, expectedVersion: state.confirmed!.story.version,
+        action: action.action, ...(action.action === "slot" ? { slotId: action.slotId } : {}) });
+      return { ...state, publication: attempt, lastPublication: attempt,
+        status: "publishing", error: null, remote: null };
+    }
+    case "publication-ok": {
+      const attempt = state.publication;
+      if (!attempt || attempt.requestId !== action.requestId || attempt.instanceId !== state.instanceId) return state;
+      const expectedState = attempt.action === "slot" ? "DRAFT" : attempt.action === "withdraw" ? "WITHDRAWN" : "PUBLISHED";
+      if (action.story.id !== attempt.storyId || action.story.version !== attempt.expectedVersion + 1
+        || action.story.state !== expectedState
+        || (attempt.action === "slot" && action.story.slotId !== attempt.slotId)
+        || action.story.hasUnpublishedChanges !== (attempt.action === "publish" ? false : state.confirmed!.story.hasUnpublishedChanges)) {
+        return { ...state, publication: null, status: "uncertain", error: "发布操作结果无法确认，请先核对服务器状态。" };
+      }
+      const { version, state: publishedState, hasUnpublishedChanges } = action.story;
+      // Publication changes no draft bytes. Keep the confirmed content and any
+      // typing since the request; only advance the server's CAS and public state.
+      return { ...state, publication: null, confirmed: { ...state.confirmed!,
+        story: { ...state.confirmed!.story, version, state: publishedState, hasUnpublishedChanges } },
+        status: "ready", error: null, remote: null };
+    }
+    case "publication-error": {
+      if (!state.publication || state.publication.requestId !== action.requestId
+        || state.publication.instanceId !== state.instanceId) return state;
+      const status = ["conflict", "uncertain", "denied"].includes(action.kind)
+        ? action.kind as "conflict" | "uncertain" | "denied" : "ready";
+      return { ...state, publication: null, status, error: action.message, remote: null };
+    }
     case "access-denied": {
-      // Read-side permission checks run only while no save is in flight. A
-      // pending save retains its own authoritative, request-correlated outcome.
-      if (state.pending !== null) return state;
+      // Pending writes retain their own authoritative, request-correlated
+      // outcome; a concurrent read cannot replace that result.
+      if (state.pending !== null || state.publication !== null) return state;
       return { ...state, status: "denied", remote: null,
         error: action.message ?? "管理权限已失效。你的本地编辑仍然保留，请使用已授权账号重新登录。" };
     }
     case "remote-read": {
-      if (state.pending !== null) return state;
+      if (state.pending !== null || state.publication !== null) return state;
       if (state.confirmed && action.detail.story.id !== state.confirmed.story.id) return state;
       if (!state.confirmed && !["uncertain", "conflict"].includes(state.status)) return state;
       if (action.detail.story.kind !== state.working.kind) return state;
       return { ...state, remote: globalThis.structuredClone(action.detail) };
     }
     case "keep-local": {
-      if (!state.remote || state.pending !== null) return state;
+      if (!state.remote || state.pending !== null || state.publication !== null) return state;
       // This explicit action accepts the freshly read version for the next CAS,
       // including manual binding after an uncertain create. It never saves.
       const confirmed = { story: { ...state.remote.story }, document: fromDetail(state.remote, state.instanceId) };
-      return { ...state, confirmed, status: "ready", error: null, remote: null };
+      return { ...state, confirmed, status: "ready", error: null, remote: null, lastPublication: null };
     }
     case "use-remote": {
-      if (!state.remote || state.pending !== null) return state;
+      if (!state.remote || state.pending !== null || state.publication !== null) return state;
       const working = fromDetail(state.remote, state.instanceId);
       return { ...state, working, baseline: copy(working), confirmed: { story: { ...state.remote.story }, document: copy(working) },
-        status: "ready", error: null, remote: null };
+        status: "ready", error: null, remote: null, lastPublication: null };
     }
   }
 }

@@ -2,13 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-10A 管理员发布操作后端**（[Issue #37](https://github.com/SynapseOperator/mq-story-blog/issues/37)）。查询预设星位、草稿选位、首次发布、显式发布更新、下架与恢复均通过服务端权限边界；独立 HMAC 凭证绑定事务与操作，运行时无发布字段直接写权限。接口、权限矩阵和威胁模型见 [STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)。发布默认关闭，本轮仅使用隔离合成数据。
+当前分支为 **P2-10B 管理员发布管理界面**（[Issue #39](https://github.com/SynapseOperator/mq-story-blog/issues/39)）。在现有编辑器中选择星位、发布已保存草稿、发布更新、下架与恢复，复用 P2-10A 接口；保存草稿不会自动公开，恢复只开放下架前的公开版本。接口、权限矩阵与编辑状态约定见 [STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)。发布默认关闭，本轮仅使用隔离合成数据与临时密钥。
 
-已同步 P2-09D 合并后的 main `4f46e2988d7b5109fa37b53110e7ccbe0ef54d6c`，[main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41812969659) 的 quality/database 均成功。素材删除与备份恢复说明见 [MEDIA_LIFECYCLE.md](docs/engineering/MEDIA_LIFECYCLE.md)、[MEDIA_BACKUP.md](docs/engineering/MEDIA_BACKUP.md)。P2-10A / PR #38 保持待独立安全评审，本轮不合并、不部署，不开发发布界面。
+P2-10A / [PR #38](https://github.com/SynapseOperator/mq-story-blog/pull/38) 已经独立 APPROVED，以普通 merge 合入 main `6e2ac7e4d578dbe6fe527d0334387e40d87cfa7e`，[main CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41820043909) 的 quality/database 均成功，Issue #37 已完成。本分支直接基于该 main；本轮交付独立 Draft PR，不自动合并或部署。素材删除与备份恢复说明见 [MEDIA_LIFECYCLE.md](docs/engineering/MEDIA_LIFECYCLE.md)、[MEDIA_BACKUP.md](docs/engineering/MEDIA_BACKUP.md)。
 
-私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。负责人已完成编辑器与私有预览的技术、视觉及交互签收；本次同步不调整界面。
+私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。已签收编辑器与私有预览继续复用，新增发布区的视觉与交互须单独验收。
 
-首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→006 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
+首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信与登录视觉保持不变；编辑器沿用深蓝、暖金、米色并新增发布区。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→006 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
 保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。发布与选位接口默认关闭；删除和备份仅通过受控入口执行，不包含生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 

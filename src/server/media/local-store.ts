@@ -195,17 +195,28 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
 
   async function removeAsset(storageKey: string) {
     const target = objectPath(storageKey, "display");
+    // Concurrent Windows deletion can report EPERM (or race realpath) instead
+    // of ENOENT. Accept only a confirmed absence of this exact known target;
+    // an existing protected file or an unreadable path remains a failure.
+    async function removedElsewhere(path: string, error: unknown) {
+      if (storageError(error).code === "NOT_FOUND") return true;
+      if (process.platform !== "win32") return false;
+      try { await lstat(path); return false; }
+      catch (failure) {
+        return failure && typeof failure === "object" && "code" in failure && failure.code === "ENOENT";
+      }
+    }
     try {
       privateMode((await inspectPath(root, true)).mode, 0o700);
       try { privateMode((await inspectPath(target.directory, true)).mode, 0o700); }
       catch (error) {
-        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+        if (await removedElsewhere(target.directory, error)) return;
         throw error;
       }
       let entries: string[];
       try { entries = await readdir(target.directory); }
       catch (error) {
-        if (storageError(error).code === "NOT_FOUND") return;
+        if (await removedElsewhere(target.directory, error)) return;
         throw error;
       }
       // Validate every entry before deleting any. Unexpected files/directories
@@ -217,18 +228,18 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
         }
         try { privateMode((await inspectPath(join(target.directory, name), false)).mode, 0o600); }
         catch (error) {
-          if (storageError(error).code !== "NOT_FOUND") throw error;
+          if (!(await removedElsewhere(join(target.directory, name), error))) throw error;
         }
       }
       for (const name of entries) {
         try { await unlink(join(target.directory, name)); }
         catch (error) {
-          if (storageError(error).code !== "NOT_FOUND") throw error;
+          if (!(await removedElsewhere(join(target.directory, name), error))) throw error;
         }
       }
       try { await rmdir(target.directory); }
       catch (error) {
-        if (storageError(error).code !== "NOT_FOUND") throw error;
+        if (!(await removedElsewhere(target.directory, error))) throw error;
       }
     } catch (error) { throw storageError(error); }
   }

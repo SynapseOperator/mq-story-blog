@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readdir, writeFile, readFile, lstat, chmod, symlink, rm } from "node:fs/promises";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { createLocalMediaStore, MediaStorageError } from "../src/server/media/local-store.ts";
@@ -175,6 +177,26 @@ test("DELETING removal rejects unknown files without removing the valid image", 
   await assert.rejects(store.removeAsset(key), code("UNSAFE_PATH"));
   assert.equal((await store.read(key, "display")).toString(), "must remain");
   assert.equal(await readFile(join(roots.test, key, "unknown.txt"), "utf8"), "unknown private file");
+});
+
+test("cleanup does not swallow a filesystem permission error while its target still exists", async t => {
+  const { store, roots } = await fixture(t);
+  const key = randomUUID(), bytes = Buffer.from("protected synthetic output");
+  await store.write(key, "display", bytes);
+  const target = join(roots.test, key, "display.webp");
+  const originalUnlink = fsPromises.unlink;
+  // Explicit fault injection: exercise the negative control without changing
+  // Windows ACLs or claiming chmod can reproduce every platform's unlink rules.
+  const injected = t.mock.method(fsPromises, "unlink", async path => {
+    if (path === target) throw Object.assign(new Error("synthetic permission refusal"), { code: "EPERM" });
+    return originalUnlink(path);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(store.removeAsset(key), code("STORAGE_UNAVAILABLE"));
+    assert.deepEqual(await readFile(target), bytes);
+    assert.deepEqual(await readdir(join(roots.test, key)), ["display.webp"]);
+  } finally { injected.mock.restore(); syncBuiltinESMExports(); }
 });
 
 test("FAILED recovery refuses object and output junctions without touching their targets", async t => {
