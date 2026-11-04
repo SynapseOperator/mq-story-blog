@@ -90,15 +90,36 @@ export async function runBrowser({ baseURL, admin, regular, publicStory, private
     assert.ok(Math.abs(box.y + box.height / 2 - viewport.height / 2) < 2);
   }
   async function visibleThumbnails(page) {
-    await page.waitForFunction(() => {
-      const pane = globalThis.document.querySelector(".editor-media-scroll");
-      if (!pane) return false;
-      const bounds = pane.getBoundingClientRect();
-      const images = [...pane.querySelectorAll("img")].filter(image => {
-        const box = image.getBoundingClientRect(); return box.bottom > bounds.top && box.top < bounds.bottom;
+    try {
+      // A short viewport may initially show only the upload controls. Bring a
+      // real card into the scroll viewport before waiting for its lazy image.
+      const first = page.locator(".editor-media-scroll img").first();
+      await first.scrollIntoViewIfNeeded(); await first.evaluate(image => image.decode());
+      await page.waitForFunction(() => {
+        const pane = globalThis.document.querySelector(".editor-media-scroll");
+        if (!pane) return false;
+        const bounds = pane.getBoundingClientRect();
+        const images = [...pane.querySelectorAll("img")].filter(image => {
+          const box = image.getBoundingClientRect(); return box.bottom > bounds.top && box.top < bounds.bottom;
+        });
+        return images.length > 0 && images.every(image => image.complete && image.naturalWidth > 0);
       });
-      return images.length > 0 && images.every(image => image.complete && image.naturalWidth > 0);
-    });
+    } catch (error) {
+      const geometry = await page.evaluate(() => {
+        const pane = globalThis.document.querySelector(".editor-media-scroll");
+        if (!pane) return { pane: false };
+        const bounds = pane.getBoundingClientRect();
+        return { viewportHeight: globalThis.innerHeight, paneHeight: Math.round(bounds.height), scrollTop: Math.round(pane.scrollTop),
+          images: [...pane.querySelectorAll("img")].map(image => {
+            const box = image.getBoundingClientRect();
+            return { top: Math.round(box.top - bounds.top), bottom: Math.round(box.bottom - bounds.top),
+              complete: image.complete, width: image.naturalWidth };
+          }) };
+      });
+      // Geometry and decode state only: never URLs, asset IDs or private text.
+      console.error(`MEDIA_THUMBNAIL_GEOMETRY ${JSON.stringify(geometry)}`);
+      throw error;
+    }
   }
   async function choose(page, id) {
     await panel(page).getByRole("button", { name: `选择图片 ${id}`, exact: true }).click();
