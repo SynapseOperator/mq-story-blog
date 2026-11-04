@@ -290,7 +290,10 @@ export async function runPublishingHttpTests({ connectionString, maintenanceUrl,
       await publicState(first, { title: "合成发布验收 · 羽毛信", asset: assets[0].id, forbidden: [privateTitle] });
       assert.equal((await current(first.id)).slug, first.slug);
     });
-    return { passed, total: 15, admin, regular, secrets, first: { ...first, title: "合成发布验收 · 羽毛信" }, privateCanaries: [privateTitle] };
+    // The cookie remains inside this isolated test process; never serialize it
+    // into reports. Restore tests reuse it to prove old sessions cannot publish.
+    return { passed, total: 15, admin, regular, secrets, oldJar: { ...jar },
+      first: { ...first, title: "合成发布验收 · 羽毛信" }, privateCanaries: [privateTitle] };
   } catch (error) { error.publishingStage = stage; throw error; }
   finally { await Promise.allSettled([owner.end(), maintenance.$disconnect()]); }
 }

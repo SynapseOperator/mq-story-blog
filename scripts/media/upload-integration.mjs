@@ -124,7 +124,7 @@ async function main() {
       assert.equal(combined.passed, combined.total);
       console.log(`Combined draft/media database privileges: ${combined.passed}/${combined.total} checks passed`);
     } finally { await combinedRuntime.end(); }
-    console.log("PASS two independent databases apply 001 -> 005, repeated deploy, schema drift and private error logging");
+    console.log("PASS two independent databases apply 001 -> 006, repeated deploy, schema drift and private error logging");
     workspace = await mkdtemp(join(tmpdir(), "mq-media-upload-"));
     const devRoot = join(workspace, "private-development"), testRoot = join(workspace, "private-test");
     await mkdir(devRoot, { mode: 0o700 }); await mkdir(testRoot, { mode: 0o700 });

@@ -115,7 +115,7 @@ async function main() {
     console.log(`Draft PostgreSQL integration: ${database.passed}/${database.total} checks passed`);
     stage = "separate empty database migration for production HTTP validation";
     const application = await isolatedDatabase();
-    console.log("PASS two independently migrated empty databases: 001 -> 002 -> 003 -> 004 -> 005, repeat deploy and schema diff");
+    console.log("PASS two independently migrated empty databases: 001 -> 006, repeat deploy and schema diff");
     const port = await unusedPort();
     const origin = `http://127.0.0.1:${port}`;
     const secret = randomBytes(48).toString("base64url"); secrets.add(secret);

@@ -1,6 +1,6 @@
 # P2-10A：受控故事发布
 
-对应 [Issue #37](https://github.com/SynapseOperator/mq-story-blog/issues/37)、PRD v1.1 §5.2、§5.4、§10.2 和 FN-08/09/10/14。本次从 main `1850610510928df9459420d4ffa1de671d2b4f9f` 独立开发，不依赖仍待独立评审的 [PR #36](https://github.com/SynapseOperator/mq-story-blog/pull/36)。素材删除和联合备份不能因此被视为本分支已有能力。
+对应 [Issue #37](https://github.com/SynapseOperator/mq-story-blog/issues/37)、PRD v1.1 §5.2、§5.4、§10.2 和 FN-08/09/10/14。P2-10A 最初从 main `1850610` 独立开发；[PR #36](https://github.com/SynapseOperator/mq-story-blog/pull/36) 随后以普通 merge `4f46e2988d7b5109fa37b53110e7ccbe0ef54d6c` 合并，合并后的 quality/database [CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41812969659) 成功。本分支已通过普通 merge 同步其素材删除、维护与联合备份能力；同步后的验证及独立 Review 单独记录，不沿用旧提交的审批。
 
 本阶段只有发布后端和隔离测试，没有发布管理 UI，也没有生产权限配置或真实内容发布。认证仍受原有开关控制；发布还要求显式设置 `MQ_PUBLISH_ENABLED=true` 和独立签名密钥，缺失时拒绝操作。
 
@@ -85,10 +85,20 @@ node scripts/publishing/initialize-key.mjs --database mq_test_admin_<本次随�
 
 它不声称防御应用进程被控制、服务器签名密钥泄露、数据库 owner/超级用户失陷、恶意主机文件操作或备份凭据泄露。生产启用前仍须独立安全 Review、真实运行身份与文件 ACL、HTTPS/可信代理、数据库日志及备份访问控制、密钥保管/轮换/恢复方案。Better Auth Session Token 仍原值存库，不能称为已经哈希保护。共享管理员账号只能归因到账号，不能识别实际使用者。
 
+## 与联合备份恢复的边界
+
+完整 `pg_dump` 包含 006 的 `mq_publish_private`、非空签名密钥和原有 Session；不能只备份 Prisma 管理的 public Schema。备份目录因此还承担签名密钥保密责任。清单、日志及 CI Artifacts 不得包含密钥或 Token；加密、签名、异地保存和恢复后的密钥轮换仍是正式开放前事项，见 [MEDIA_BACKUP.md](MEDIA_BACKUP.md)。
+
+恢复演练保留归档数据，不通过删除密钥或 Session 假装完成安全恢复。新隔离库先撤销 PUBLIC CONNECT，`pg_restore --no-owner --no-acl` 不恢复原运行身份；导入后清除所有非系统 Schema 的 PUBLIC Schema、表、序列和函数权限，包含 `mq_publish_private` 与其扩展函数。
+
+即使操作者随后只重配普通管理员、草稿和媒体权限，并给应用设置原密钥与发布开关，原 Cookie 也不能发布：运行身份未获发布函数 EXECUTE，恢复后的函数 owner 也不满足受限 NOLOGIN 所有者约定。仅误授 EXECUTE 仍须由数据库函数拒绝。恢复命令不自动配置发布 owner、签名权限或启动服务。生产恢复需要另外授权的权限、密钥与会话处理流程。
+
 ## 验证记录
 
 计划检查伪造/替换签名、跨事务/身份重放、过期与撤销 Session、密钥缺失、最小 owner 权限、发布与选位竞争、事务回滚、图片完整性，以及公开 API/HTML/RSC/metadata/图片 GET/HEAD 随生命周期同步。迁移回归保留 004→005，并增加真实 005→006、历史 checksum、v1/v2 内容和引用快照、空库部署及 Prisma drift。
 
-Windows 隔离验收：`npm run check` 退出 0，135 项单测中 133 通过、2 项为已有平台文件系统限制；新增 `test:publishing` 退出 0，PostgreSQL 13/13、HTTP 15/15、HTTPS 15/15。测试进程用独立 preload 暂停真实文件读取，在暂停期间完成草稿保存与撤权，再验证发布拒绝；生产代码没有测试接口。桌面 1536×1024、触屏 390×844、320×568 reduced-motion 的真实生产构建浏览器回归通过，未捕获运行错误。
+原提交 `93cb78f` 的 Windows 隔离验收：`npm run check` 退出 0，135 项单测中 133 通过、2 项为已有平台文件系统限制；新增 `test:publishing` 退出 0，PostgreSQL 13/13、HTTP 15/15、HTTPS 15/15。测试进程用独立 preload 暂停真实文件读取，在暂停期间完成草稿保存与撤权，再验证发布拒绝；生产代码没有测试接口。桌面 1536×1024、触屏 390×844、320×568 reduced-motion 的真实生产构建浏览器回归通过，未捕获运行错误。这些结果不代表本次同步后的新提交已经通过。
+
+本轮同步后的 Windows `test:publishing` 已退出 0：PostgreSQL 13/13、HTTP 15/15、HTTPS 15/15，新增备份恢复 6/6。真实归档包含密钥及有效合成 Session；恢复后逐项比对数据、执行 migration status/drift，并验证未配置身份不能连接、普通权限不能执行发布或读取密钥、原 HTTPS Cookie 仍不能发布，以及误授 EXECUTE 时函数 owner 检查仍拒绝。生产构建的桌面、390px、320px reduced-motion 浏览器回归通过。完整既有回归与新提交的 CI 以 PR 中对应 SHA 的结果为准。
 
 首轮发布 HTTP 测试的退出请求漏传 JSON `{}`，被已有认证入口拒绝。修正测试合同后完整重跑通过，没有放宽 Origin、内容类型或认证检查；初次失败日志与后续结果均保留在仓库外的本地验收目录。完整既有回归及对应提交的 Linux CI 结果记录在本阶段 PR，不将测试成功代替负责人验收或正式独立 Review。

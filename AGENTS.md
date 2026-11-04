@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- P2-08A/B/C、P2-09A/B/C 已合入 main 1850610510928df9459420d4ffa1de671d2b4f9f。本轮仅 P2-10A / Issue #37：管理员星位与发布操作后端，独立 006 迁移、事务绑定 HMAC 和受限数据库函数。权限与威胁模型见 STORY_PUBLICATION.md。图片 I/O 在短授权事务之外，最终事务复核版本及素材。PR #36 未合并，不依赖其删除备份实现。仅隔离合成数据，发布默认关闭，交付 Draft PR；不合并、不部署、不开始 P2-10B。
+- P2-09D / PR #36 已以普通 merge 合入 main 4f46e2988d7b5109fa37b53110e7ccbe0ef54d6c，quality/database 成功。本轮仅同步 P2-10A / PR #38，保留 001→006、独立事务绑定 HMAC、受限发布函数与所有删除/备份测试。完整备份含签名私有 Schema；恢复保留原数据，但权限、函数 owner 与开关必须默认拒绝发布。边界见 STORY_PUBLICATION.md、MEDIA_BACKUP.md。仅隔离合成数据，不合并 #38、不部署、不开始 P2-10B；新提交需重新取得独立 Review。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。

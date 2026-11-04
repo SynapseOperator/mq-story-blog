@@ -18,6 +18,7 @@ import { applyPublishingDatabasePrivileges, initializePublishingKey } from "./pr
 import { runPublishingDatabaseTests } from "./database-tests.mjs";
 import { runPublishingHttpTests } from "./http-tests.mjs";
 import { runPublishingBrowser } from "./browser-tests.mjs";
+import { runPublicationBackupTests } from "./backup-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -132,6 +133,22 @@ async function main() {
         console.log("PASS production browser: published reader/history and unchanged editor desktop/mobile/reduced-motion");
       }
       await stopServer(server);
+      if (secure) {
+        stage = "native 006 backup and restored publication default-deny";
+        const backupResult = await runPublicationBackupTests({
+          source: application, controlURL: base, projectRoot: root, workspace,
+          storage: { projectRoot: root, roots: { development: devRoot, test: storageRoot },
+            environment: "test", maxVariantBytes: 4 * 1024 * 1024 },
+          runtimeRole, maintenanceRole, key, first: httpResult.first, oldJar: httpResult.oldJar,
+          origin, ca: tls.ca, secrets, rememberDatabase: name => databases.push(name),
+          withRestoredServer: async (overrides, action) => {
+            const restored = await startServer(port, { ...env, ...overrides }, servers, ingress);
+            try { await action(); } finally { await stopServer(restored); }
+          },
+        });
+        assert.equal(backupResult.passed, backupResult.total);
+        console.log(`Publishing backup/restore: ${backupResult.passed}/${backupResult.total} checks passed`);
+      }
       stage = "publishing disabled and missing signing key fail closed";
       for (const overrides of [{ MQ_PUBLISH_ENABLED: "false" }, { MQ_PUBLISH_SIGNING_KEY: "" }]) {
         const disabled = await startServer(port, { ...env, ...overrides }, servers, ingress);

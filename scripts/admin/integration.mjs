@@ -151,7 +151,7 @@ async function main() {
     assert.equal(database.passed, database.total);
     stage = "migrate a separate empty database for production HTTP checks";
     const application = await isolatedDatabase();
-    console.log("PASS two independent empty databases apply 001 -> 002 -> 003 -> 004, repeat deploy and schema drift checks");
+    console.log("PASS two independent empty databases apply 001 -> 006, repeat deploy and schema drift checks");
     const port = await unusedPort();
     const origin = `http://127.0.0.1:${port}`;
     const secret = randomBytes(48).toString("base64url");

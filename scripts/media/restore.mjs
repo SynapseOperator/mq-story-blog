@@ -30,9 +30,18 @@ export async function restoreMediaBackup({ directory, controlURL, restoreParent,
     await runPgBackupTool("pg_restore", ["--exit-on-error", "--single-transaction", "--no-owner", "--no-acl"], restored,
       { ...tools, input: join(directory, "database.dump") });
     pool = new pg.Pool({ connectionString: restored.href, max: 1, connectionTimeoutMillis: 5000 });
-    // --no-acl intentionally avoids reviving old deployment identities. Default
-    // PUBLIC EXECUTE must be removed before this drill may grant any app access.
-    await pool.query("REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC; REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC; REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+    // --no-acl intentionally avoids reviving old deployment identities. Native
+    // extensions recreate default function ACLs, including outside public. Keep
+    // every restored application schema closed before granting any app access.
+    const schemas = (await pool.query(`SELECT nspname FROM pg_namespace
+      WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY nspname`)).rows;
+    for (const { nspname } of schemas) {
+      const schema = `"${nspname.replaceAll('"', '""')}"`;
+      await pool.query(`REVOKE ALL ON ALL FUNCTIONS IN SCHEMA ${schema} FROM PUBLIC;
+        REVOKE ALL ON ALL TABLES IN SCHEMA ${schema} FROM PUBLIC;
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA ${schema} FROM PUBLIC;
+        REVOKE ALL ON SCHEMA ${schema} FROM PUBLIC`);
+    }
     const rows = await compareRestoredInventory(pool, manifest);
     const store = await createLocalMediaStore({ projectRoot, roots: { development: join(restoreParent, `unused-${randomUUID()}`), test: privateRoot },
       environment: "test", maxVariantBytes: 4 * 1024 * 1024 });
