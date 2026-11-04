@@ -65,7 +65,9 @@ async function main() {
   const control = new pg.Pool({ connectionString: base, max: 1, connectionTimeoutMillis: 5000 });
   const suffix = randomUUID().replaceAll("-", "");
   const runtimeRole = `mq_admin_rt_${suffix}`, maintenanceRole = `mq_admin_mt_${suffix}`;
+  const mediaMaintenanceRole = `mq_media_mt_${suffix}`;
   const rolePasswords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")];
+  if (process.env.MQ_MEDIA_LIFECYCLE_TESTS === "true") rolePasswords.push(randomBytes(32).toString("hex"));
   const roles = [], databases = [], servers = [], secrets = new Set(rolePasswords);
   let workspace, tls, failure;
   async function isolatedDatabase({ drafts = false } = {}) {
@@ -98,8 +100,10 @@ async function main() {
     await access(new URL("../../.next/BUILD_ID", import.meta.url));
     stage = "create only this run's restricted roles";
     await control.query("SET log_statement='none'; SET log_min_error_statement='panic'; SET log_error_verbosity='terse'; SET log_parameter_max_length_on_error=0");
-    for (const [index, role] of [runtimeRole, maintenanceRole].entries()) {
-      assert.match(role, /^mq_admin_(rt|mt)_[a-f0-9]{32}$/); assert.match(rolePasswords[index], /^[a-f0-9]{64}$/);
+    const testRoles = [runtimeRole, maintenanceRole];
+    if (process.env.MQ_MEDIA_LIFECYCLE_TESTS === "true") testRoles.push(mediaMaintenanceRole);
+    for (const [index, role] of testRoles.entries()) {
+      assert.match(role, /^mq_(admin_(rt|mt)|media_mt)_[a-f0-9]{32}$/); assert.match(rolePasswords[index], /^[a-f0-9]{64}$/);
       await control.query(`CREATE ROLE "${role}" LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '${rolePasswords[index]}'`); roles.push(role);
     }
     stage = "isolated empty migrations and exact media privilege matrix";
@@ -163,6 +167,90 @@ async function main() {
         storageRoot: storyRoot, runBrowser, evidenceDirectory: process.env.MEDIA_STORY_EVIDENCE_DIR });
       assert.equal(result.passed, result.total); console.log(`Managed story media integration: ${result.passed}/${result.total} checks passed`);
       [...result.secrets, ...result.privateCanaries, stories.connectionString, stories.runtimeUrl, storyRoot].forEach(value => secrets.add(value));
+    }
+    if (process.env.MQ_MEDIA_LIFECYCLE_TESTS === "true") {
+      stage = "isolated media deletion and recovery";
+      await stopServer(secure);
+      const lifecycle = await isolatedDatabase({ drafts: true });
+      const lifecycleRoot = join(workspace, "private-lifecycle"); await mkdir(lifecycleRoot, { mode: 0o700 });
+      const { applyMediaMaintenancePrivileges } = await import("./maintenance-privileges.mjs");
+      stage = "dedicated media maintenance privilege matrix";
+      const provision = new pg.Pool({ connectionString: lifecycle.connectionString, max: 1 });
+      try { await applyMediaMaintenancePrivileges(provision, { maintenanceRole: mediaMaintenanceRole, expectedDatabase: lifecycle.name }); }
+      finally { await provision.end(); }
+      const mediaMaintenanceUrl = new URL(lifecycle.connectionString);
+      mediaMaintenanceUrl.username = mediaMaintenanceRole; mediaMaintenanceUrl.password = rolePasswords[2];
+      const { runMediaLifecycleDatabaseTests } = await import("./lifecycle-tests.mjs");
+      stage = "media deletion and reference database ordering";
+      const dbResult = await runMediaLifecycleDatabaseTests(lifecycle);
+      assert.equal(dbResult.passed, dbResult.total);
+      console.log(`Media lifecycle PostgreSQL: ${dbResult.passed}/${dbResult.total} checks passed`);
+      const { runMediaLifecycleMaintenanceTests } = await import("./lifecycle-maintenance-tests.mjs");
+      stage = "offline media diagnostics and recovery";
+      const maintenanceResult = await runMediaLifecycleMaintenanceTests({ connectionString: lifecycle.connectionString,
+        maintenanceUrl: mediaMaintenanceUrl.href, storageRoot: lifecycleRoot, projectRoot: root });
+      assert.equal(maintenanceResult.passed, maintenanceResult.total);
+      console.log(`Media offline maintenance: ${maintenanceResult.passed}/${maintenanceResult.total} checks passed`);
+      const lifecycleEnv = { ...env, DATABASE_URL: lifecycle.runtimeUrl, MQ_MEDIA_TEST_ROOT: lifecycleRoot,
+        AUTH_ORIGIN: tls.origin, AUTH_ALLOW_LOCAL_HTTP: "false", AUTH_PROXY_SECRET: tls.proxySecret };
+      const probeHeaders = { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" };
+      let lifecycleServer = await startServer(backendPort, lifecycleEnv, servers, probeHeaders);
+      const { runMediaLifecycleHttpTests } = await import("./lifecycle-http-tests.mjs");
+      stage = "confirmed media deletion over production HTTPS";
+      const deletion = await runMediaLifecycleHttpTests({ ...lifecycle, runtimeRole, origin: tls.origin, ca: tls.ca,
+        storageRoot: lifecycleRoot, async restartServer() {
+          await stopServer(lifecycleServer, true);
+          lifecycleServer = await startServer(backendPort, lifecycleEnv, servers, probeHeaders);
+        } });
+      assert.equal(deletion.passed, deletion.total);
+      deletion.secrets.forEach(value => secrets.add(value));
+      console.log(`Media lifecycle HTTPS: ${deletion.passed}/${deletion.total} checks passed`);
+      await stopServer(lifecycleServer);
+      stage = "joint PostgreSQL and private-file backup and isolated restore";
+      const { runBackupTests } = await import("./backup-tests.mjs");
+      const restoredTests = await runBackupTests({ controlURL: base, projectRoot: root,
+        async verifyRestored({ databaseURL, privateRoot, publicStoryId, publicAssetId, privateAssetId,
+          expectedPublicBytes, expectedPrivateBytes, admin: restoredAdmin }) {
+          secrets.add(restoredAdmin.password); secrets.add(privateRoot);
+          const database = new URL(databaseURL).pathname.slice(1);
+          const owner = new pg.Pool({ connectionString: databaseURL, max: 1 });
+          try {
+            await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: database });
+            await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: database });
+          } finally { await owner.end(); }
+          const restoredRuntime = new URL(databaseURL); restoredRuntime.username = runtimeRole; restoredRuntime.password = rolePasswords[0];
+          const restoredServer = await startServer(backendPort, { ...lifecycleEnv, DATABASE_URL: restoredRuntime.href,
+            MQ_MEDIA_TEST_ROOT: privateRoot }, servers, probeHeaders);
+          try {
+            const { transport, privateHeaders } = await import("./upload-http-tests.mjs");
+            const { request } = transport(tls.origin, secrets, tls.ca);
+            for (const method of ["GET", "HEAD"]) {
+              const visible = await request(`/api/stories/${publicStoryId}/media/${publicAssetId}`, { method });
+              assert.equal(visible.status, 200); privateHeaders(visible);
+              if (method === "GET") assert.deepEqual(visible.bytes, expectedPublicBytes);
+              const hidden = await request(`/api/stories/${publicStoryId}/media/${privateAssetId}`, { method });
+              assert.equal(hidden.status, 404); privateHeaders(hidden);
+              const admin = await request(`/api/admin/media/${privateAssetId}/content`, { method });
+              assert.equal(admin.status, 401); privateHeaders(admin);
+            }
+            const jar = {};
+            const login = await request("/api/auth/sign-in/username", { method: "POST", body: restoredAdmin, jar });
+            assert.equal(login.status, 200); assert.ok(jar.cookie);
+            for (const method of ["GET", "HEAD"]) {
+              const privateImage = await request(`/api/admin/media/${privateAssetId}/content`, { method, jar });
+              assert.equal(privateImage.status, 200); privateHeaders(privateImage);
+              if (method === "GET") assert.deepEqual(privateImage.bytes, expectedPrivateBytes);
+            }
+            const inspect = new pg.Pool({ connectionString: databaseURL, max: 1 });
+            try {
+              const values = (await inspect.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+              values.forEach(row => secrets.add(row.value));
+            } finally { await inspect.end(); }
+            console.log("PASS restored production HTTPS preserves public/private image boundaries");
+          } finally { await stopServer(restoredServer); }
+        } });
+      assert.equal(restoredTests.passed, restoredTests.total);
+      console.log(`Media backup/restore: ${restoredTests.passed}/${restoredTests.total} checks passed`);
     }
     stage = "production logs contain no synthetic sensitive values or private storage identity";
     const inspect = new pg.Pool({ connectionString: application.connectionString, max: 1 });
