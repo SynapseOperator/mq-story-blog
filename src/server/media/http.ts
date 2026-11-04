@@ -4,6 +4,7 @@ import { withAdmin } from "../admin/access.ts";
 import { AdminAccessError } from "../admin/policy.ts";
 import { createLocalMediaStore, type LocalMediaStore } from "./local-store.ts";
 import { MEDIA_INPUT_LIMIT, MEDIA_DISPLAY_LIMIT, MediaProcessingError, processMediaImage } from "./processor.ts";
+import { beginMediaDeletion, finishMediaDeletion, MediaLifecycleError } from "./lifecycle.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const headers = { "cache-control": "private, no-store, max-age=0", pragma: "no-cache",
@@ -56,7 +57,7 @@ async function metadataWithUsage(tx: Prisma.TransactionClient, assets: MediaAsse
 }
 function failure(request: Request, error: unknown) {
   const status = error instanceof AdminAccessError || error instanceof MediaProcessingError ? error.status : 503;
-  const code = error instanceof MediaRequestError ? error.mediaCode
+  const code = error instanceof MediaRequestError || error instanceof MediaLifecycleError ? error.mediaCode
     : error instanceof AdminAccessError || error instanceof MediaProcessingError ? error.code : "MEDIA_UNAVAILABLE";
   if (status >= 500) console.error("MQ_MEDIA_UNAVAILABLE");
   const reply = { ...headers, ...(status === 429 || status === 503 ? { "retry-after": "30" } : {}) };
@@ -245,5 +246,24 @@ export async function getMedia(request: Request, id: string, content = false) {
     return new Response(request.method === "HEAD" ? null : new Uint8Array(bytes), {
       headers: { ...headers, "content-type": "image/webp", "content-length": String(bytes.byteLength),
         "content-disposition": 'inline; filename="mq-image.webp"', "content-security-policy": "default-src 'none'; sandbox" } });
+  } catch (error) { return failure(request, error); }
+}
+
+export async function deleteMedia(request: Request, id: string) {
+  try {
+    const asset = await withAdmin(request, async tx => {
+      configured(); assetId(id);
+      // Next's Node adapter supplies a stream even for an empty DELETE. Reject
+      // framed bodies/encodings rather than treating that stream as input data.
+      if (new URL(request.url).search || request.headers.has("transfer-encoding")
+        || request.headers.has("content-type") || request.headers.has("content-encoding")
+        || ![null, "0"].includes(request.headers.get("content-length"))) fail("INVALID_DELETE_REQUEST", 400);
+      if (request.headers.get("x-mq-confirm-delete") !== id) fail("DELETE_CONFIRMATION_REQUIRED", 400);
+      return beginMediaDeletion(tx, id);
+    });
+    if (asset.state === "DELETED") return Response.json({ asset: metadata(asset) }, { headers });
+    await (await storage()).removeAsset(asset.storageKey);
+    const deleted = await withAdmin(request, tx => finishMediaDeletion(tx, id));
+    return Response.json({ asset: metadata(deleted) }, { headers });
   } catch (error) { return failure(request, error); }
 }

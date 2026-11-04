@@ -31,6 +31,9 @@ export type LocalMediaStore = Readonly<{
    * terminal FAILED state in the database; never call for READY/referenced data.
    * This primitive does not grant permission or inspect database state. */
   removeFailed(storageKey: string): Promise<void>;
+  /** Caller must first commit DELETING under authorization. Fixed known files
+   * only; missing outputs are expected during interruption/retry recovery. */
+  removeAsset(storageKey: string): Promise<void>;
 }>;
 
 const keyPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -89,7 +92,7 @@ async function outsideGit(path: string) {
 }
 
 /** Private LOCAL storage for ALREADY processed WebP variants. No upload parsing,
- * image decoding, MIME validation, original variant or public/deletion HTTP API.
+ * image decoding, MIME validation, original variant or public HTTP API.
  * Roots must be pre-created, separate, absolute, outside every Git checkout and
  * the project/build/public tree. No environment/cwd fallback is permitted.
  */
@@ -190,7 +193,7 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
     } catch (error) { throw storageError(error); }
   }
 
-  async function removeFailed(storageKey: string) {
+  async function removeAsset(storageKey: string) {
     const target = objectPath(storageKey, "display");
     try {
       privateMode((await inspectPath(root, true)).mode, 0o700);
@@ -199,7 +202,12 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
         if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
         throw error;
       }
-      const entries = await readdir(target.directory);
+      let entries: string[];
+      try { entries = await readdir(target.directory); }
+      catch (error) {
+        if (storageError(error).code === "NOT_FOUND") return;
+        throw error;
+      }
       // Validate every entry before deleting any. Unexpected files/directories
       // remain untouched for an operator; no recursive or cross-asset cleanup.
       for (const name of entries) {
@@ -207,12 +215,23 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
           && !(name.startsWith(".pending-") && keyPattern.test(name.slice(9)))) {
           throw new MediaStorageError("UNSAFE_PATH");
         }
-        privateMode((await inspectPath(join(target.directory, name), false)).mode, 0o600);
+        try { privateMode((await inspectPath(join(target.directory, name), false)).mode, 0o600); }
+        catch (error) {
+          if (storageError(error).code !== "NOT_FOUND") throw error;
+        }
       }
-      for (const name of entries) await unlink(join(target.directory, name));
-      await rmdir(target.directory);
+      for (const name of entries) {
+        try { await unlink(join(target.directory, name)); }
+        catch (error) {
+          if (storageError(error).code !== "NOT_FOUND") throw error;
+        }
+      }
+      try { await rmdir(target.directory); }
+      catch (error) {
+        if (storageError(error).code !== "NOT_FOUND") throw error;
+      }
     } catch (error) { throw storageError(error); }
   }
 
-  return Object.freeze({ write, read, removeFailed });
+  return Object.freeze({ write, read, removeFailed: removeAsset, removeAsset });
 }

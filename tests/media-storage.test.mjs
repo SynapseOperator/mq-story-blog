@@ -13,7 +13,7 @@ async function fixture(t) {
   for (const path of [projectRoot, roots.development, roots.test]) await mkdir(path, { mode: 0o700 });
   await mkdir(join(projectRoot, ".git"));
   // Cleanup is confined to the unique fixture root created by this exact test;
-  // the storage API has only per-FAILED-object recovery, no recursive deletion.
+  // the storage API has only per-object removal, no recursive deletion.
   t.after(() => rm(sandbox, { recursive: true, force: true }));
   const config = { projectRoot, roots, environment: "test", maxVariantBytes: 1024 };
   return { sandbox, config, projectRoot, roots, store: await createLocalMediaStore(config) };
@@ -28,7 +28,7 @@ test("LOCAL storage round-trips only processed display/thumbnail bytes with no p
   const key = randomUUID();
   const display = Buffer.from("synthetic already-processed display bytes");
   const thumbnail = Buffer.from("synthetic already-processed thumbnail bytes");
-  assert.deepEqual(Object.keys(store), ["write", "read", "removeFailed"]);
+  assert.deepEqual(Object.keys(store), ["write", "read", "removeFailed", "removeAsset"]);
   assert.deepEqual(await store.write(key, "display", display), { byteLength: display.length });
   assert.deepEqual(await store.write(key, "thumbnail", thumbnail), { byteLength: thumbnail.length });
   assert.deepEqual(await store.read(key, "display"), display);
@@ -150,6 +150,31 @@ test("FAILED recovery refuses unexpected entries before removing any valid outpu
     assert.equal((await store.read(key, "display")).toString(), "keep on unsafe cleanup");
     assert.deepEqual((await readdir(join(roots.test, key))).sort(), ["display.webp", name].sort());
   }
+});
+
+test("DELETING retries are idempotent after partial removal and under concurrent cleanup", async t => {
+  const { store, roots } = await fixture(t);
+  const deleted = randomUUID(), retained = randomUUID();
+  // The first variant was already removed before a simulated process exit.
+  await store.write(deleted, "thumbnail", Buffer.from("remaining synthetic thumbnail"));
+  await writeFile(join(roots.test, deleted, `.pending-${randomUUID()}`), "interrupted output", { mode: 0o600 });
+  await store.write(retained, "display", Buffer.from("other asset"));
+  await Promise.all([store.removeAsset(deleted), store.removeAsset(deleted)]);
+  await store.removeAsset(deleted);
+  assert.deepEqual(await readdir(roots.test), [retained]);
+  assert.equal((await store.read(retained, "display")).toString(), "other asset");
+  assert.deepEqual(await readdir(roots.development), []);
+  await assert.rejects(store.removeAsset("../outside"), code("INVALID_OBJECT"));
+});
+
+test("DELETING removal rejects unknown files without removing the valid image", async t => {
+  const { store, roots } = await fixture(t);
+  const key = randomUUID();
+  await store.write(key, "display", Buffer.from("must remain"));
+  await writeFile(join(roots.test, key, "unknown.txt"), "unknown private file", { mode: 0o600 });
+  await assert.rejects(store.removeAsset(key), code("UNSAFE_PATH"));
+  assert.equal((await store.read(key, "display")).toString(), "must remain");
+  assert.equal(await readFile(join(roots.test, key, "unknown.txt"), "utf8"), "unknown private file");
 });
 
 test("FAILED recovery refuses object and output junctions without touching their targets", async t => {

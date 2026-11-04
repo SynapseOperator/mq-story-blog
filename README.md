@@ -71,7 +71,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-09c-managed-story-images` 的 PR 暂以 `integration/p2-09c-baseline` 为 base，仅审查 C 增量。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
+本分支以 main 为 base，独立审查 P2-09D 增量。历史阶段文档保留原验收记录，当前操作以本文及生命周期/备份手册为准。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本轮不更改已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
