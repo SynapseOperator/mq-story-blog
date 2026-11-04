@@ -2,15 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08B：管理员简单结构化故事编辑器**（[Issue #25](https://github.com/SynapseOperator/mq-story-blog/issues/25)）的 main 同步与集成验收。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；认证和上传默认关闭或受控启用。
+当前分支为 **Phase 2 · P2-08C：管理员私有羽毛信预览**（[Issue #27](https://github.com/SynapseOperator/mq-story-blog/issues/27)）。管理员在 `/admin/stories` 点击“预览羽毛信”，无需保存即可查看当前编辑快照；使用同一张已验收信纸、图文渲染和动效，关闭后回到原编辑内容、光标及滚动位置。预览明确标注未发布，不提供点赞、留言、登录或分享，不产生写请求或改变保存版本、URL/history。
 
-P2-08A / PR #24 及媒体 PR #30/#32 已正式合入，当前 main `f75f5f3dc8882529e0c0d464e45492ccf4320215` 的 quality/database 均成功。本 PR base 为 main，以普通 merge 保留分支历史；同步产生的新 HEAD 须重新匹配 CI 与独立 Review，原 `3f161bf` 的审批不覆盖新提交。媒体基础与上传见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)、[MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
+P2-08A/B 与媒体 P2-09A/B 已正式合入 main `99ce7c1347ef586ef4b9195c399923c8af8882ea`，[主分支 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41764619074) 的 quality/database 均成功。本分支以普通 merge 同步 main，PR #28 改以 main 为 base；新提交须重新通过 CI 和独立 Review，本轮不合并 #28/#34。媒体基础与上传见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)、[MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
-受控管理员可从 `/admin` 进入 `/admin/stories`，手动创建和编辑结构化草稿。所有数据操作复用四个私有草稿 API；同事务鉴权与列权限不变。界面区分当前编辑、发送快照和服务器确认版本，冲突或结果未知时保留输入，先核对再保存。编辑器说明见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务与权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。
+私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。负责人已完成编辑器与私有预览的技术、视觉及交互签收；本次同步不调整界面。
 
 首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→005 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
-负责人已正式签收此前桌面和手机编辑器视觉，本轮工程同步只需针对性浏览器回归；若以后改动视觉或交互，另交相应证据。满足新提交全部审批和 CI 后才合并 #26；#28 仅在其后同步验证，本轮不合并 #28/#34。私有预览、v2 图片编辑与公开媒体接入仍属于未合并分支，不能整体合入临时 integration base。仅合成账号/内容，不开放生产，不开始 P2-09D/P2-10；生产权限、HTTPS/代理、Token、日志备份及独立安全审查继续保留。
+`test:admin-preview` 额外验证本地快照、零写入、关闭后的选区与滚动恢复。v2 图片编辑与公开媒体接入仍在 PR #34，不将其临时 integration base 整体合入。认证及上传继续受控启用，测试仅用隔离合成数据；不开放生产，不开始 P2-09D/P2-10。生产权限、HTTPS/代理、Token、日志备份及独立安全审查仍待完成。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

@@ -20,6 +20,16 @@ export interface DemoStory {
 /** Published revisions have no invented date, introduction, author or closing. */
 export type Story = DemoStory | (PublicStoryDetail & { readonly source: "published" });
 
+/** Local editor memory only; never a public story, route or transport DTO. */
+export type LetterPreviewSnapshot = {
+  readonly title: string;
+  readonly content: {
+    readonly version: 1;
+    readonly blocks: readonly Readonly<PublicStoryDetail["content"]["blocks"][number]>[];
+  };
+  readonly hasUnsavedChanges: boolean;
+};
+
 export type LetterContentState =
   | { readonly status: "loading" }
   | { readonly status: "error"; readonly unavailable: boolean }
