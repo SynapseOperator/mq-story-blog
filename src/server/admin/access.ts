@@ -5,7 +5,8 @@ import { createAuthDatabaseClient } from "../auth/database.ts";
 import { consumeAuthLimit } from "../auth/rate-limit.ts";
 import { AdminAccessError, inspectAdminRequest } from "./policy.ts";
 
-export type AdminPrincipal = Readonly<{ userId: string }>;
+// Server-only identity. Never serialize the session ID into an API response.
+export type AdminPrincipal = Readonly<{ userId: string; sessionId: string }>;
 let database: ReturnType<typeof createAuthDatabaseClient> | undefined;
 
 /** All future management handlers/services must execute their database work
@@ -56,7 +57,7 @@ export async function withAdmin<T>(request: Request,
       const rows = await tx.$queryRaw<{ allowed: boolean }[]>`
         SELECT public.mq_lock_admin_access(${verified.sessionId}, ${verified.user.id}) AS allowed`;
       if (rows.length !== 1 || rows[0].allowed !== true) throw new AdminAccessError("ADMIN_FORBIDDEN", 403);
-      return await operation(tx, Object.freeze({ userId: verified.user.id }));
+      return await operation(tx, Object.freeze({ userId: verified.user.id, sessionId: verified.sessionId }));
     }, { maxWait: 5000, timeout: 5000 });
   } catch (error) {
     if (error instanceof AdminAccessError) {
