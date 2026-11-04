@@ -2,10 +2,9 @@ name: Quality
 
 on:
   pull_request:
-    # Remove the integration branch filters when C is retargeted to merged main.
-    branches: [main, feat/p2-08a-admin-drafts, feat/p2-08b-story-editor, feat/p2-09a-media-foundation, integration/p2-09c-baseline]
+    branches: [main]
   push:
-    branches: [main, integration/p2-09c-baseline]
+    branches: [main]
 
 permissions:
   contents: read

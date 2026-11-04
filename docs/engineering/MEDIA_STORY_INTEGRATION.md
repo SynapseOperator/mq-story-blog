@@ -1,12 +1,14 @@
 # P2-09C：受管图片与故事集成
 
-本阶段对应 Issue #33。只使用隔离测试库与合成图片；不开放正式注册、管理员账号或发布接口。本文说明当前集成分支能力，不将上游待审代码当作 main 已有功能。
+本阶段对应 Issue #33。只使用隔离测试库与合成图片；不开放正式注册、管理员账号或发布接口。上游已合并，P2-09C 本身仍在 PR #34 等待独立评审与合并授权。
 
 ## 分支与迁移
 
 独立基线 `02c33cb808e30e6cc948aa30a291d78c1680259e` 的两个父提交为 P2-08C `5249c39640e084cc74f4a7989590241b2e19681e`、P2-09B `59c676e466cd32a58926f76478fb2de91e903e7a`。基线通过 Windows 全套回归和 [Quality #43](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41643971936) 后，才创建 C 功能分支。
 
-PR #24 → #26 → #28 与 #30 → #32 均保持原 head、待审/未合并状态。C 的 Draft PR 以 `integration/p2-09c-baseline` 为 base。正式上游合并后需重新整理 C 与 main 的增量，移除临时 CI branch filters，重验所有迁移、权限、测试及独立 Review；不能将集成分支直接合并 main。
+PR #24/#26/#28/#30/#32 现已正式合并；main 为 `ab2d5b56902b597ef03c13148241efa67fe47174`，[quality/database CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41770461689) 均成功。main 包含上述两个父提交，且与 `02c33cb8` 的树差异只有 CI 和五个文档：生产代码、测试、Prisma、依赖锁文件及 Next 配置完全一致。基线中的组合权限测试、005 清单和 Sharp/Playwright 接线没有遗漏。
+
+因此保留 C 原分支，以普通 merge 同步 main 后再将 PR #34 的 base 改为 main。对 main 的差异仅为 C 增量及说明，不需 cherry-pick 或新建替代 PR。临时 integration 分支的 CI 触发已移除；新提交重新执行全部回归并请求独立 Review，本轮不合并 #34。
 
 历史 001–005、Prisma Schema 均不修改。空库全部迁移与真实 004 旧库升级至 005 由 `test:media` 验证，含历史迁移 checksum 和 schema drift。C 无新迁移；沿用 005 的 READY 外键、内容校验、引用投影与不可变保护。
 
@@ -52,9 +54,33 @@ PR #24 → #26 → #28 与 #30 → #32 均保持原 head、待审/未合并状�
 
 新增 `npm run test:media:stories`：保留 B 原始测试，再在第三个随机空库和独立私有文件目录执行 C。覆盖真实上传/v2 保存、并发 CAS/回滚、原公开版保留、跨故事复用、更新/下架/恢复、GET/HEAD/缓存/优化器、错误闭合、低权限、公开 HTML/RSC/metadata 及生产 Chromium 图文操作。`MEDIA_STORY_EVIDENCE_DIR` 可指定仓库外证据目录，输出仅合成截图和脱敏结果；不保存 Cookie、密码、HAR 或数据库凭据。
 
-CI 保留全部套件并新增图文联合步骤。Windows 文件系统特性与 Linux 不同，平台不适用用例按原安全测试说明分别报告，不把跳过等同验证通过。技术检查不代表产品视觉已签收。
+CI 保留全部套件并新增图文联合步骤。Windows 文件系统特性与 Linux 不同，平台不适用用例按原安全测试说明分别报告，不把跳过等同验证通过。负责人已签收原 `0e4c585` 的技术、安全与视觉；本轮同步不改 UI，新提交仍需 CI 和独立 Review。
 
-### 本机实际结果（2026-11-03）
+### main 同步后的最终验证
+
+本次整合保留全部 C 代码和测试，没有复制或重新挑选上游提交。相对已验收的 `0e4c585`，唯一新增产品修复是关闭素材库时的焦点竞争：旧的下一帧恢复任务可能在新输入已聚焦后把焦点拉回正文。现在新的 input/textarea/select 焦点优先，原有选区和滚动恢复路径保留；没有改 CSS、信纸或场景。
+
+浏览器测试增加图片说明、题注和原段落值断言，并通过暂存关闭事件的动画帧回调，确定性验证“新控件聚焦后，旧回调不得抢焦点”。不使用固定等待或生产测试接口。首次失败保留于仓库外 `mq-p2-09c-main-sync/run-1793765583511`；它是输入位置错误导致的预览 alt 定位超时，并非图片权限或加载失败。
+
+修复后 Windows 最终运行 `final-1793766673025` 的以下命令全部退出 0：
+
+| 命令 | 结果 |
+| --- | --- |
+| `check` | lint、Schema、类型、生产构建；133 单测中 131 通过、0 失败、2 项既有 Windows 文件系统限制 |
+| `test:db` | 31 项 |
+| `test:auth` | 35 HTTP + 8 HTTPS |
+| `test:admin` | 3 CLI + 18 DB + 20 HTTP + 4 HTTPS |
+| `test:admin-drafts` | 12 DB + 20 HTTP + 4 HTTPS |
+| `test:admin-editor` | 草稿套件 + 21 编辑器与 4 独立 CAMPFIRE 浏览器检查 |
+| `test:admin-preview` | 草稿套件 + 14 预览浏览器检查 |
+| `test:media` | 13 DB；001→005 空库、004 升级、校验和与 drift |
+| `test:media:upload` | 6 ACL + 2 恢复竞争 + 3 组合权限 + 17 HTTP + 5 HTTPS |
+| `test:media:stories` | 上传基础套件 + 14 图文 PostgreSQL/HTTP + 13 浏览器检查，9 张图文截图 |
+| `test:public` | 15 公开读取 + 10 分享隔离 + 32 浏览器检查 |
+
+生产构建 Chromium 156 覆盖 1536×1024、390×844、320×568、触屏和 reduced-motion；无非预期浏览器错误或私有响应泄露。Browser 插件不可用，沿用项目锁定 Playwright；未验证其他浏览器或实体手机。权限测试覆盖下架后新的 GET/HEAD 拒绝；返回前二次查询已审查，但没有声称单独验证了“恰在文件 I/O 中途下架”的确定性时序。新提交 CI 与独立 Review 以 PR #34 的实际状态为准。
+
+### 初版本机结果（2026-11-03，同步前）
 
 Node 24.19.0 / npm 11.17.0 / PostgreSQL 18.6 / Prisma 7.10.1 / Sharp 0.35.5；生产构建 Chromium 156.0.8078.4。上述十个既有命令均退出 0；另运行限流、事务等待和数据库日志安全回归，均退出 0。`check` 单元测试 131 通过；既有 Windows 文件符号链接权限与 POSIX mode 两项不适用（junction 真实测试仍运行），Linux CI 必须验证相应 POSIX 用例。
 

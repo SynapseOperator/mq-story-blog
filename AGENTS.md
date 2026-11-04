@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 本轮为 P2-09C / Issue #33 图文集成；独立基线 02c33cb8 从 P2-08C 5249c396 普通非快进合并 P2-09B 59c676e4，已通过本机和 CI 后再创建 C 分支。main 仍为 42ef1821；PR #24/#26/#28/#30/#32 均未合并，不改它们的 head 或沿用旧审批。C 契约见 MEDIA_STORY_INTEGRATION.md：v2 仅 assetId；引用由 005 自动投影；上传/选择/预览不保存；公开图片每次核验当前发布关系。保留全部测试、安全边界、视觉和历史迁移；不自动合并、不使用 Review Exception、不创建真实账号/照片、不部署、不开始 P2-09D/P2-10。临时 integration/p2-09c-baseline CI 过滤须在未来正式 main 收敛时删除。
+- Phase 1、P2-01 至 P2-07、P2-08A/B/C 和 P2-09A/B 已合入 main `ab2d5b56902b597ef03c13148241efa67fe47174`，quality/database 成功。本轮只整理 P2-09C / PR #34 相对 main 的增量。原集成基线的生产代码和测试已全部进入 main，以普通 merge 同步原 C 分支，保留组合权限、001→005、v1/v2、CAS 和所有联合测试。契约见 MEDIA_STORY_INTEGRATION.md：v2 仅 assetId；引用由 005 自动生成；上传/选择/预览不保存；公开图片逐次检查当前发布关系。保留已签收视觉，新提交重新验证并请求独立 Review。本轮不合并 #34，不使用 Review Exception，不创建真实账号/照片，不部署，不开始 P2-09D/P2-10。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -12,6 +12,7 @@
 ## 实现与验证
 
 - 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
+- PR 说明面向代码评审者，直接写问题、改动原因、实际验证和剩余限制；减少模板套话、过程复述和重复状态清单。详细日志放证据链接，不堆进正文。
 - 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
 - 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
 - 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。

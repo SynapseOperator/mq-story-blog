@@ -53,6 +53,10 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     const point = returnPoint.current;
     requestAnimationFrame(() => {
       if (!point?.element.isConnected) return;
+      const active = document.activeElement;
+      // A new editing action takes precedence over the queued dialog return.
+      if (active !== point.element && (active instanceof HTMLInputElement
+        || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement)) return;
       point.element.focus({ preventScroll: true });
       if (point.start !== null && (point.element instanceof HTMLInputElement || point.element instanceof HTMLTextAreaElement)) {
         point.element.setSelectionRange(point.start, point.end, point.direction ?? undefined);

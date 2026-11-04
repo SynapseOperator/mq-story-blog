@@ -2,9 +2,13 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-09C 受管图文编辑与公开读取**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)），基于已验证的独立集成基线 `02c33cb8`（P2-08C + P2-09B 普通 merge）。编辑器可上传或选择私有素材、在内存中预览，并手动保存 v2 assetId 引用；公开图片逐次校验当前发布版本。main 仍为 42ef1821；#24/#26/#28/#30/#32 均未合并，任何旧审批不自动覆盖本集成。契约与权限见 [MEDIA_STORY_INTEGRATION.md](docs/engineering/MEDIA_STORY_INTEGRATION.md)，上传基础见 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
+当前分支为 **P2-09C 受管图文编辑与公开读取**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)）。编辑器可上传或选择私有素材、在内存中预览，并手动保存 v2 assetId 引用；公开图片逐次校验当前发布版本。契约与权限见 [MEDIA_STORY_INTEGRATION.md](docs/engineering/MEDIA_STORY_INTEGRATION.md)，上传基础见 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
-私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。场景、羽毛信和登录视觉不重新设计；本轮预览及编辑器的产品视觉验收仍需负责人确认。
+P2-08A/B/C 和媒体 P2-09A/B 已正式合入 main `ab2d5b56902b597ef03c13148241efa67fe47174`，[主分支 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41770461689) 的 quality/database 均成功。原集成基线 `02c33cb8` 的生产代码与测试均已进入 main，因此保留原 C 分支普通 merge 同步，PR #34 改以 main 为 base，只审查 C 增量。新提交须重新通过 CI 和独立 Review，本轮不合并。
+
+私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。负责人已完成编辑器与私有预览的技术、视觉及交互签收；本次同步不调整界面。
+
+首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→005 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
 保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。无发布、星位、删除管理或生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 

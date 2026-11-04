@@ -139,14 +139,42 @@ export async function runBrowser({ baseURL, admin, regular, publicStory, private
       const originalIds = new Set([privateAssetId]);
       const newImage = media.data.items.find(asset => asset.state === "READY" && asset.display.width === width && !originalIds.has(asset.id));
       assert.ok(newImage); uploadedId = newImage.id;
+      const originalParagraph = await body(page).first().inputValue();
       await choose(page, uploadedId);
       await page.getByLabel("图片说明（供无障碍阅读）", { exact: true }).last().fill("合成星空与草坡配图");
       await page.getByLabel("图片题注", { exact: true }).last().fill("合成素材 · 仅用于图文功能验收");
+      assert.equal(await page.getByLabel("图片说明（供无障碍阅读）", { exact: true }).last().inputValue(), "合成星空与草坡配图");
+      assert.equal(await page.getByLabel("图片题注", { exact: true }).last().inputValue(), "合成素材 · 仅用于图文功能验收");
+      assert.equal(await body(page).first().inputValue(), originalParagraph);
       await status(page, "dirty"); assert.deepEqual(await snapshotDatabase(), before);
       await shot(page, "desktop-managed-editor");
       await openPicker(page); await panel(page).getByText(/当前用于 \d+ 篇公开故事/).first().waitFor();
       await visibleThumbnails(page);
       await shot(page, "desktop-media-library"); await page.keyboard.press("Escape"); await panel(page).waitFor({ state: "detached" });
+    });
+    await check("a queued media-dialog return cannot steal focus from the next image edit", async () => {
+      const originalParagraph = await body(page).first().inputValue();
+      await body(page).first().focus(); await openPicker(page);
+      // Hold only frames scheduled by the close event, then perform the next
+      // edit before releasing them. No timeout or production test hook is needed.
+      assert.equal(await page.evaluate(() => {
+        const frames = [], original = globalThis.requestAnimationFrame;
+        globalThis.requestAnimationFrame = callback => { frames.push(callback); return 0; };
+        try { globalThis.document.querySelector(".editor-media-heading button").click(); }
+        finally { globalThis.requestAnimationFrame = original; }
+        globalThis.__mqReleaseFocusReturn = () => {
+          frames.forEach(callback => callback(globalThis.performance.now()));
+          delete globalThis.__mqReleaseFocusReturn;
+        };
+        return frames.length;
+      }), 1);
+      await panel(page).waitFor({ state: "detached" });
+      const description = page.getByLabel("图片说明（供无障碍阅读）", { exact: true }).last();
+      await description.focus();
+      await page.evaluate(() => globalThis.__mqReleaseFocusReturn());
+      assert.equal(await description.evaluate(element => globalThis.document.activeElement === element), true);
+      await description.fill("合成星空与草坡配图");
+      assert.equal(await body(page).first().inputValue(), originalParagraph);
     });
     await check("unsaved private feather-letter uses managed images without revisions, URL or storage writes", async () => {
       const before = await snapshotDatabase(), address = page.url();
