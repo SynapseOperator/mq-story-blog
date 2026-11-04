@@ -39,6 +39,7 @@
     "test:auth:transactions": "node scripts/auth/transaction-queue-regression.mjs",
     "test:auth:logs": "node scripts/auth/database-log-audit.mjs",
     "test:admin": "npm run db:generate && node scripts/admin/integration.mjs",
+    "test:admin-drafts": "npm run db:generate && node scripts/admin-drafts/integration.mjs",
     "admin:maintain": "node scripts/admin/maintain.mjs"
   },
   "dependencies": {

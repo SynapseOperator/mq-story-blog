@@ -12,10 +12,12 @@ import { databaseUrl } from "../db/environment.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
 import { configureTemporaryDatabaseLogging, verifyDatabaseLogging } from "../db/log-privacy.mjs";
 import { applyAdminDatabasePrivileges } from "../admin/privileges.mjs";
+import { applyAdminDraftDatabasePrivileges } from "../admin-drafts/privileges.mjs";
 import { startHttpsProxy } from "../auth/https-proxy.mjs";
 import { applyMediaDatabasePrivileges } from "./privileges.mjs";
 import { runMediaPrivilegeTests } from "./privileges-tests.mjs";
 import { runMediaRecoveryTests } from "./recovery-tests.mjs";
+import { runCombinedMediaDraftPrivilegeTests } from "./combined-privileges-tests.mjs";
 import { runMediaUploadHttpTests, runMediaUploadHttpsTests } from "./upload-http-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -66,7 +68,7 @@ async function main() {
   const rolePasswords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")];
   const roles = [], databases = [], servers = [], secrets = new Set(rolePasswords);
   let workspace, tls, failure;
-  async function isolatedDatabase() {
+  async function isolatedDatabase({ drafts = false } = {}) {
     const name = `mq_test_admin_${randomUUID().replaceAll("-", "")}`;
     assert.match(name, /^mq_test_admin_[a-f0-9]{32}$/);
     await control.query(`CREATE DATABASE "${name}"`); databases.push(name);
@@ -81,7 +83,8 @@ async function main() {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
       assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation"]);
-      await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
+      const configure = drafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges;
+      await configure(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
     } finally { await owner.end(); }
     const runtime = new URL(ownerUrl); runtime.username = runtimeRole; runtime.password = rolePasswords[0];
@@ -110,7 +113,13 @@ async function main() {
     const recovery = await runMediaRecoveryTests(domain);
     assert.equal(recovery.passed, recovery.total); console.log(`Media database recovery races: ${recovery.passed}/${recovery.total} checks passed`);
     stage = "separate HTTP database and private test filesystem";
-    const application = await isolatedDatabase();
+    const application = await isolatedDatabase({ drafts: true });
+    const combinedRuntime = new pg.Pool({ connectionString: application.runtimeUrl, max: 1 });
+    try {
+      const combined = await runCombinedMediaDraftPrivilegeTests({ runtime: combinedRuntime, runtimeRole, expectedDatabase: application.name });
+      assert.equal(combined.passed, combined.total);
+      console.log(`Combined draft/media database privileges: ${combined.passed}/${combined.total} checks passed`);
+    } finally { await combinedRuntime.end(); }
     console.log("PASS two independent databases apply 001 -> 005, repeated deploy, schema drift and private error logging");
     workspace = await mkdtemp(join(tmpdir(), "mq-media-upload-"));
     const devRoot = join(workspace, "private-development"), testRoot = join(workspace, "private-test");

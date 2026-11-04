@@ -1,0 +1,10 @@
+import { handleAdminDrafts } from "@/server/admin/drafts/http";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const GET = (request: Request) => handleAdminDrafts(request);
+export const HEAD = (request: Request) => handleAdminDrafts(request);
+export const POST = (request: Request) => handleAdminDrafts(request);
+export const PUT = (request: Request) => handleAdminDrafts(request);
+export const PATCH = (request: Request) => handleAdminDrafts(request);
+export const DELETE = (request: Request) => handleAdminDrafts(request);
+export const OPTIONS = (request: Request) => handleAdminDrafts(request);

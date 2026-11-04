@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- main 仍为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`（Phase 1 与 P2-01 至 P2-07）。本轮 P2-09B / Issue #31 基于尚未合并的 P2-09A `092ec6c`，Draft PR base 为 `feat/p2-09a-media-foundation`。#30 已负责人阶段验收、Ready 并请求独立 Review；#24/#26/#28 仍未合并，不复制其草稿/编辑器/预览。B 只实现安全上传、管理员素材分页/状态及私有图片读取；READY 不等于公开，无访客图片、素材选择器、删除管理、发布或 C/D。身份/配额预留和最终确认分别在 withAdmin 短事务内，图片 I/O 在事务外；未知提交先查持久状态，绝不删除可能 READY 的文件。见 MEDIA_UPLOAD.md。不改历史迁移或已验收视觉，不创建真实账号/照片，不开放生产，不使用 Review Exception。
+- Phase 1、P2-01 至 P2-07 及 P2-09A/B 已正式合入 main；媒体 PR #30/#32 经匹配 HEAD 的独立 APPROVED 后普通 merge，当前 main `d94587138a3e01a3b84c3b8dfc58bc06c27a5d10` 的 quality/database CI 成功。本轮仅同步 P2-08A / PR #24 与媒体 main，保留 001→005、同事务草稿/CAS、媒体引用与最小权限、认证和公开分享测试。新同步 HEAD 必须重新取得 CI 和独立 Review，不能沿用 `1f898372` 审批，不使用 Review Exception。#26/#28/#34 仍未合并，编辑器视觉签收另行确认；不得整体合入 C 的临时 integration base。READY 不代表公开，图片 I/O 在 withAdmin 事务之外。本轮不新增功能、不改历史迁移或已验收视觉、不创建真实账号/照片、不开放注册或部署，不开始 P2-09D/P2-10。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -25,6 +25,7 @@
 - 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开 API 保持只读与 no-store，任何未来管理写入口必须复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
 - 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
 - 管理权限见 `docs/engineering/ADMIN_AUTHORIZATION.md`。管理 Route Handler/服务必须通过 `withAdmin(request, async (tx, principal) => ...)`，在回调同一事务内使用 tx 完成受保护数据库操作；不能缓存一次鉴权或信任客户端角色。运行时不得使用迁移/维护身份；离线凭据不得作为命令参数，生产账号/角色配置需单独授权。
+- 草稿接口见 `docs/engineering/ADMIN_DRAFTS.md`；使用 `createStoryOperations(tx)`，不得调用另开事务的根服务包装器。业务错误须抛出并在回滚后映射，不能在事务内吞错返回成功。管理员保存新草稿不能改变公开版本；联合验证须通过真实受保护写入及匿名公开 API/HTML/RSC/metadata，不能以独立套件通过代替。
 - 认证边界与本地运行见 `docs/engineering/AUTHENTICATION.md`。公开 HTTP 路径严格白名单，内部邮箱/密码/Session Token 不进入日志或客户端 DTO；不能为了测试关闭 CSRF/Origin。默认 token 原值存库，正式用户开放前必须完成独立安全与数据库最小权限审查。
 - 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
 - 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。
