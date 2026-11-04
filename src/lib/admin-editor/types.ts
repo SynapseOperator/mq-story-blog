@@ -26,5 +26,10 @@ export type EditorBlock = DraftBlock & { key: string };
 // explicitly replaces legacy pictures. Mixed content is never saveable.
 export type EditorDocument = { kind: StoryKind; title: string; contentVersion?: 1 | 2; blocks: EditorBlock[] };
 export type FailureKind = "validation" | "conflict" | "uncertain" | "denied" | "retryable" | "cancelled";
+export type PublicationAction = "slot" | "publish" | "withdraw" | "restore";
+export type PublicationAck = {
+  id: string; version: number; state: DraftSummary["state"]; slotId: string | null; hasUnpublishedChanges: boolean;
+};
+export type StarSlot = { id: string; sceneKey: string; story: { id: string; state: DraftSummary["state"] } | null };
 
 export const EDITOR_SYNTHETIC_IMAGE = "/scene/night-sky.webp";

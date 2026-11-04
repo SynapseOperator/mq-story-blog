@@ -30,5 +30,7 @@ export default async function EditorPage({ searchParams }: { searchParams: Promi
   if (denied) return <main className="editor-gate"><span className="editor-brand">MQ</span><h1>无法进入故事工作区</h1><p>{denied}</p><a href="/">返回 MQ</a></main>;
   const query = await searchParams;
   const initialId = typeof query.story === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.story) ? query.story : null;
-  return <StoryEditor initialId={initialId} />;
+  // Presentation only. Every publication request still checks the server key,
+  // database session and grant; no signing configuration reaches the browser.
+  return <StoryEditor initialId={initialId} publishingEnabled={process.env.MQ_PUBLISH_ENABLED === "true"} />;
 }

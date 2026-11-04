@@ -1,8 +1,24 @@
-# P2-10A：受控故事发布
+# P2-10：受控故事发布
 
 对应 [Issue #37](https://github.com/SynapseOperator/mq-story-blog/issues/37)、PRD v1.1 §5.2、§5.4、§10.2 和 FN-08/09/10/14。P2-10A 最初从 main `1850610` 独立开发；[PR #36](https://github.com/SynapseOperator/mq-story-blog/pull/36) 随后以普通 merge `4f46e2988d7b5109fa37b53110e7ccbe0ef54d6c` 合并，合并后的 quality/database [CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41812969659) 成功。本分支已通过普通 merge 同步其素材删除、维护与联合备份能力；同步后的验证及独立 Review 单独记录，不沿用旧提交的审批。
 
-本阶段只有发布后端和隔离测试，没有发布管理 UI，也没有生产权限配置或真实内容发布。认证仍受原有开关控制；发布还要求显式设置 `MQ_PUBLISH_ENABLED=true` 和独立签名密钥，缺失时拒绝操作。
+P2-10A 后端已通过对应提交的独立 APPROVED，以普通 merge `6e2ac7e4d578dbe6fe527d0334387e40d87cfa7e` 合入 main；[合并后 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41820043909) 的 quality/database 成功，Issue #37 已完成。P2-10B / [Issue #39](https://github.com/SynapseOperator/mq-story-blog/issues/39) 直接从该 main 开发发布管理界面，不改变下述权限、迁移或生命周期合同。
+
+认证仍受原有开关控制；发布还要求显式设置 `MQ_PUBLISH_ENABLED=true` 和独立签名密钥，缺失时拒绝操作。P2-10B 只使用隔离合成数据与临时密钥，没有生产权限配置或真实内容发布。
+
+## P2-10B 编辑器发布合同
+
+发布区位于现有管理员故事编辑器内，复用下述只读星位接口及四个写接口。STAR 展示候选星位与空闲、草稿预留、已发布、下架保留状态；仅未首次发布的故事可调整星位。CAMPFIRE 使用既有固定入口，不选择普通星位。界面沿用后台深蓝、暖金与米色，主场景、羽毛信和登录窗口不改。
+
+保存、发布、下架和恢复是独立操作：新故事和有本地修改的故事须先保存，才能发布所确认的服务器草稿；已发布故事保存新草稿后显示“发布更新”，原公开版本保持不变。下架需要二次确认，并保留星位。恢复按钮明确使用下架前的公开版本，不发布后来编辑或保存的新草稿。
+
+编辑器继续区分 `working`、发送保存快照和 `confirmed`。发布请求另外记录故事、操作、expectedVersion 及请求身份；保存和发布互斥，但文本输入可以继续。发布成功响应只更新已确认的公开状态与服务器版本，不替换本地文字、内容块标识或已确认草稿正文。请求进行期间的新输入仍为未保存，不能因旧响应成功而被标成全部已保存。
+
+409、断网、503、响应丢失或无法识别的成功响应都保留本地稿；结果未知时不自动重复发布。用户先重新读取服务器草稿与星位状态，再人工选择保留本地内容或载入服务器版本。接受新版本号不等于保存，也不触发发布。权限撤销后停止新的管理操作，同时保留已在当前页面内的输入。
+
+服务端只向页面传递是否显示可用发布控件的布尔开关，不发送密钥；该开关不构成授权。默认关闭时仍可编辑、保存与私有预览。启用后的每一次真实操作继续经过 P2-10A 的 Session、授权、事务 HMAC 和 CAS。浏览器写入只包含 `expectedVersion`，选位额外包含 `slotId`，没有签名、数据库身份、Revision 指针或存储 Key。
+
+验收覆盖隔离 PostgreSQL、HTTP/HTTPS 与生产浏览器中的星位竞争、发布版本冲突、未保存保护、撤权、素材缺失，以及公开 API、分享 HTML/RSC/metadata 和图片 GET/HEAD 随状态变化的行为。新增 UI 测试须保留原发布、备份恢复及其他套件；桌面、390px、320px 触屏/reduced-motion 截图与最终结果记录在本阶段 PR。此处为实现合同，不代表 P2-10B 已通过工程、视觉或独立 Review。
 
 ## HTTP 合同与生命周期
 
@@ -102,3 +118,11 @@ node scripts/publishing/initialize-key.mjs --database mq_test_admin_<本次随�
 本轮同步后的 Windows `test:publishing` 已退出 0：PostgreSQL 13/13、HTTP 15/15、HTTPS 15/15，新增备份恢复 6/6。真实归档包含密钥及有效合成 Session；恢复后逐项比对数据、执行 migration status/drift，并验证未配置身份不能连接、普通权限不能执行发布或读取密钥、原 HTTPS Cookie 仍不能发布，以及误授 EXECUTE 时函数 owner 检查仍拒绝。生产构建的桌面、390px、320px reduced-motion 浏览器回归通过。完整既有回归与新提交的 CI 以 PR 中对应 SHA 的结果为准。
 
 首轮发布 HTTP 测试的退出请求漏传 JSON `{}`，被已有认证入口拒绝。修正测试合同后完整重跑通过，没有放宽 Origin、内容类型或认证检查；初次失败日志与后续结果均保留在仓库外的本地验收目录。完整既有回归及对应提交的 Linux CI 结果记录在本阶段 PR，不将测试成功代替负责人验收或正式独立 Review。
+
+### P2-10B 验证补充
+
+B 的首轮 `npm run check` 在既有 Windows 素材并发清理测试失败：158 项单测中 155 通过、1 失败、2 项平台限制跳过。该实现和用例此前未因发布界面改动；单独重复原并发用例 20 次，4 次实际出现 Windows `unlink` 的 `EPERM`。保留首轮 `check-01.log` 和逐次失败记录，没有将重跑成功覆盖为首轮通过。
+
+修复仅限 `removeAsset` 的已校验固定目标：Windows 删除竞争报错后，复查同一路径，只有确认 `ENOENT` 才视为并发清理已完成。根目录检查、未知文件和符号链接拒绝逻辑保持不变；仍存在或无法读取的目标继续报错，不全局忽略权限错误，不增加等待或锁。新增显式 `EPERM` 故障注入负向测试，证明目标仍存在时不会吞错；这项测试不冒充真实 Windows ACL 验证，也没有修改系统权限。
+
+修复后原并发用例连续 100 次通过；完整存储单测 15 通过、2 项既有平台跳过，`npm test` 为 157 通过、2 项既有平台跳过，退出码均为 0。两个跳过项分别是当前 Windows 环境缺少文件符号链接权限，以及仅适用于 POSIX 的 0700/0600 检查；目录 junction 用例实际执行。定点 ESLint 和 `git diff --check` 均退出 0。原始失败、`storage-fixed-summary.json`、`storage-fixed-full.log` 和 `storage-fix-all-unit.log` 保存在仓库外验收目录。最终完整 check、集成测试、浏览器与对应提交的 CI 另行记录，以上结果不代表这些检查或 B 的产品视觉验收已完成。

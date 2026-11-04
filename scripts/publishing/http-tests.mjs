@@ -292,7 +292,7 @@ export async function runPublishingHttpTests({ connectionString, maintenanceUrl,
     });
     // The cookie remains inside this isolated test process; never serialize it
     // into reports. Restore tests reuse it to prove old sessions cannot publish.
-    return { passed, total: 15, admin, regular, secrets, oldJar: { ...jar },
+    return { passed, total: 15, admin, regular, assets, secrets, oldJar: { ...jar },
       first: { ...first, title: "合成发布验收 · 羽毛信" }, privateCanaries: [privateTitle] };
   } catch (error) { error.publishingStage = stage; throw error; }
   finally { await Promise.allSettled([owner.end(), maintenance.$disconnect()]); }

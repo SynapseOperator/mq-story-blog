@@ -3,9 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { draftApi, DraftClientError } from "../../lib/admin-editor/api";
-import { canSave, createEditor, editorReducer, imageBlock, isDirty, needsLeaveProtection, openEditor, paragraphBlock,
+import { canPublishAction, canSave, createEditor, editorReducer, imageBlock, isDirty, needsLeaveProtection, openEditor, paragraphBlock,
   validateDocument, type EditorAction, type EditorState } from "../../lib/admin-editor/state";
-import type { DraftSummary, EditorBlock, EditorDocument, StoryKind } from "../../lib/admin-editor/types";
+import type { DraftSummary, EditorBlock, EditorDocument, PublicationAction, StoryKind } from "../../lib/admin-editor/types";
+import { publicationApi } from "../../lib/admin-editor/publication-api";
+import { PublicationControls } from "./publication-controls";
 import { createPreviewSnapshot } from "../../lib/admin-editor/preview";
 import type { LetterPreviewSnapshot } from "../../lib/stories/story";
 import { FeatherLetter } from "../reader/feather-letter";
@@ -25,7 +27,7 @@ function setAddress(id: string | null) {
   window.history.replaceState(window.history.state, "", url);
 }
 
-export function StoryEditor({ initialId }: { initialId: string | null }) {
+export function StoryEditor({ initialId, publishingEnabled = false }: { initialId: string | null; publishingEnabled?: boolean }) {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const current = useRef<EditorState | null>(null);
   const [items, setItems] = useState<DraftSummary[]>([]);
@@ -114,7 +116,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
         if (current.current?.instanceId !== instanceId) return;
         dispatch({ type: "remote-read", detail: result });
       } else {
-        if (editGeneration.current !== editsAtStart || current.current?.pending) {
+        if (editGeneration.current !== editsAtStart || current.current?.pending || current.current?.publication) {
           setNotice("读取期间本地内容已变化，已取消切换。你的编辑仍然保留。"); return;
         }
         commit(openEditor(result)); setAddress(id); setListOpen(false);
@@ -181,7 +183,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     closeMedia();
   }
   function navigate(action: () => void) {
-    if (current.current?.pending) { setNotice("保存正在进行，请等待结果后再切换故事。"); return; }
+    if (current.current?.pending || current.current?.publication) { setNotice("操作正在进行，请等待结果后再切换故事。"); return; }
     if (current.current && needsLeaveProtection(current.current)) { pendingNavigation.current = action; setLeaving(true); }
     else action();
   }
@@ -225,13 +227,32 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     setListOpen(false);
   }
 
+  async function publish(action: PublicationAction, slotId?: string | null) {
+    if (!publishingEnabled || !current.current || accessLost || detailBusy || !canPublishAction(current.current, action)) return;
+    dispatch({ type: "begin-publication", requestId: crypto.randomUUID(), action, slotId });
+    const attempt = current.current.publication;
+    if (!attempt) return;
+    setNotice(null);
+    try {
+      const story = await publicationApi.apply(attempt.storyId, attempt.action, attempt.expectedVersion, attempt.slotId);
+      if (!mounted.current || current.current?.instanceId !== attempt.instanceId) return;
+      dispatch({ type: "publication-ok", requestId: attempt.requestId, story });
+      void loadList();
+    } catch (error) {
+      if (!mounted.current || current.current?.instanceId !== attempt.instanceId) return;
+      const known = failure(error);
+      dispatch({ type: "publication-error", requestId: attempt.requestId, kind: known.kind, message: known.message });
+    }
+  }
+
   const dirty = editor ? isDirty(editor) : false;
+  const writing = Boolean(editor?.pending || editor?.publication);
   const unknownCreate = Boolean(editor && !editor.confirmed && ["uncertain", "conflict"].includes(editor.status));
-  const status = accessLost || editor?.status === "denied" ? "blocked" : editor?.status === "saving" ? "saving"
+  const status = accessLost || editor?.status === "denied" ? "blocked" : editor?.status === "publishing" ? "publishing" : editor?.status === "saving" ? "saving"
     : editor?.status === "conflict" ? "conflict" : editor?.status === "uncertain" ? "uncertain"
       : editor?.error ? "error" : dirty ? "dirty" : "saved";
-  const statusText = { blocked: "权限失效 · 本地内容保留", saving: "正在保存发送快照…", conflict: "版本冲突 · 请人工核对",
-    uncertain: "保存结果未知 · 请先核对", error: "未能保存 · 内容保留", dirty: "有未保存的修改", saved: editor?.confirmed ? `已保存 · 版本 ${editor.confirmed.story.version}` : "尚未创建" }[status];
+  const statusText = { blocked: "权限失效 · 本地内容保留", saving: "正在保存发送快照…", publishing: "正在处理发布操作…", conflict: "版本或星位冲突 · 请人工核对",
+    uncertain: editor?.lastPublication ? "发布操作结果未知 · 请先核对" : "保存结果未知 · 请先核对", error: "操作未完成 · 内容保留", dirty: "有未保存的修改", saved: editor?.confirmed ? `已保存 · 版本 ${editor.confirmed.story.version}` : "尚未创建" }[status];
   const invalid = editor ? validateDocument(editor.working) : null;
 
   return <><main className="editor-workspace" data-testid="story-editor">
@@ -241,13 +262,13 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     <div className="editor-columns">
       <aside className={`editor-library ${listOpen ? "is-open" : ""}`} aria-label="草稿列表">
         <div className="editor-library-title"><h2>故事手稿 <span>{items.length}{cursor ? "+" : ""}</span></h2><button className="editor-mobile-toggle" onClick={() => setListOpen(!listOpen)} aria-expanded={listOpen}>{listOpen ? "收起目录" : "展开目录"}</button></div>
-        <div className="editor-library-body"><div className="editor-create"><button disabled={accessLost || Boolean(editor?.pending) || (unknownCreate && editor?.status === "uncertain")} onClick={() => newStory("STAR")}>新建故事 <span aria-hidden="true">＋</span></button><button disabled={accessLost || Boolean(editor?.pending) || (unknownCreate && editor?.status === "uncertain")} onClick={() => newStory("CAMPFIRE")}>新建篝火</button></div>
+        <div className="editor-library-body"><div className="editor-create"><button disabled={accessLost || writing || (unknownCreate && editor?.status === "uncertain")} onClick={() => newStory("STAR")}>新建故事 <span aria-hidden="true">＋</span></button><button disabled={accessLost || writing || (unknownCreate && editor?.status === "uncertain")} onClick={() => newStory("CAMPFIRE")}>新建篝火</button></div>
           <button className="editor-text-button" disabled={listBusy || accessLost} onClick={() => void loadList()}>刷新草稿列表</button>
           {listError && <p role="alert" className="editor-library-error">{listError}</p>}
           {listBusy && <p role="status" className="editor-muted">正在读取手稿…</p>}
           {!listBusy && !listError && !items.length && <p className="editor-empty-list">还没有手稿。<br />从一个小小的片刻开始。</p>}
           <ul>{items.map(item => <li key={item.id} data-testid="draft-row" data-story-id={item.id}>
-            <button className={`editor-draft-link ${editor?.confirmed?.story.id === item.id ? "is-selected" : ""}`} disabled={accessLost || Boolean(editor?.pending) || detailBusy}
+            <button className={`editor-draft-link ${editor?.confirmed?.story.id === item.id ? "is-selected" : ""}`} disabled={accessLost || writing || detailBusy}
               aria-label={unknownCreate ? "核对这篇草稿" : undefined}
               aria-current={editor?.confirmed?.story.id === item.id ? "true" : undefined}
               onClick={() => unknownCreate ? void loadDetail(item.id, true) : navigate(() => void loadDetail(item.id))}>
@@ -274,12 +295,14 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
             {["uncertain", "conflict"].includes(editor.status) && <div className="editor-recovery"><h2>先核对，再决定</h2><p>本地修改完整保留。不会自动重复提交或覆盖服务器版本。</p>
               {editor.confirmed ? <button disabled={detailBusy || accessLost} onClick={() => void loadDetail(editor.confirmed!.story.id, true)}>读取服务器版本</button>
                 : <><p>新建请求可能已经完成。请刷新左侧列表，人工核对候选手稿后绑定；不要重复新建。</p><button onClick={() => { setListOpen(true); void loadList(); }} disabled={listBusy || accessLost}>核对服务器草稿列表</button></>}
-              {editor.lastSent && <details><summary>查看最近一次发送的内容</summary><p>{editor.lastSent.document.title}</p>{editor.lastSent.document.blocks.map(block => <p key={block.key}>{block.type === "paragraph" ? block.text : `图片：${block.alt}`}</p>)}</details>}
+              {editor.lastSent && !editor.lastPublication && <details><summary>查看最近一次发送的内容</summary><p>{editor.lastSent.document.title}</p>{editor.lastSent.document.blocks.map(block => <p key={block.key}>{block.type === "paragraph" ? block.text : `图片：${block.alt}`}</p>)}</details>}
             </div>}
-            {editor.remote && <div className="editor-remote"><h2>服务器版本 {editor.remote.story.version}</h2><p className="editor-muted">请核对内容与故事身份。保留本地只会更新下次保存所用的版本号，不会立即写入。</p><strong>{editor.remote.draft.title}</strong><code>{editor.remote.story.slug}</code><div className="editor-remote-body">{editor.remote.draft.content.blocks.map((block, index) => <p key={index}>{block.type === "paragraph" ? block.text : `图片：${block.alt}${block.caption ? ` · ${block.caption}` : ""}`}</p>)}</div><div className="editor-remote-actions"><button disabled={accessLost} onClick={() => resolveRemote("keep-local")}>保留本地并继续编辑</button><button disabled={accessLost} onClick={() => resolveRemote("use-remote")}>载入服务器版本</button></div></div>}
+            {editor.remote && <div className="editor-remote"><h2>服务器版本 {editor.remote.story.version}</h2><p className="editor-muted">{stateName[editor.remote.story.state]}{editor.remote.story.hasUnpublishedChanges ? " · 有未发布草稿" : " · 无未发布草稿修改"}。请核对内容与故事身份。保留本地只会更新下次操作所用的版本号，不会立即写入。</p><strong>{editor.remote.draft.title}</strong><code>{editor.remote.story.slug}</code><div className="editor-remote-body">{editor.remote.draft.content.blocks.map((block, index) => <p key={index}>{block.type === "paragraph" ? block.text : `图片：${block.alt}${block.caption ? ` · ${block.caption}` : ""}`}</p>)}</div><div className="editor-remote-actions"><button disabled={accessLost} onClick={() => resolveRemote("keep-local")}>保留本地并继续编辑</button><button disabled={accessLost} onClick={() => resolveRemote("use-remote")}>载入服务器版本</button></div></div>}
+            <PublicationControls key={editor.instanceId} editor={editor} enabled={publishingEnabled}
+              blocked={accessLost || detailBusy || leaving} onAction={(action, slotId) => void publish(action, slotId)} onDenied={deny} />
             <div className="editor-paper" onBlurCapture={event => { if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) remember(event.target); }}>
               <label className="editor-title-field">故事标题<input maxLength={160} value={editor.working.title} onChange={event => edit(document => ({ ...document, title: event.target.value }))} placeholder="给这段回忆起个名字" autoComplete="off" /></label>
-              <p className="editor-paper-note">{editor.confirmed ? "保存会创建新的草稿版本，公开内容保持不变。" : "创建时生成稳定地址；当前不选择星位，也不发布。"}</p>
+              <p className="editor-paper-note">{editor.confirmed ? "保存会创建新的草稿版本，公开内容保持不变。" : "保存后生成稳定地址，再单独选择入口并发布。"}</p>
               <div className="editor-blocks">{editor.working.blocks.map((block, index) => <section key={block.key} className={`editor-block editor-block-${block.type}`} data-testid="content-block">
                 <div className="editor-block-toolbar"><span>{String(index + 1).padStart(2, "0")} / {block.type === "paragraph" ? "段落" : "图片"}</span><div><button aria-label="上移" title="上移" disabled={index === 0} onClick={() => moveBlock(index, -1)}>↑</button><button aria-label="下移" title="下移" disabled={index === editor.working.blocks.length - 1} onClick={() => moveBlock(index, 1)}>↓</button><button onClick={() => edit(document => ({ ...document, blocks: document.blocks.filter(item => item.key !== block.key) }))}>删除</button></div></div>
                 {block.type === "paragraph" ? <><label className="editor-style-label">段落样式<select aria-label="段落样式" value={block.style ?? "normal"} onChange={event => changeBlock(block.key, value => value.type === "paragraph" ? { ...value, style: event.target.value as "normal" | "emphasis" | "strong" } : value)}><option value="normal">普通</option><option value="emphasis">强调</option><option value="strong">加粗</option></select></label><label className="editor-paragraph-label"><span className="editor-sr-only">段落内容</span><textarea aria-label="段落内容" className={`editor-paragraph is-${block.style ?? "normal"}`} rows={4} maxLength={10000} value={block.text} onChange={event => changeBlock(block.key, value => value.type === "paragraph" ? { ...value, text: event.target.value } : value)} placeholder="写下这一刻的故事…" /></label></>

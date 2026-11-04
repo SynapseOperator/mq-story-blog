@@ -19,6 +19,7 @@ import { runPublishingDatabaseTests } from "./database-tests.mjs";
 import { runPublishingHttpTests } from "./http-tests.mjs";
 import { runPublishingBrowser } from "./browser-tests.mjs";
 import { runPublicationBackupTests } from "./backup-tests.mjs";
+import { runPublishingEditorBrowser } from "./editor-browser-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -148,6 +149,16 @@ async function main() {
         });
         assert.equal(backupResult.passed, backupResult.total);
         console.log(`Publishing backup/restore: ${backupResult.passed}/${backupResult.total} checks passed`);
+        stage = "production publishing management browser regression";
+        const uiServer = await startServer(port, env, servers, ingress);
+        try {
+          const ui = await runPublishingEditorBrowser({ baseURL: origin, ...application, storageRoot,
+            admin: httpResult.admin, regular: httpResult.regular, assets: httpResult.assets,
+            privateValues: secrets,
+            evidenceDirectory: process.env.PUBLISH_BROWSER_EVIDENCE_DIR });
+          assert.equal(ui.passed, ui.total);
+          console.log(`Publishing editor browser: ${ui.passed}/${ui.total} checks passed; ${ui.screenshots} screenshots`);
+        } finally { await stopServer(uiServer); }
       }
       stage = "publishing disabled and missing signing key fail closed";
       for (const overrides of [{ MQ_PUBLISH_ENABLED: "false" }, { MQ_PUBLISH_SIGNING_KEY: "" }]) {
