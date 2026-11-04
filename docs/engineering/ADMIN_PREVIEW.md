@@ -4,7 +4,7 @@
 
 ## 依赖与入口
 
-本分支基于 P2-08B 同步提交 `3f161bf519321edf209e5ee706f731a670e8cd2b`，其 Windows 全量回归和 [Quality #39](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41611604713) 已通过。PR 暂以 `feat/p2-08b-story-editor` 为 base；PR #24 的 `1f89837`、PR #26 的 `3f161bf` 仍未合并。main 是 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，不能将未合并的编辑功能视作 main 功能。继续开发许可不构成 Review Exception；本轮不合并任何 PR。
+本分支最初从 P2-08B `3f161bf` 派生。现在 P2-08A/B 与媒体 P2-09A/B 均已合并，PR #28 以 main `99ce7c1347ef586ef4b9195c399923c8af8882ea` 为基线，普通 merge 保留原提交历史。该 main 的 [quality/database CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41764619074) 已通过。负责人已签收编辑器及私有预览视觉，本次只做工程同步；新提交仍需正式独立 Review，本轮不合并 #28。
 
 在受保护的 `/admin/stories` 编辑一篇草稿，点击“预览羽毛信”。新建但未保存、已保存后继续编辑、保存中及发生冲突/结果未知的本地工作稿都可预览；已知权限失效或正在切换详情时禁用入口。关闭回到原编辑器，不跳转 MQ 首页。
 
@@ -39,13 +39,36 @@ npm run test:admin-drafts
 npm run test:public
 npm run test:admin-editor
 npm run test:admin-preview
+npm run test:media
+npm run test:media:upload
 ```
 
 预览套件复用已有草稿 runner 的随机 PostgreSQL 空库、受限 runtime、维护身份和本地测试 TLS，先执行原 12 DB / 20 HTTP / 4 HTTPS，再运行生产构建 Playwright。测试专用只读 `snapshotDatabase` 回调检查版本、公开指针和 Revision 数，没有对应 HTTP 入口。测试结束只清理本轮记录的数据库、角色、图片与进程。
 
 `DRAFT_BROWSER_EVIDENCE_DIR` 可指定仓库外截图目录；默认使用系统临时目录。报告只记录测试名、固定错误类别、源码行号或指纹，新增私稿 canary 同时进入父 runner 的应用日志隐私断言。CI 保留全部既有套件并增加 `test:admin-preview`，不上传带账号状态或私有请求正文的调试产物。
 
-## 2026-11-03 本机验收
+## 同步 main 后的回归
+
+同步 main `99ce7c1` 后，预览和编辑器 UI 代码与已验收的 `5249c396` 一致。Prisma、001→005、媒体/管理员权限、Next 配置和 lockfile 与 main 一致；CI 只增加预览套件，草稿 runner 保留零写入快照与 005 断言。
+
+Windows / PostgreSQL 18.6 / Prisma 7.10.1 / Chromium 156 下，以下命令均退出 0：
+
+| 检查 | 结果 |
+| --- | --- |
+| `check` | lint、Schema、类型、生产构建；117 单测中 115 通过、2 项既有 Windows 文件系统限制、0 失败 |
+| `test:db` | 31 项 |
+| `test:auth` | 35 HTTP + 8 HTTPS |
+| `test:admin` | 3 CLI + 18 DB + 20 HTTP + 4 HTTPS |
+| `test:admin-drafts` | 12 DB + 20 HTTP + 4 HTTPS |
+| `test:admin-editor` | 草稿套件 + 21 编辑器与 4 独立 CAMPFIRE 浏览器检查 |
+| `test:admin-preview` | 草稿套件 + 14 预览浏览器检查，6 张截图 |
+| `test:media` | 13 DB；空库迁移、004 升级、校验和与 drift |
+| `test:media:upload` | 6 ACL + 2 恢复竞争 + 3 组合权限 + 17 HTTP + 5 HTTPS |
+| `test:public` | 15 公开读取 + 10 分享隔离 + 32 浏览器检查 |
+
+浏览器覆盖 1536×1024、390×844、320×568、触屏与 reduced-motion；无意外运行错误或私稿公开响应。预览保持零写入，保存中、409、网络结果未知及关闭后的选区恢复均通过。真实截图与日志保留在仓库外 `mq-p2-08c-main-sync/run-1793762095826`。Browser 插件不可用，使用项目锁定 Playwright；未验证其他浏览器或实体手机。远端 CI 和新提交独立 Review 以 PR #28 实时状态为准。
+
+## 初版验收记录（2026-11-03，同步前）
 
 Windows 生产构建、隔离 PostgreSQL 18 与 Chromium 156 的最终验证均退出 0：
 
