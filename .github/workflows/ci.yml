@@ -2,7 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main, feat/p2-08a-admin-drafts]
+    branches: [main]
   push:
     branches: [main]
 
@@ -102,6 +102,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:db
+      - name: Media migration, immutable revision references and PostgreSQL locking
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:media
       - name: Atomic framework limiter concurrency regression
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
@@ -136,6 +140,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:public
+      - name: Private media uploads, recovery, HTTP and HTTPS authorization
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:media:upload
       - name: Create isolated local-style development and test databases
         run: |
           docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'

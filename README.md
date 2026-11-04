@@ -2,15 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08B：管理员简单结构化故事编辑器**（[Issue #25](https://github.com/SynapseOperator/mq-story-blog/issues/25)），同步 P2-08A 最新提交后的集成验证。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；网站仅使用用户名和密码，认证默认关闭或受控启用。
+当前分支为 **Phase 2 · P2-08B：管理员简单结构化故事编辑器**（[Issue #25](https://github.com/SynapseOperator/mq-story-blog/issues/25)）的 main 同步与集成验收。复用 Better Auth 1.7.12 + Username + PostgreSQL 18 / Prisma 7；认证和上传默认关闭或受控启用。
 
-main 为 `42ef1821dd03881388f0bcc14c288a89a2e3dbe3`，已包含 P2-05/06/07。本分支以未合并 PR #24 的 `1f898372a2f6660778930a0a8c05885505bd53c9` 为基线，PR #26 仍以 `feat/p2-08a-admin-drafts` 为 base。上游和本 PR 均未合入 main；新同步提交须重新匹配 CI 与独立 Review，旧 APPROVED 不自动覆盖。
+P2-08A / PR #24 及媒体 PR #30/#32 已正式合入，当前 main `f75f5f3dc8882529e0c0d464e45492ccf4320215` 的 quality/database 均成功。本 PR base 为 main，以普通 merge 保留分支历史；同步产生的新 HEAD 须重新匹配 CI 与独立 Review，原 `3f161bf` 的审批不覆盖新提交。媒体基础与上传见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)、[MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
 受控管理员可从 `/admin` 进入 `/admin/stories`，手动创建和编辑结构化草稿。所有数据操作复用四个私有草稿 API；同事务鉴权与列权限不变。界面区分当前编辑、发送快照和服务器确认版本，冲突或结果未知时保留输入，先核对再保存。编辑器说明见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务与权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。
 
-首页读取 PostgreSQL 已发布摘要，正文按需获取；分享地址 `/stories/[slug]` 复用现有 MQ 场景与羽毛信。公开 API、HTML/RSC 和 metadata 不能返回草稿/下架内容；保存未发布草稿不改变公开版本。见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。已验收的场景、信纸和账号视觉保持不变。
+首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→005 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
-本次只在 PR #26 同步依赖并重验。负责人允许验证通过后从本分支另建 P2-08C 私有预览 Draft PR（Issue #27），但本 PR 不混入预览代码。PR #24/#26/C 均不合并、不使用 Review Exception；编辑器视觉验收仍待确认。只用隔离合成账号/内容，不开放生产、不开发上传或发布。生产身份、HTTPS/代理、日志备份及安全审查门槛继续保留。
+负责人已正式签收此前桌面和手机编辑器视觉，本轮工程同步只需针对性浏览器回归；若以后改动视觉或交互，另交相应证据。满足新提交全部审批和 CI 后才合并 #26；#28 仅在其后同步验证，本轮不合并 #28/#34。私有预览、v2 图片编辑与公开媒体接入仍属于未合并分支，不能整体合入临时 integration base。仅合成账号/内容，不开放生产，不开始 P2-09D/P2-10；生产权限、HTTPS/代理、Token、日志备份及独立安全审查继续保留。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
