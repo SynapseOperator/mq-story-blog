@@ -24,7 +24,9 @@ export type Story = DemoStory | (PublicStoryDetail & { readonly source: "publish
 export type LetterPreviewSnapshot = {
   readonly title: string;
   readonly content: {
-    readonly version: 1;
+    // A preview may contain legacy and asset images during explicit migration.
+    // This local-only snapshot is not a valid draft-save or public DTO.
+    readonly version: 1 | 2;
     readonly blocks: readonly Readonly<PublicStoryDetail["content"]["blocks"][number]>[];
   };
   readonly hasUnsavedChanges: boolean;

@@ -2,15 +2,15 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **Phase 2 · P2-08C：管理员私有羽毛信预览**（[Issue #27](https://github.com/SynapseOperator/mq-story-blog/issues/27)）。管理员在 `/admin/stories` 点击“预览羽毛信”，无需保存即可查看当前编辑快照；使用同一张已验收信纸、图文渲染和动效，关闭后回到原编辑内容、光标及滚动位置。预览明确标注未发布，不提供点赞、留言、登录或分享，不产生写请求或改变保存版本、URL/history。
+当前分支为 **P2-09C 受管图文编辑与公开读取**（[Issue #33](https://github.com/SynapseOperator/mq-story-blog/issues/33)）。编辑器可上传或选择私有素材、在内存中预览，并手动保存 v2 assetId 引用；公开图片逐次校验当前发布版本。契约与权限见 [MEDIA_STORY_INTEGRATION.md](docs/engineering/MEDIA_STORY_INTEGRATION.md)，上传基础见 [MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
 
-P2-08A/B 与媒体 P2-09A/B 已正式合入 main `99ce7c1347ef586ef4b9195c399923c8af8882ea`，[主分支 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41764619074) 的 quality/database 均成功。本分支以普通 merge 同步 main，PR #28 改以 main 为 base；新提交须重新通过 CI 和独立 Review，本轮不合并 #28/#34。媒体基础与上传见 [MEDIA_FOUNDATION.md](docs/engineering/MEDIA_FOUNDATION.md)、[MEDIA_UPLOAD.md](docs/engineering/MEDIA_UPLOAD.md)。
+P2-08A/B/C 和媒体 P2-09A/B 已正式合入 main `ab2d5b56902b597ef03c13148241efa67fe47174`，[主分支 CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41770461689) 的 quality/database 均成功。原集成基线 `02c33cb8` 的生产代码与测试均已进入 main，因此保留原 C 分支普通 merge 同步，PR #34 改以 main 为 base，只审查 C 增量。新提交须重新通过 CI 和独立 Review，本轮不合并。
 
 私有预览说明见 [ADMIN_PREVIEW.md](docs/engineering/ADMIN_PREVIEW.md)，编辑器状态见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)，事务/列权限见 [ADMIN_DRAFTS.md](docs/engineering/ADMIN_DRAFTS.md)。已有公开故事/分享 API、HTML/RSC 和 metadata 仍只读已发布版本，见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。负责人已完成编辑器与私有预览的技术、视觉及交互签收；本次同步不调整界面。
 
 首页与分享 `/stories/[slug]` 保留原公开版本隔离，保存新草稿不改变公开 API、HTML/RSC 或 metadata。场景、羽毛信、登录与编辑器视觉均保持不变。`test:admin-drafts`、`test:media`、`test:media:upload` 保留真实隔离库、001→005 和组合列权限检查；`test:admin-editor` 验证完整保存状态机、私有数据隔离及桌面/手机浏览器。
 
-`test:admin-preview` 额外验证本地快照、零写入、关闭后的选区与滚动恢复。v2 图片编辑与公开媒体接入仍在 PR #34，不将其临时 integration base 整体合入。认证及上传继续受控启用，测试仅用隔离合成数据；不开放生产，不开始 P2-09D/P2-10。生产权限、HTTPS/代理、Token、日志备份及独立安全审查仍待完成。
+保留全部故事、认证、管理员、草稿、编辑器、预览、媒体上传和公开分享测试；新增 `npm run test:media:stories` 联合验证真实上传、草稿、公开图片和生产浏览器。所有测试使用随机隔离库、受限身份和合成数据；认证与媒体仍默认关闭/受控启用。无发布、星位、删除管理或生产部署；生产身份、HTTPS/代理、日志备份和独立安全审查门槛不变。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -71,7 +71,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支 `feat/p2-08a-admin-drafts` 对应 [#23 管理员草稿](https://github.com/SynapseOperator/mq-story-blog/issues/23)，现同步已包含 P2-05/P2-06/P2-07 的 main。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
+本分支 `feat/p2-09c-managed-story-images` 的 PR 暂以 `integration/p2-09c-baseline` 为 base，仅审查 C 增量。历史文档中的“本轮”保留原阶段含义，当前命令以本 README 和 `package.json` 为准。目录最终位置、移动端高清素材、候选星位数量、部署平台与手机标题单字换行仍是后续事项，本轮不重设计已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 

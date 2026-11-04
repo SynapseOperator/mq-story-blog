@@ -296,8 +296,9 @@ export async function runMediaDatabaseTests({ connectionString, runtimeUrl }) {
       assert.equal((await refs(revisions[0])).length, 1); assert.deepEqual(await refs(revisions[1]), []);
       assert.equal((await runtime.query("SELECT count(*)::int AS n FROM story_revision WHERE story_id=$1", [story.id])).rows[0].n, 2);
     });
-    await check("existing public reader excludes private v2 and fails closed on unsupported published bodies", async () => {
-      const story = await createStory(v2(await readyAsset()));
+    await check("public reader supports current published v2 while excluding private revisions and withdrawn bodies", async () => {
+      const publicContent = v2(await readyAsset());
+      const story = await createStory(publicContent);
       assert.equal(await publicReader.getStory(story.id), null);
       assert.equal(await publicReader.getStoryBySlug(story.slug), null);
       assert.ok(!(await publicReader.listStories()).some(item => item.id === story.id));
@@ -305,8 +306,15 @@ export async function runMediaDatabaseTests({ connectionString, runtimeUrl }) {
       await owner.query("UPDATE story SET state='PUBLISHED',published_revision_id=draft_revision_id,version=version+1 WHERE id=$1", [story.id]);
       const summary = await publicReader.getSummaryBySlug(story.slug);
       assert.deepEqual(Object.keys(summary).sort(), ["entry", "id", "slug", "slotId", "title"].sort());
-      await assert.rejects(publicReader.getStory(story.id), error => error.code === "VALIDATION");
-      await assert.rejects(publicReader.getStoryBySlug(story.slug), error => error.code === "VALIDATION");
+      assert.deepEqual((await publicReader.getStory(story.id)).content, publicContent);
+      assert.deepEqual((await publicReader.getStoryBySlug(story.slug)).content, publicContent);
+      const privateContent = v2(await readyAsset()), privateRevision = randomUUID();
+      await transaction(runtime, async connection => {
+        await insertRevision(connection, story.id, privateRevision, privateContent);
+        await connection.query("UPDATE story SET draft_revision_id=$1,version=version+1 WHERE id=$2", [privateRevision, story.id]);
+      });
+      assert.deepEqual((await publicReader.getStory(story.id)).content, publicContent);
+      assert.deepEqual((await publicReader.getStoryBySlug(story.slug)).content, publicContent);
       await owner.query("UPDATE story SET state='WITHDRAWN',version=version+1 WHERE id=$1", [story.id]);
       assert.equal(await publicReader.getStory(story.id), null);
       assert.equal(await publicReader.getStoryBySlug(story.slug), null);

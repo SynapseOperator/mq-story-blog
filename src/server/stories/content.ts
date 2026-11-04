@@ -11,10 +11,22 @@ export type ImageBlock = {
   caption?: string;
 };
 
-export type StoryContent = {
+export type AssetImageBlock = {
+  type: "image";
+  assetId: string;
+  alt: string;
+  caption?: string;
+};
+
+export type StoryContentV1 = {
   version: 1;
   blocks: (ParagraphBlock | ImageBlock)[];
 };
+export type StoryContentV2 = {
+  version: 2;
+  blocks: (ParagraphBlock | AssetImageBlock)[];
+};
+export type StoryContent = StoryContentV1 | StoryContentV2;
 
 export class ContentValidationError extends Error {
   readonly code = "VALIDATION";
@@ -26,7 +38,8 @@ export class ContentValidationError extends Error {
 }
 
 // Existing synthetic scene image, reused as a read-only prototype reference.
-// Draft HTTP restricts images to this list until P2-09 defines media ownership.
+// Legacy draft writes retain this explicit allowlist. New managed images use
+// assetId in v2; existing revisions are never rewritten or silently imported.
 export const SYNTHETIC_STORY_IMAGES: readonly string[] = ["/scene/night-sky.webp"];
 
 function reject(message: string): never {
@@ -121,16 +134,16 @@ function imageSource(value: unknown): string {
 export function validateStoryContent(value: unknown): StoryContent {
   const input = object(value, ["version", "blocks"]);
   if (
-    input.version !== 1 ||
+    (input.version !== 1 && input.version !== 2) ||
     !Array.isArray(input.blocks) ||
     input.blocks.length < 1 ||
     input.blocks.length > 200 ||
     Array.from(input.blocks).some((block) => block === undefined)
   ) {
-    return reject("正文必须使用版本 1，包含 1 至 200 个内容块。");
+    return reject("正文必须使用版本 1 或 2，包含 1 至 200 个内容块。");
   }
-  const blocks = input.blocks.map((raw): ParagraphBlock | ImageBlock => {
-    const block = object(raw, ["type", "text", "style", "src", "alt", "caption"]);
+  const blocks = input.blocks.map((raw): ParagraphBlock | ImageBlock | AssetImageBlock => {
+    const block = object(raw, ["type", "text", "style", "src", "assetId", "alt", "caption"]);
     if (block.type === "paragraph") {
       object(block, ["type", "text", "style"]);
       const result: ParagraphBlock = {
@@ -146,10 +159,18 @@ export function validateStoryContent(value: unknown): StoryContent {
       return result;
     }
     if (block.type === "image") {
-      object(block, ["type", "src", "alt", "caption"]);
-      const result: ImageBlock = {
+      object(block, input.version === 1 ? ["type", "src", "alt", "caption"] : ["type", "assetId", "alt", "caption"]);
+      if (input.version === 2 && (typeof block.assetId !== "string"
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(block.assetId))) {
+        return reject("版本 2 图片必须引用有效素材 ID。");
+      }
+      const result: ImageBlock | AssetImageBlock = input.version === 1 ? {
         type: "image",
         src: imageSource(block.src),
+        alt: text(block.alt, 300, "图片替代文本"),
+      } : {
+        type: "image",
+        assetId: (block.assetId as string).toLowerCase(),
         alt: text(block.alt, 300, "图片替代文本"),
       };
       if ("caption" in block) result.caption = text(block.caption, 1000, "图片说明");
@@ -157,8 +178,22 @@ export function validateStoryContent(value: unknown): StoryContent {
     }
     return reject("正文仅支持段落与图片，不支持 HTML 或其他内容块。");
   });
-  const content: StoryContent = { version: 1, blocks };
-  if (new TextEncoder().encode(JSON.stringify(content)).byteLength > 256 * 1024) {
+  // The version branch above rejects mixed src/assetId blocks before creating
+  // this discriminated document. Keep the v1 limit unchanged for old content.
+  const content: StoryContent = input.version === 1
+    ? { version: 1, blocks: blocks as StoryContentV1["blocks"] }
+    : { version: 2, blocks: blocks as StoryContentV2["blocks"] };
+  let byteLength = new TextEncoder().encode(JSON.stringify(content)).byteLength;
+  if (content.version === 2) {
+    // PostgreSQL jsonb::text adds one ASCII space after each structural colon
+    // and comma. This fixed, flat block contract lets us count them without
+    // touching commas/colons inside user strings or depending on key ordering.
+    byteLength += 3 + blocks.length - 1 + blocks.reduce((sum, block) => sum + 2 * Object.keys(block).length - 1, 0);
+    if (blocks.some(block => Object.values(block).some(value => typeof value === "string" && !value.isWellFormed()))) {
+      return reject("正文包含无效 Unicode 文本。");
+    }
+  }
+  if (byteLength > 256 * 1024) {
     return reject("正文大小不得超过 256 KiB。");
   }
   return content;

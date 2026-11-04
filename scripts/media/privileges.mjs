@@ -45,7 +45,9 @@ export async function applyMediaDatabasePrivileges(pool, { runtimeRole, expected
         await connection.query(`REVOKE ${privilege} (${list}) ON TABLE public.${table} FROM ${role}`);
       }
     }
-    await connection.query(`GRANT SELECT ON public.media_asset TO ${role}`);
+    // Read-only reference access supports current-publication image checks and
+    // aggregate usage counts. Projection remains the only relation writer.
+    await connection.query(`GRANT SELECT ON public.media_asset, public.story_revision_asset TO ${role}`);
     await connection.query(`GRANT INSERT (id) ON public.media_asset TO ${role}`);
     await connection.query(`GRANT UPDATE (state,${metadata.join(",")},updated_at) ON public.media_asset TO ${role}`);
 

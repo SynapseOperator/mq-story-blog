@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 1、P2-01 至 P2-07、P2-08A/B 和 P2-09A/B 已合入 main `99ce7c1347ef586ef4b9195c399923c8af8882ea`，quality/database 成功。本轮同步 P2-08C / PR #28 到 main，保留本地 working 快照预览、零写入、关闭后的编辑上下文恢复，以及 001→005、媒体权限和全部回归。编辑器与私有预览均已获负责人视觉签收，本轮不改 UI。新提交需重新取得独立 APPROVED；本轮不合并 #28/#34，不使用 Review Exception，不复制 #34 功能，不开始 P2-09D/P2-10。仅用隔离合成数据，不创建真实账号、私人照片或部署。
+- Phase 1、P2-01 至 P2-07、P2-08A/B/C 和 P2-09A/B 已合入 main `ab2d5b56902b597ef03c13148241efa67fe47174`，quality/database 成功。本轮只整理 P2-09C / PR #34 相对 main 的增量。原集成基线的生产代码和测试已全部进入 main，以普通 merge 同步原 C 分支，保留组合权限、001→005、v1/v2、CAS 和所有联合测试。契约见 MEDIA_STORY_INTEGRATION.md：v2 仅 assetId；引用由 005 自动生成；上传/选择/预览不保存；公开图片逐次检查当前发布关系。保留已签收视觉，新提交重新验证并请求独立 Review。本轮不合并 #34，不使用 Review Exception，不创建真实账号/照片，不部署，不开始 P2-09D/P2-10。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。

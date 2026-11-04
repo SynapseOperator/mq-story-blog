@@ -34,6 +34,7 @@
     "test:db": "npm run db:generate && node scripts/db/integration.mjs",
     "test:media": "npm run db:generate && node scripts/media/integration.mjs",
     "test:media:upload": "npm run db:generate && node scripts/media/upload-integration.mjs",
+    "test:media:stories": "npm run db:generate && node scripts/media/story-integration.mjs",
     "test:db:persistence": "npm run db:generate && node scripts/db/persistence.mjs",
     "test:auth:limiter": "node scripts/auth/rate-limit-regression.mjs --custom-only",
     "test:auth:transactions": "node scripts/auth/transaction-queue-regression.mjs",

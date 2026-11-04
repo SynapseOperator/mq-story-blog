@@ -66,7 +66,7 @@ test("story content validates required image labels and paragraph limits", () =>
 });
 
 test("story content enforces version, block count and total UTF-8 byte limits", () => {
-  for (const input of [null, [], {}, { version: 2, blocks: [paragraph()] }, document()]) rejects(input);
+  for (const input of [null, [], {}, { version: 3, blocks: [paragraph()] }, document()]) rejects(input);
   rejects({ version: 1, blocks: Array(1) });
   rejects(document(...Array.from({ length: 201 }, () => paragraph())));
   assert.equal(validateStoryContent(document(...Array.from({ length: 200 }, () => paragraph()))).blocks.length, 200);

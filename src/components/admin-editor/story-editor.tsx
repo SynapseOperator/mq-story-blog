@@ -10,6 +10,8 @@ import { createPreviewSnapshot } from "../../lib/admin-editor/preview";
 import type { LetterPreviewSnapshot } from "../../lib/stories/story";
 import { FeatherLetter } from "../reader/feather-letter";
 import { Landscape } from "../scene/landscape";
+import { MediaPicker, type MediaTarget } from "./media-picker";
+import type { MediaAsset } from "../../lib/admin-editor/media-api";
 import "../reader/letter.css";
 
 type ReturnPoint = { element: HTMLElement; start: number | null; end: number | null;
@@ -36,6 +38,8 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
   const [leaving, setLeaving] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
   const [previewSnapshot, setPreviewSnapshot] = useState<LetterPreviewSnapshot | null>(null);
+  const [mediaTarget, setMediaTarget] = useState<MediaTarget | null>(null);
+  const mediaTargetRef = useRef<MediaTarget | null>(null);
   const listRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
   const detailGeneration = useRef(0);
@@ -49,6 +53,10 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     const point = returnPoint.current;
     requestAnimationFrame(() => {
       if (!point?.element.isConnected) return;
+      const active = document.activeElement;
+      // A new editing action takes precedence over the queued dialog return.
+      if (active !== point.element && (active instanceof HTMLInputElement
+        || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement)) return;
       point.element.focus({ preventScroll: true });
       if (point.start !== null && (point.element instanceof HTMLInputElement || point.element instanceof HTMLTextAreaElement)) {
         point.element.setSelectionRange(point.start, point.end, point.direction ?? undefined);
@@ -59,6 +67,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
   }, []);
   // Stable across a save ACK: it must not restart the mounted reader's effect.
   const closePreview = useCallback(() => { setPreviewSnapshot(null); restoreReturnPoint(); }, [restoreReturnPoint]);
+  const closeMedia = useCallback(() => { mediaTargetRef.current = null; setMediaTarget(null); restoreReturnPoint(); }, [restoreReturnPoint]);
 
   const commit = useCallback((next: EditorState | null) => { current.current = next; setEditor(next); }, []);
   const dispatch = useCallback((action: EditorAction) => {
@@ -68,6 +77,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     listRequest.current?.abort(); detailRequest.current?.abort(); ++detailGeneration.current;
     setListBusy(false); setDetailBusy(false);
     setAccessLost(true); setItems([]); setCursor(null);
+    mediaTargetRef.current = null; setMediaTarget(null);
     dispatch({ type: "access-denied" });
   }, [dispatch]);
   const failure = useCallback((error: unknown) => {
@@ -155,6 +165,20 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
       x: window.scrollX, y: window.scrollY };
     // A separate, immutable local view; no reducer action, validation or API call.
     setPreviewSnapshot(createPreviewSnapshot(current.current.working, isDirty(current.current) || !current.current.confirmed));
+  }
+  function openMedia(trigger: HTMLButtonElement, blockKey: string | null = null) {
+    if (!current.current || accessLost || leaving || detailBusy || previewSnapshot) return;
+    if (!returnPoint.current?.element.isConnected) remember(trigger);
+    const target = { instanceId: current.current.instanceId, blockKey, requestId: crypto.randomUUID() };
+    mediaTargetRef.current = target; setMediaTarget(target);
+  }
+  function insertMedia(asset: MediaAsset, destination: MediaTarget) {
+    if (asset.state !== "READY" || accessLost || destination !== mediaTargetRef.current
+      || current.current?.instanceId !== destination.instanceId) return;
+    ++editGeneration.current;
+    dispatch({ type: "select-media", instanceId: destination.instanceId, blockKey: destination.blockKey,
+      assetId: asset.id, newBlockKey: crypto.randomUUID() });
+    closeMedia();
   }
   function navigate(action: () => void) {
     if (current.current?.pending) { setNotice("保存正在进行，请等待结果后再切换故事。"); return; }
@@ -259,9 +283,16 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
               <div className="editor-blocks">{editor.working.blocks.map((block, index) => <section key={block.key} className={`editor-block editor-block-${block.type}`} data-testid="content-block">
                 <div className="editor-block-toolbar"><span>{String(index + 1).padStart(2, "0")} / {block.type === "paragraph" ? "段落" : "图片"}</span><div><button aria-label="上移" title="上移" disabled={index === 0} onClick={() => moveBlock(index, -1)}>↑</button><button aria-label="下移" title="下移" disabled={index === editor.working.blocks.length - 1} onClick={() => moveBlock(index, 1)}>↓</button><button onClick={() => edit(document => ({ ...document, blocks: document.blocks.filter(item => item.key !== block.key) }))}>删除</button></div></div>
                 {block.type === "paragraph" ? <><label className="editor-style-label">段落样式<select aria-label="段落样式" value={block.style ?? "normal"} onChange={event => changeBlock(block.key, value => value.type === "paragraph" ? { ...value, style: event.target.value as "normal" | "emphasis" | "strong" } : value)}><option value="normal">普通</option><option value="emphasis">强调</option><option value="strong">加粗</option></select></label><label className="editor-paragraph-label"><span className="editor-sr-only">段落内容</span><textarea aria-label="段落内容" className={`editor-paragraph is-${block.style ?? "normal"}`} rows={4} maxLength={10000} value={block.text} onChange={event => changeBlock(block.key, value => value.type === "paragraph" ? { ...value, text: event.target.value } : value)} placeholder="写下这一刻的故事…" /></label></>
-                  : <div className="editor-image-block"><Image src={block.src} width={720} height={480} alt="已有合成星空素材" unoptimized /><p className="editor-image-note">现有合成素材 · 暂不提供上传</p><label>图片说明（供无障碍阅读）<input value={block.alt} maxLength={300} onChange={event => changeBlock(block.key, value => value.type === "image" ? { ...value, alt: event.target.value } : value)} /></label><label>图片题注<input value={block.caption ?? ""} maxLength={1000} onChange={event => changeBlock(block.key, value => value.type === "image" ? { ...value, caption: event.target.value } : value)} placeholder="可选的简短说明" /></label></div>}
+                  : <div className="editor-image-block"><Image src={"assetId" in block ? `/api/admin/media/${block.assetId}/content` : block.src}
+                    width={720} height={480} alt={block.alt || "故事配图"} unoptimized referrerPolicy="no-referrer" />
+                    <div className="editor-image-actions"><p className="editor-image-note">{"assetId" in block ? "私有素材引用 · 保存不会发布" : "旧合成配图 · 可从素材库明确替换"}</p>
+                      <button type="button" disabled={accessLost || detailBusy} onClick={event => openMedia(event.currentTarget, block.key)}>替换图片</button></div>
+                    <label>图片说明（供无障碍阅读）<input value={block.alt} maxLength={300} onChange={event => changeBlock(block.key, value => value.type === "image" ? { ...value, alt: event.target.value } : value)} /></label><label>图片题注<input value={block.caption ?? ""} maxLength={1000} onChange={event => changeBlock(block.key, value => value.type === "image" ? { ...value, caption: event.target.value } : value)} placeholder="可选的简短说明" /></label></div>}
               </section>)}</div>
-              <div className="editor-add-block"><button disabled={editor.working.blocks.length >= 200} onClick={() => edit(document => ({ ...document, blocks: [...document.blocks, paragraphBlock(crypto.randomUUID())] }))}>添加段落 <span aria-hidden="true">＋</span></button><button disabled={editor.working.blocks.length >= 200} onClick={() => edit(document => ({ ...document, blocks: [...document.blocks, imageBlock(crypto.randomUUID())] }))}>添加图片</button></div>
+              <div className="editor-add-block"><button disabled={editor.working.blocks.length >= 200} onClick={() => edit(document => ({ ...document, blocks: [...document.blocks, paragraphBlock(crypto.randomUUID())] }))}>添加段落 <span aria-hidden="true">＋</span></button>
+                <button disabled={accessLost || detailBusy || editor.working.blocks.length >= 200} onClick={event => openMedia(event.currentTarget)}>上传或选择图片</button></div>
+              <div className="editor-legacy-images"><button disabled={editor.working.blocks.length >= 200} onClick={() => edit(document => ({ ...document, blocks: [...document.blocks, imageBlock(crypto.randomUUID())] }))}>添加图片</button>
+                <span>旧版合成配图；加入素材图片后，需逐一替换旧图才能保存。</span></div>
               {invalid && dirty && <p className="editor-validation">{invalid}</p>}
               <p className="editor-footnote">手动保存 · 不自动发布 · 未保存内容仅保留在当前页面</p>
             </div>
@@ -270,6 +301,7 @@ export function StoryEditor({ initialId }: { initialId: string | null }) {
     </div>
     <dialog className="editor-leave-dialog" ref={dialog} aria-labelledby="editor-leave-title" onCancel={event => { event.preventDefault(); cancelLeave(); }}><p className="editor-eyebrow">LEAVE MANUSCRIPT?</p><h2 id="editor-leave-title">还有内容没有确认保存</h2><p>离开会丢弃本地编辑。结果未知的请求可能已在服务器完成，离开不会撤销它。</p><div><button className="editor-primary" onClick={cancelLeave}>继续编辑</button><button onClick={() => { const action = pendingNavigation.current; pendingNavigation.current = null; dialog.current?.close(); setLeaving(false); commit(null); action?.(); }}>放弃并离开</button></div></dialog>
   </main>
+    <MediaPicker target={mediaTarget} onClose={closeMedia} onChoose={insertMedia} onDenied={deny} />
     {previewSnapshot ? <>
       <div className="editor-preview-scene" aria-hidden="true"><Landscape stories={[]} reading /></div>
       <FeatherLetter mode="private-preview" snapshot={previewSnapshot} onClosed={closePreview} />

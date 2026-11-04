@@ -17,7 +17,7 @@ const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 
 // Real raw HTTP transport, including streaming requests that pause after the
 // authenticated PENDING reservation. No HAR, body, cookie or response dump.
-function transport(origin, secrets, ca) {
+export function transport(origin, secrets, ca) {
   const endpoint = new URL(origin);
   assert.equal(endpoint.hostname, "127.0.0.1");
   assert.ok(endpoint.protocol === "http:" || (endpoint.protocol === "https:" && ca));
@@ -67,7 +67,7 @@ function transport(origin, secrets, ca) {
   return { request: (path, options) => open(path, options).result, held: (path, options) => open(path, { ...options, held: true }) };
 }
 
-function privateHeaders(response) {
+export function privateHeaders(response) {
   assert.match(response.headers["cache-control"] ?? "", /(?:^|,\s*)no-store(?:,|$)/);
   assert.equal(response.headers["x-content-type-options"], "nosniff");
   assert.equal(response.headers.etag, undefined);
@@ -75,8 +75,9 @@ function privateHeaders(response) {
   assert.notEqual(response.status, 304);
 }
 
-function assetDto(asset) {
-  assert.deepEqual(Object.keys(asset).sort(), ["id", "state", "createdAt", "display", "thumbnail"].sort());
+export function assetDto(asset) {
+  assert.deepEqual(Object.keys(asset).sort(), ["id", "state", "createdAt", "display", "thumbnail", "publishedStoryCount"].sort());
+  assert.ok(Number.isInteger(asset.publishedStoryCount) && asset.publishedStoryCount >= 0);
   assert.match(asset.id, UUID);
   assert.ok(Number.isFinite(Date.parse(asset.createdAt)));
   assert.ok(["PENDING", "READY", "FAILED", "DELETING", "DELETED"].includes(asset.state));
