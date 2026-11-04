@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import type { Story, LetterContentState, LetterPreviewSnapshot } from "@/lib/stories/story";
 import { AccountControls } from "../auth/account-controls";
+import { PublishedStoryLike } from "./published-story-like";
 
 type ReaderPhase = "opening" | "reading" | "closing";
 
@@ -212,7 +213,7 @@ export function FeatherLetter(props: FeatherLetterProps) {
             <p id="letter-demo-note" className="letter-demo-note">{snapshot
               ? snapshot.hasUnsavedChanges ? "包含未保存修改 · 预览不会保存或发布" : "仅预览当前编辑内容 · 不会保存或发布"
               : story?.source === "synthetic-demo"
-              ? "合成演示 · 非真实回忆" : "点赞与留言仍为演示，不会发送"}</p>
+              ? "合成演示 · 非真实回忆" : "登录后可以点赞；留言仍为演示，不会发送"}</p>
           </header>
           {props.mode !== "private-preview" && content && content.status !== "ready" ? <div className="letter-load-state"
             data-state={content.status === "loading" ? "loading" : content.unavailable ? "not-found" : "error"}
@@ -230,13 +231,13 @@ export function FeatherLetter(props: FeatherLetterProps) {
           {story ? <>
           <LetterProse story={story} />
           <div className="letter-divider" aria-hidden="true" />
-          <div className="letter-reactions">
+          {story.source === "published" ? <PublishedStoryLike storyId={story.id} /> : <div className="letter-reactions">
             <button type="button" className="letter-like" aria-pressed={liked} onClick={() => setLiked(!liked)}>
               <span aria-hidden="true">{liked ? "♥" : "♡"}</span>演示点赞 <span>{liked ? 1 : 0}</span>
             </button>
             <span className="letter-comment-count">留言示例 1</span>
             <span className="letter-reaction-note">仅本次阅读有效，不会发送</span>
-          </div>
+          </div>}
           <section className="letter-comments" aria-labelledby="letter-comments-title">
             <h3 id="letter-comments-title">留言</h3>
             <AccountControls reader />

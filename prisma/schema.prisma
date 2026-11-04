@@ -57,6 +57,7 @@ model Story {
   // create the story and its first immutable revision in the same transaction.
   draftRevision       StoryRevision   @relation("DraftRevision", fields: [id, draftRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
   publishedRevision   StoryRevision?  @relation("PublishedRevision", fields: [id, publishedRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
+  likes               StoryLike[]
 
   @@map("story")
 }
@@ -141,6 +142,20 @@ model User {
   accounts Account[]
   adminGrant AdminGrant?
   adminSecurityEvents AdminSecurityEvent[]
+  storyLikes StoryLike[]
+}
+
+// One persistent like per account/story; withdrawal never deletes this record.
+model StoryLike {
+  userId    String   @map("user_id")
+  storyId   String   @map("story_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([userId, storyId])
+  @@index([storyId])
+  @@map("story_like")
 }
 model Session {
   id String @id

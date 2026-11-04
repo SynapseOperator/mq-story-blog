@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- P2-10A / PR #38 已经独立 APPROVED，以普通 merge 合入 main `6e2ac7e4d578dbe6fe527d0334387e40d87cfa7e`，quality/database 成功。本轮仅实施 P2-10B / Issue #39 的管理员发布界面，复用现有接口、HMAC 与生命周期约束，不新增发布权限或修改 001→006。保存、发布、下架和恢复必须分开；409 或响应未知保留本地编辑并人工核对，不自动重发。发布仍默认关闭，仅隔离合成数据与临时密钥；交付独立 Draft PR，不自动合并、不部署、不开始后续功能。边界见 STORY_PUBLICATION.md、MEDIA_BACKUP.md。
+- 本轮仅实施 P2-11 / Issue #41，基于已合并 P2-10B 的 main `0bbe77a1c42a13ee2e10da7384da818d1ffe90ac`。公开点赞使用数据库 Session、独立 GET/PUT/DELETE 与唯一约束；下架保留记录但拒绝新的公开读写。只替换公开信纸点赞区，复用 AuthDialog，保留阅读滚动和演示留言。新增 007，不修改 001–006。边界见 STORY_LIKES.md；仅隔离合成数据，Draft PR，不自动合并、部署或开始真实留言。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -23,7 +23,7 @@
 
 ## 数据与协作边界
 
-- 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开 API 保持只读与 no-store，任何未来管理写入口必须复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
+- 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开正文 API 保持只读与 no-store；点赞写入单独验证普通用户数据库 Session，管理写入口复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
 - 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
 - 管理权限见 `docs/engineering/ADMIN_AUTHORIZATION.md`。管理 Route Handler/服务必须通过 `withAdmin(request, async (tx, principal) => ...)`，在回调同一事务内使用 tx 完成受保护数据库操作；不能缓存一次鉴权或信任客户端角色。运行时不得使用迁移/维护身份；离线凭据不得作为命令参数，生产账号/角色配置需单独授权。
 - 编辑器见 `docs/engineering/ADMIN_EDITOR.md`：working / sent / confirmed 分离，未知写入不能盲目重发，409 须人工处理；私人草稿不进 SSR/RSC、metadata、公开 API 或本地持久存储。

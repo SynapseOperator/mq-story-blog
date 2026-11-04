@@ -58,6 +58,10 @@
 .letter-like { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: #713e2a; font: 13px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
 .letter-like > span:first-child { font: 27px Georgia, serif; }
 .letter-like[aria-pressed="true"] { color: #9e362c; }
+.letter-like:disabled { opacity: .6; cursor: default; }
+.letter-like-status { flex-basis: 100%; }
+.letter-like-status:empty { display: none; }
+.letter-like-retry { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #713e2a; font: 11px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; text-decoration: underline; cursor: pointer; }
 .letter-reactions > span { color: #886a4b; font: 11px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
 .letter-comment-count { padding-left: 14px; border-left: 1px solid #a9814f5c; }
 .letter-reactions .letter-reaction-note { margin-left: auto; font-size: 10px; }
