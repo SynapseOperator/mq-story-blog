@@ -90,3 +90,5 @@ Windows、Node24.19.0、PostgreSQL18.6；使用本任务独立临时容器及随
 Windows两项限制是文件符号链接权限与POSIX 0700/0600模式，现有目录junction测试正常执行；Linux CI继续执行对应平台用例。本机没有额外停止现有Compose开发实例执行持久化脚本，CI保留独立Compose停止/重建持久化检查。
 
 首轮留言HTTP测试的一项旧断言把在途撤权预期写成401；既有withAdmin在事务复核失败时明确返回403，已修正断言并完整重跑，没有更改授权逻辑或跳过用例。原失败日志保存在本机任务证据目录，未提交凭据、会话或数据库备份。CI结果与独立Review仍以PR当前HEAD为准。
+
+首轮 [Linux CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41969958330) 在旧点赞浏览器套件的320px reduced-motion初始化处失败：测试在正文异步加载完成前断言页面标题。将原有精确正文标题等待移到页面标题断言前，保留全部断言与原超时；不修改应用/UI，也不重试掩盖错误。失败诊断同时改为明确当前视口，避免显示上一用例名称。最终验证看修正后的HEAD及CI。

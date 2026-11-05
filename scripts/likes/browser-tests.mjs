@@ -40,9 +40,11 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       if (message.type() === "error" && !/Failed to load resource|net::ERR_FAILED/.test(message.text())) errors.push("console error");
     });
     await page.goto(url); await reader(page).waitFor();
+    // Reduced motion can finish opening before the async article has loaded.
+    // Its exact heading proves content/title readiness, not just animation state.
+    await page.getByRole("heading", { name: fixtures.first.title, exact: true }).waitFor();
     assert.equal(page.url(), url); assert.match(await page.title(), /点赞与星光长信/);
     assert.equal(await page.locator("nextjs-portal").count(), 0);
-    await page.getByRole("heading", { name: fixtures.first.title, exact: true }).waitFor();
     assert.ok(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth));
     assert.equal(await page.locator(".account-controls").isVisible(), false);
     return page;
@@ -102,6 +104,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       ["mobile-390", { width: 390, height: 844 }, { isMobile: true, hasTouch: true }],
       ["mobile-320-reduced", { width: 320, height: 568 }, { isMobile: true, hasTouch: true, reducedMotion: "reduce" }],
     ]) {
+      stage = `${name}: direct reader initialization`;
       await owner.query('DELETE FROM "AuthRateLimit"; DELETE FROM "RateLimit"');
       const page = await makePage(viewport, extra); await ready(page, 0, false);
       if (name === "desktop") await screenshot(page, "desktop-reader");
