@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useReducer, useRef, useState, type CSSProperties, type Ref } from "react";
 import type { Story, LetterContentState, LetterPreviewSnapshot } from "@/lib/stories/story";
 import { AccountControls } from "../auth/account-controls";
 import { PublishedStoryLike } from "./published-story-like";
+import { PublishedStoryComments } from "./published-story-comments";
+import { commentComposerReducer, commentNeedsProtection, createCommentComposer } from "@/lib/stories/comment-composer";
 
 type ReaderPhase = "opening" | "reading" | "closing";
 
@@ -85,15 +87,17 @@ export function FeatherLetter(props: FeatherLetterProps) {
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
+  const [composer, dispatchComment] = useReducer(commentComposerReducer, undefined, createCommentComposer);
+  const protectComments = Boolean(draft.trim()) || commentNeedsProtection(composer);
 
   useEffect(() => {
-    if (!draft.trim()) return;
+    if (!protectComments) return;
     // Cross-document Back/Forward, refresh and closing the tab use the browser's
     // own confirmation. Draft text is never stored in history or localStorage.
     const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
-  }, [draft]);
+  }, [protectComments]);
 
   useImperativeHandle(navigationRef, () => ({ requestClose }));
 
@@ -165,7 +169,7 @@ export function FeatherLetter(props: FeatherLetterProps) {
   function requestClose() {
     if (phaseRef.current !== "reading" || confirmationRef.current?.open
       || dialogRef.current?.querySelector(".auth-dialog[open]")) return false;
-    if (draft.trim()) {
+    if (protectComments) {
       confirmationTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setConfirming(true);
       confirmationRef.current?.showModal();
@@ -213,7 +217,7 @@ export function FeatherLetter(props: FeatherLetterProps) {
             <p id="letter-demo-note" className="letter-demo-note">{snapshot
               ? snapshot.hasUnsavedChanges ? "包含未保存修改 · 预览不会保存或发布" : "仅预览当前编辑内容 · 不会保存或发布"
               : story?.source === "synthetic-demo"
-              ? "合成演示 · 非真实回忆" : "登录后可以点赞；留言仍为演示，不会发送"}</p>
+              ? "合成演示 · 非真实回忆" : "登录后可以点赞，也可以留下留言"}</p>
           </header>
           {props.mode !== "private-preview" && content && content.status !== "ready" ? <div className="letter-load-state"
             data-state={content.status === "loading" ? "loading" : content.unavailable ? "not-found" : "error"}
@@ -238,7 +242,8 @@ export function FeatherLetter(props: FeatherLetterProps) {
             <span className="letter-comment-count">留言示例 1</span>
             <span className="letter-reaction-note">仅本次阅读有效，不会发送</span>
           </div>}
-          <section className="letter-comments" aria-labelledby="letter-comments-title">
+          {story.source === "published" ? <PublishedStoryComments storyId={story.id} composer={composer} dispatch={dispatchComment} />
+          : <section className="letter-comments" aria-labelledby="letter-comments-title">
             <h3 id="letter-comments-title">留言</h3>
             <p id="letter-comment-help">留言仅供演示，不会发送或保存。</p>
             <AccountControls reader />
@@ -262,7 +267,7 @@ export function FeatherLetter(props: FeatherLetterProps) {
                 <p>愿每一个平凡的夜晚，都有值得收藏的微光。</p>
               </div>
             </div>
-          </section>
+          </section>}
           <p className="letter-end">这一页的故事，暂且写到这里。</p>
           </> : null}
         </div>
@@ -271,7 +276,11 @@ export function FeatherLetter(props: FeatherLetterProps) {
         aria-labelledby="letter-discard-title" aria-describedby="letter-discard-description"
         onCancel={(event) => { event.preventDefault(); event.stopPropagation(); continueEditing(); }}>
         <h2 id="letter-discard-title">要放下这封信吗？</h2>
-        <p id="letter-discard-description">演示留言尚未提交。关闭后，这次输入和预览会被清除。</p>
+        <p id="letter-discard-description">{story?.source === "synthetic-demo"
+          ? "演示留言尚未提交。关闭后，这次输入和预览会被清除。"
+          : composer.phase === "sending" || composer.uncertain
+          ? "这次提交的结果尚未确认。关闭会清除输入和本次重试信息，但不会撤回已经发送的请求。"
+          : "还有未提交的留言。关闭后，这次输入会被清除。"}</p>
         <div className="letter-discard-actions">
           <button ref={continueRef} type="button" onClick={continueEditing}>继续编辑</button>
           <button type="button" onClick={discardAndClose}>放弃并关闭</button>

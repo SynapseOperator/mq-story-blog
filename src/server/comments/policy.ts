@@ -105,6 +105,13 @@ export function encodeCommentCursor(cursor: { createdAt: Date | string; id: stri
   return cursor ? Buffer.from(JSON.stringify({ createdAt: new Date(cursor.createdAt).toISOString(), id: cursor.id })).toString("base64url") : null;
 }
 
+export function adminCommentRead(search: URLSearchParams) {
+  if (!search.has("commentId")) return { page: commentPage(search, true) };
+  const id = search.get("commentId");
+  if ([...search.keys()].length !== 1 || id === null || !uuid.test(id)) invalid();
+  return { commentId: id.toLowerCase() };
+}
+
 export function commentModeration(input: unknown): CommentModeration {
   const value = object(input, ["action", "expectedVersion"]);
   if (typeof value.action !== "string" || !["approve", "reject", "withdraw"].includes(value.action)

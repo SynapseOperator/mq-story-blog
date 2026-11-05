@@ -88,7 +88,7 @@ async function main() {
       const configure = drafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges;
       await configure(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
-      await owner.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
+      await owner.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
     } finally { await owner.end(); }
     const runtime = new URL(ownerUrl); runtime.username = runtimeRole; runtime.password = rolePasswords[0];
     const maintenance = new URL(ownerUrl); maintenance.username = maintenanceRole; maintenance.password = rolePasswords[1];
@@ -218,7 +218,7 @@ async function main() {
           try {
             await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: database });
             await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: database });
-            await owner.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
+            await owner.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
           } finally { await owner.end(); }
           const restoredRuntime = new URL(databaseURL); restoredRuntime.username = runtimeRole; restoredRuntime.password = rolePasswords[0];
           const restoredServer = await startServer(backendPort, { ...lifecycleEnv, DATABASE_URL: restoredRuntime.href,

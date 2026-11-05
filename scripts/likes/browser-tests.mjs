@@ -63,7 +63,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
     }
     assert.ok(Math.abs(after.top - before.top) <= 2, "Nested authentication must retain the same reading position");
     assert.equal(after.body, before.body);
-    assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
+    assert.equal(await page.getByLabel("留言内容", { exact: true }).inputValue(), draft);
   }
   async function login(page, account) {
     const auth = page.locator(".auth-dialog[open]"); await auth.waitFor();
@@ -109,8 +109,8 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       const page = await makePage(viewport, extra); await ready(page, 0, false);
       if (name === "desktop") await screenshot(page, "desktop-reader");
       const originalReader = await reader(page).elementHandle(); assert.ok(originalReader);
-      const draft = `仅演示、不发送：${name} 的合成留言草稿。`;
-      await page.getByLabel("演示留言", { exact: true }).fill(draft);
+      const draft = `尚未提交：${name} 的合成留言草稿。`;
+      await page.getByLabel("留言内容", { exact: true }).fill(draft);
       await heart(page).scrollIntoViewIfNeeded(); const before = await position(page);
       assert.ok(before.scrollHeight > before.height && before.top > 0);
       await check(`${name}: guest cancellation retains the letter, scroll, comment and heart focus`, async () => {
@@ -149,7 +149,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
         }
         await unchanged(page, before, draft, originalReader); await screenshot(page, `${name}-confirmed-like`);
         await heart(page).click(); await ready(page, 0, false); await persisted(0);
-        assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
+        assert.equal(await page.getByLabel("留言内容", { exact: true }).inputValue(), draft);
       });
       if (name === "desktop") {
         await check("pending server ACK keeps the previous state and blocks duplicate activation", async () => {
@@ -185,7 +185,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
             await reader(page).getByRole("button", { name: "重新读取点赞状态", exact: true }).waitFor();
           }
           finally { await page.unroute(endpoint, handler); }
-          assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
+          assert.equal(await page.getByLabel("留言内容", { exact: true }).inputValue(), draft);
         });
         await check("unknown write plus failed read keeps the last confirmed count until explicit retry", async () => {
           let writes = 0, reads = 0;
@@ -198,7 +198,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
             await heart(page).click(); await reader(page).locator('.letter-reactions[data-state="error"]').waitFor();
             assert.equal(await heart(page).isDisabled(), true); assert.equal(writes, 1); assert.ok(reads >= 1);
             assert.equal(await reader(page).locator(".letter-like-count").textContent(), "0");
-            assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
+            assert.equal(await page.getByLabel("留言内容", { exact: true }).inputValue(), draft);
             await persisted(0); await screenshot(page, "desktop-unknown-like-retry");
           } finally { await page.unroute(endpoint, handler); }
           await reader(page).getByRole("button", { name: "重新读取点赞状态", exact: true }).click(); await ready(page, 0, false);
@@ -213,7 +213,7 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
         });
         await check("refresh and a new HTTPS login retain likes while another account stays unpressed", async () => {
           await heart(page).click(); await ready(page, 1, true);
-          await page.getByLabel("演示留言", { exact: true }).fill("");
+          await page.getByLabel("留言内容", { exact: true }).fill("");
           await page.reload(); await reader(page).waitFor(); await ready(page, 1, true);
           const returning = await makePage({ width: 1536, height: 1024 }); await ready(returning, 1, false);
           await heart(returning).scrollIntoViewIfNeeded(); await heart(returning).click(); await login(returning, accounts[0]);
@@ -243,12 +243,12 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
           await context.close();
         });
       }
-      // Comment remains a local demonstration and still uses the original discard dialog.
-      await page.getByLabel("演示留言", { exact: true }).fill(draft);
+      // The real comment draft retains the original close/discard protection.
+      await page.getByLabel("留言内容", { exact: true }).fill(draft);
       await page.getByRole("button", { name: "关闭羽毛信", exact: true }).click();
       await page.getByRole("alertdialog").waitFor();
       await page.getByRole("button", { name: "继续编辑", exact: true }).click();
-      assert.equal(await page.getByLabel("演示留言", { exact: true }).inputValue(), draft);
+      assert.equal(await page.getByLabel("留言内容", { exact: true }).inputValue(), draft);
       await page.getByRole("button", { name: "关闭羽毛信", exact: true }).click();
       await page.getByRole("button", { name: "放弃并关闭", exact: true }).click();
       await page.waitForURL(`${baseURL}/`); await reader(page).waitFor({ state: "detached" });
@@ -261,10 +261,10 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
       const page = await makePage(viewport, { isMobile: true, hasTouch: true }); await ready(page, 0, false);
       const originalReader = await reader(page).elementHandle(); assert.ok(originalReader);
       const draft = `合成留言：${name} 紧凑窗口切换后仍保留。`;
-      await page.getByLabel("演示留言", { exact: true }).fill(draft);
+      await page.getByLabel("留言内容", { exact: true }).fill(draft);
       await heart(page).scrollIntoViewIfNeeded(); const before = await position(page);
       const comments = await reader(page).locator(".letter-comments").evaluate(section => {
-        const fonts = ["p#letter-comment-help", ".reader-account", "textarea", ".letter-comment-actions > span", ".letter-comment-actions button", ".letter-sample-comment"]
+        const fonts = ["p#letter-comment-help", ".reader-account", "textarea", ".letter-comment-actions > span", ".letter-comment-actions button", ".letter-comments-read-status"]
           .map(selector => Number.parseFloat(globalThis.getComputedStyle(section.querySelector(selector)).fontSize));
         const count = section.querySelector(".letter-comment-actions > span").getBoundingClientRect();
         const submit = section.querySelector(".letter-comment-actions button").getBoundingClientRect();
@@ -273,9 +273,9 @@ export async function runLikeBrowserTests({ baseURL, connectionString, accounts,
         });
         return { fonts, targets, actionsOverlap: count.left < submit.right && submit.left < count.right && count.top < submit.bottom && submit.top < count.bottom };
       });
-      assert.ok(comments.fonts.every((size, index) => size >= [12, 14, 16, 12, 14, 14][index]), "Mobile comment copy and input keep the intended readable sizes");
+      assert.ok(comments.fonts.every((size, index) => size >= [12, 14, 16, 12, 14, 12][index]), "Mobile comment help, empty state and input keep the intended readable sizes");
       assert.ok(comments.targets.every(target => target.width >= 44 && target.height >= 44));
-      assert.equal(comments.actionsOverlap, false, "Comment count and preview button must wrap without overlap");
+      assert.equal(comments.actionsOverlap, false, "Comment count and submit button must wrap without overlap");
       for (const mode of ["login", "register"]) {
         await check(`${name}: compact ${mode} stays usable in a shortened viewport and preserves reading state`, async () => {
           await heart(page).click();

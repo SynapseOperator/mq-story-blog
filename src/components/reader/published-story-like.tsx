@@ -97,8 +97,7 @@ export function PublishedStoryLike({ storyId }: { storyId: string }) {
       <span aria-hidden="true">{current.value?.liked ? "♥" : "♡"}</span>
       {current.value?.liked ? "已点赞" : "点赞"} <span className="letter-like-count">{current.value?.count ?? "—"}</span>
     </button>
-    <span className="letter-comment-count">留言示例 1</span>
-    <span className="letter-like-status" role={current.error ? "alert" : "status"}>
+    <span className={`letter-like-status${current.phase === "loading" ? " sr-only" : ""}`} role={current.error ? "alert" : "status"}>
       {current.phase === "loading" ? "正在读取点赞状态…" : current.phase === "saving" ? "正在保存点赞状态…"
         : current.phase === "checking" ? "请求结果暂未确认，正在核对点赞状态…"
         : current.error || (current.uncertain ? "已读取当前状态；上次请求结果未确认。" : "")}

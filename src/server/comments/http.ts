@@ -5,7 +5,7 @@ import { withAdmin } from "../admin/access.ts";
 import { AdminAccessError } from "../admin/policy.ts";
 import { createStoryCommentOperations } from "./service.ts";
 import { consumeCommentLimit } from "./rate-limit.ts";
-import { CommentOperationError, commentId, commentIdempotencyHash, commentModeration, commentPage,
+import { CommentOperationError, adminCommentRead, commentId, commentIdempotencyHash, commentModeration, commentPage,
   commentSigningKey, commentSubmission, encodeCommentCursor, inspectCommentOrigin, inspectCommentTarget,
   readCommentBody, requireCommentsEnabled } from "./policy.ts";
 
@@ -63,12 +63,17 @@ export async function handleAdminComments(request: Request, id?: string) {
     if (request.method !== allowed) return reply(request, { code: "COMMENT_METHOD_NOT_ALLOWED" }, 405, { allow: allowed });
     const comment = id === undefined ? undefined : commentId(id);
     const search = inspectCommentTarget(request, id === undefined ? "/api/admin/comments" : `/api/admin/comments/${id}/moderate`, id === undefined);
-    const page = id === undefined ? commentPage(search, true) : null;
+    const read = id === undefined ? adminCommentRead(search) : null;
     const input = id === undefined ? null : commentModeration(await readCommentBody(request));
     const data = await withAdmin(request, async (tx, principal) => {
       const operations = createStoryCommentOperations(tx);
-      if (page) {
-        const result = await operations.listAdmin(page);
+      if (read) {
+        if (read.commentId) {
+          const result = await operations.listAdmin({ limit: 1, commentId: read.commentId });
+          if (!result.items[0]) throw new CommentOperationError("COMMENT_NOT_FOUND");
+          return { comment: result.items[0] };
+        }
+        const result = await operations.listAdmin(read.page!);
         return { ...result, nextCursor: encodeCommentCursor(result.nextCursor) };
       }
       // Key access and signing remain inside this exact authorization transaction.

@@ -83,6 +83,31 @@
 .letter-sample-comment p { margin: 0 0 8px; }
 .letter-sample-comment strong { font-weight: 500; }
 .letter-sample-comment span { font-size: 10px; margin-left: 12px; color: #94714d; }
+.letter-public-comment-count { font: 12px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; letter-spacing: 0; color: #715337; }
+.letter-comment-identity { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; padding: 0; border: 0; }
+.letter-comment-identity label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; font: 14px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
+.letter-comment-identity input { accent-color: #805632; width: 16px; height: 16px; margin: 0; }
+.letter-comment-identity input:focus-visible { outline: 2px solid #7c4927; outline-offset: 3px; }
+.letter-comment-author { min-height: 22px; margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.letter-comment-author, .letter-comment-validation, .letter-comment-submit-status, .letter-comments-read-status,
+.letter-comment-recovery, .letter-comment-list-actions { font: 12px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #715337; }
+.letter-comment-validation { margin: 6px 0 0; }
+.letter-comment-validation:empty, .letter-comment-submit-status:empty, .letter-comments-read-status:empty { display: none; }
+.letter-comment-submit-status, .letter-comments-read-status { margin-top: 16px; }
+.letter-comment-submit-status p, .letter-comment-recovery p { margin: 6px 0; }
+.letter-comment-recovery { margin-top: 10px; }
+.letter-comment-recovery summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.letter-comment-recovery details p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.letter-comment-recovery small { font-size: 12px; }
+.letter-comment-recovery button, .letter-comment-list-actions button { min-width: 44px; min-height: 44px; padding: 6px 10px; border: 1px solid #9b744c9c; border-radius: 3px; background: #ebd3ac66; color: #573b26; font: 14px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
+.letter-comment-recovery button:disabled, .letter-comment-list-actions button:disabled { opacity: .6; cursor: default; }
+.letter-comment-list { margin: 16px 0 0; padding: 0; list-style: none; }
+.letter-comment-item { padding: 15px 0 9px; border-top: 1px solid #a9814f40; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.letter-comment-item > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.letter-comment-item strong { font-weight: 500; }
+.letter-comment-item time { font: 12px/1.8 "Microsoft YaHei", "PingFang SC", sans-serif; color: #785b3e; }
+.letter-comment-item p { white-space: pre-wrap; margin: 8px 0; }
+.letter-comment-list-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .letter-end { margin: 27px 0 0; text-align: center; color: #9b7c57; font: 12px/1.8 "STKaiti", "KaiTi", "Kaiti SC", serif; }
 .letter-discard { width: min(380px, calc(100% - 44px)); padding: 26px; margin: auto; border: 1px solid #aa8255; border-radius: 4px; color: #49311f; background: #f3dfbc; box-shadow: 0 10px 50px #0006; }
 .letter-discard::backdrop { background: #100c085c; }

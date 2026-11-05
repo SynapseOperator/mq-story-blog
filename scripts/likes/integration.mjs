@@ -76,6 +76,7 @@ async function main() {
       assert.deepEqual(history, expected);
       await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyStoryLikeDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
+      await owner.query(`GRANT SELECT ON public.story_comment TO "${runtimeRole}"`);
     } finally { await owner.end(); }
     const runtime = new URL(ownerUrl); runtime.username = runtimeRole; runtime.password = passwords[0];
     secrets.add(ownerUrl.href); secrets.add(runtime.href);

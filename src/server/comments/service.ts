@@ -9,6 +9,7 @@ export type CommentCursor = { createdAt: string; id: string };
 export type CommentPage = { limit: number; cursor?: CommentCursor };
 export type PublicComment = { id: string; body: string; author: string; createdAt: string };
 export type AdminComment = PublicComment & { storyId: string; state: CommentState; version: number;
+  storyDraftTitle: string; storyState: "DRAFT" | "PUBLISHED" | "WITHDRAWN";
   moderatedAt: string | null; approvedAt: string | null };
 export type ModerationAction = "approve" | "reject" | "withdraw";
 
@@ -82,18 +83,22 @@ export function createStoryCommentOperations(tx: Prisma.TransactionClient) {
       });
     },
 
-    listAdmin(input: CommentPage & { state?: CommentState; storyId?: string }) {
+    listAdmin(input: CommentPage & { state?: CommentState; storyId?: string; commentId?: string }) {
       return operation(async () => {
         const state = input.state ? Prisma.sql`AND c.state=${input.state}::public."CommentState"` : Prisma.empty;
         const story = input.storyId ? Prisma.sql`AND c.story_id=${input.storyId}::uuid` : Prisma.empty;
+        const comment = input.commentId ? Prisma.sql`AND c.id=${input.commentId}::uuid` : Prisma.empty;
         const cursor = input.cursor ? Prisma.sql`AND (c.created_at,c.id)<(${input.cursor.createdAt}::timestamptz,${input.cursor.id}::uuid)` : Prisma.empty;
         const [result] = await tx.$queryRaw<{ count: number; items: AdminComment[] }[]>`
-          SELECT (SELECT count(*)::int FROM public.story_comment c WHERE true ${state} ${story}) AS count,
+          SELECT (SELECT count(*)::int FROM public.story_comment c WHERE true ${state} ${story} ${comment}) AS count,
             COALESCE((SELECT jsonb_agg(selected ORDER BY selected."createdAt" DESC,selected.id DESC) FROM (
               SELECT c.id,c.story_id AS "storyId",c.body,COALESCE(u.username,'匿名访客') AS author,c.created_at AS "createdAt",
-                c.state,c.version,c.moderated_at AS "moderatedAt",c.approved_at AS "approvedAt"
+                c.state,c.version,c.moderated_at AS "moderatedAt",c.approved_at AS "approvedAt",
+                r.title AS "storyDraftTitle",s.state AS "storyState"
               FROM public.story_comment c LEFT JOIN public."User" u ON u.id=c.user_id
-              WHERE true ${state} ${story} ${cursor} ORDER BY c.created_at DESC,c.id DESC LIMIT ${input.limit + 1}
+              JOIN public.story s ON s.id=c.story_id
+              JOIN public.story_revision r ON r.story_id=s.id AND r.id=s.draft_revision_id
+              WHERE true ${state} ${story} ${comment} ${cursor} ORDER BY c.created_at DESC,c.id DESC LIMIT ${input.limit + 1}
             ) selected),'[]'::jsonb) AS items`;
         const items = result.items.slice(0, input.limit).map(item => ({ ...item, createdAt: new Date(item.createdAt).toISOString(),
           moderatedAt: item.moderatedAt ? new Date(item.moderatedAt).toISOString() : null,
