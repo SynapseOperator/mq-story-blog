@@ -58,6 +58,10 @@
 .letter-like { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: #713e2a; font: 13px "Microsoft YaHei", "PingFang SC", sans-serif; cursor: pointer; }
 .letter-like > span:first-child { font: 27px Georgia, serif; }
 .letter-like[aria-pressed="true"] { color: #9e362c; }
+.letter-like:disabled { opacity: .6; cursor: default; }
+.letter-like-status { flex-basis: 100%; }
+.letter-like-status:empty { display: none; }
+.letter-like-retry { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #713e2a; font: 11px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; text-decoration: underline; cursor: pointer; }
 .letter-reactions > span { color: #886a4b; font: 11px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; }
 .letter-comment-count { padding-left: 14px; border-left: 1px solid #a9814f5c; }
 .letter-reactions .letter-reaction-note { margin-left: auto; font-size: 10px; }
@@ -120,9 +124,33 @@
   .letter-prose blockquote { font-size: 18px; padding-right: 0; }
   .letter-photo { float: none; width: 90%; margin: 20px auto 24px; }
   .letter-meta { gap: 4px 12px; font-size: 10px; }
-  .letter-reactions { gap: 2px 12px; }
-  .letter-reactions .letter-reaction-note { width: 100%; margin-left: 0; }
-  .letter-comments h3 { font-size: 23px; }
+  .letter-reactions { gap: 6px 14px; margin-bottom: 22px; }
+  .letter-like { gap: 10px; font-size: 14px; }
+  .letter-like > span:first-child { font-size: 30px; }
+  .letter-like-count { font-variant-numeric: tabular-nums; }
+  .letter-reactions > span { color: #725537; font-size: 12px; line-height: 1.75; }
+  .letter-reactions .letter-reaction-note { width: 100%; margin-left: 0; font-size: 12px; }
+  .letter-like-retry { font-size: 12px; line-height: 1.75; }
+  .letter-comments h3 { margin-bottom: 10px; font-size: 24px; letter-spacing: .1em; }
+  .letter-comments h3::before { margin-right: 10px; }
+  .letter-comments > p { margin-bottom: 12px; color: #715337; font-size: 12px; line-height: 1.8; }
+  .letter-comments .reader-account { align-items: center; gap: 4px 12px; margin: 0 0 12px; color: #694626; font-size: 14px; }
+  .letter-comments .reader-account button { min-width: 44px; min-height: 44px; }
+  .letter-comments .reader-account-note { color: #725537; font-size: 12px; }
+  .letter-comments .reader-account .account-error { font-size: 12px; }
+  .letter-comments textarea { min-height: 112px; padding: 12px; background: #f8edda99; border-color: #9b744c9c; box-shadow: inset 0 1px 3px #6f4a2010; line-height: 1.75; }
+  .letter-comments textarea::placeholder { color: #80603f; }
+  .letter-comment-actions { gap: 8px; margin-top: 10px; }
+  .letter-comment-actions > span { color: #715337; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .letter-comment-actions button { margin-left: auto; padding: 10px 12px; border-color: #9b744c9c; background: #ebd3accc; color: #573b26; font-size: 14px; line-height: 1.5; }
+  .letter-comment-actions button:disabled { opacity: .7; }
+  .letter-comment-preview { padding-left: 12px; }
+  .letter-comment-preview h4, .letter-comment-preview small { color: #715337; font-size: 12px; }
+  .letter-comment-preview p { font-size: 14px; }
+  .letter-sample-comment { gap: 10px; padding-block: 16px 10px; font-size: 14px; }
+  .letter-sample-comment > div { min-width: 0; }
+  .letter-sample-comment p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+  .letter-sample-comment span { margin-left: 0; color: #785b3e; font-size: 12px; }
 }
 @media (max-height: 540px) {
   .letter-sheet { height: calc(100dvh - 20px); }

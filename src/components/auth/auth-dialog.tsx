@@ -3,7 +3,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useAuth, type AuthMode } from "./auth-provider";
 
-export function AuthDialog({ initialMode, onClosed }: { initialMode: AuthMode; onClosed: () => void }) {
+export function AuthDialog({ initialMode, onClosed, appearance = "default" }: {
+  initialMode: AuthMode; onClosed: () => void; appearance?: "default" | "reader";
+}) {
   const { authenticate } = useAuth();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
@@ -41,6 +43,27 @@ export function AuthDialog({ initialMode, onClosed }: { initialMode: AuthMode; o
       if (readerScroll && readingPosition !== undefined) readerScroll.scrollTop = readingPosition;
     };
   }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const viewport = window.visualViewport;
+    if (appearance !== "reader" || !dialog || !viewport) return;
+    // Mobile keyboards resize the visual viewport without necessarily changing
+    // CSS dvh. Keep only this nested panel inside the usable reading area.
+    const fitViewport = () => {
+      dialog.style.setProperty("--auth-viewport-height", `${viewport.height}px`);
+      dialog.style.setProperty("--auth-viewport-top", `${viewport.offsetTop}px`);
+    };
+    fitViewport();
+    viewport.addEventListener("resize", fitViewport);
+    viewport.addEventListener("scroll", fitViewport);
+    return () => {
+      viewport.removeEventListener("resize", fitViewport);
+      viewport.removeEventListener("scroll", fitViewport);
+      dialog.style.removeProperty("--auth-viewport-height");
+      dialog.style.removeProperty("--auth-viewport-top");
+    };
+  }, [appearance]);
 
   function close() {
     if (busyRef.current) return;
@@ -83,7 +106,8 @@ export function AuthDialog({ initialMode, onClosed }: { initialMode: AuthMode; o
     }
   }
 
-  return <dialog ref={dialogRef} className="auth-dialog" aria-labelledby={`${id}-title`} aria-describedby={`${id}-intro`}
+  return <dialog ref={dialogRef} className="auth-dialog" data-appearance={appearance} data-mode={mode}
+    aria-labelledby={`${id}-title`} aria-describedby={`${id}-intro`}
     onCancel={(event) => { event.preventDefault(); event.stopPropagation(); close(); }}
     onPointerDown={(event) => { event.stopPropagation(); backdropPress.current = event.target === event.currentTarget; }}
     onClick={(event) => {
@@ -117,7 +141,10 @@ export function AuthDialog({ initialMode, onClosed }: { initialMode: AuthMode; o
         <button className="auth-submit" type="submit" disabled={busy}>{busy ? "正在处理…" : isRegister ? "注册并登录" : "登录"}</button>
       </form>
       <p className="auth-switch">{isRegister ? "已经有账号？" : "还没有账号？"}<button type="button" disabled={busy} onClick={switchMode}>{isRegister ? "去登录" : "注册"}</button></p>
-      <p className="auth-footnote">无需邮箱。当前不提供密码找回，请妥善保存密码。<br />不登录也可以继续阅读。</p>
+      <p className="auth-footnote">
+        <span className="auth-footnote-full">无需邮箱。当前不提供密码找回，请妥善保存密码。<br />不登录也可以继续阅读。</span>
+        {appearance === "reader" ? <span className="auth-footnote-compact">请妥善保存密码，暂不支持找回。</span> : null}
+      </p>
     </section>
   </dialog>;
 }

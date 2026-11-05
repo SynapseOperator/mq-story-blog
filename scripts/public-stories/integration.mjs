@@ -120,6 +120,7 @@ async function main() {
     await owner.query(`REVOKE CREATE,TEMPORARY ON DATABASE "${name}" FROM PUBLIC`);
     await owner.query(`GRANT CONNECT ON DATABASE "${name}" TO "${role}"`);
     await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+    await owner.query(`GRANT SELECT ON public.story_like TO "${role}"`);
     async function setDatabaseAvailable(available) {
       await owner.query(`${available ? "GRANT" : "REVOKE"} SELECT ON public.story,public.story_revision,public.star_slot ${available ? "TO" : "FROM"} "${role}"`);
     }

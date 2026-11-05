@@ -13,7 +13,7 @@ import { assertTemporaryTarget } from "../admin-drafts/test-support.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
 import { verifyDatabaseLogging } from "../db/log-privacy.mjs";
 
-/** Native backup/restore of a populated 006 database. Keys and old sessions are
+/** Native backup/restore of a populated 007 database. Keys and old sessions are
  * preserved as data, never treated as permission to enable a restored service. */
 export async function runPublicationBackupTests({ source, controlURL, projectRoot, workspace, storage,
   runtimeRole, maintenanceRole, key, first, oldJar, origin, ca, secrets, rememberDatabase, withRestoredServer }) {
@@ -38,6 +38,11 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
     const sourceStory = (await pool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0];
     const adminSession = sourceSessions.find(session => session.userId === sourceGrant.userId && session.expiresAt > new Date());
     assert.ok(adminSession && !sourceGrant.revokedAt);
+    const readers = (await pool.query('SELECT id FROM "User" ORDER BY id')).rows;
+    assert.ok(readers.length >= 2);
+    for (const user of readers) await pool.query("INSERT INTO story_like(user_id,story_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [user.id, first.id]);
+    const sourceLikes = (await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows;
+    assert.equal(sourceLikes.filter(like => like.story_id === first.id).length, readers.length);
 
     await check("full native archive contains nonempty private signing schema without exposing secrets in its manifest", async () => {
       archive = await createMediaBackup({ databaseURL: source.connectionString, expectedDatabase: source.name,
@@ -47,7 +52,7 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       assert.ok(!manifest.includes(key) && !manifest.includes(oldJar.cookie));
       for (const session of sourceSessions) assert.ok(!manifest.includes(session.token));
     });
-    await check("restored 006 retains the exact key and sessions while PUBLIC privileges remain closed in all application schemas", async () => {
+    await check("restored 007 retains exact likes, key and sessions while PUBLIC privileges remain closed in all application schemas", async () => {
       result = await restoreMediaBackup({ directory: archive.directory, controlURL, restoreParent: restores, projectRoot, tools });
       rememberDatabase(result.database);
       restoredPool = new pg.Pool({ connectionString: result.databaseURL, max: 2 });
@@ -56,6 +61,7 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       assert.ok(restoredKey.equals(sourceKey));
       assert.deepEqual((await restoredPool.query('SELECT * FROM "Session" ORDER BY id')).rows, sourceSessions);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0], sourceStory);
+      assert.deepEqual((await restoredPool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, sourceLikes);
       assert.ok((await restoredPool.query("SELECT to_regprocedure('public.mq_apply_story_publication(text,bytea)') IS NOT NULL AS present")).rows[0].present);
       const acl = (await restoredPool.query(`SELECT count(*)::int AS n FROM (
         SELECT a.grantee FROM pg_namespace ns,
@@ -82,6 +88,7 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
     await check("ordinary application reprovisioning cannot publish or reveal restored keys", async () => {
       await applyAdminDraftDatabasePrivileges(restoredPool, { runtimeRole, maintenanceRole, expectedDatabase: result.database });
       await applyMediaDatabasePrivileges(restoredPool, { runtimeRole, expectedDatabase: result.database });
+      await restoredPool.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
       runtime = new pg.Pool({ connectionString: restoredRuntime.href, max: 1 });
       await assert.rejects(runtime.query("SELECT secret FROM mq_publish_private.signing_key"), { code: "42501" });
       for (const column of ["state", "published_revision_id", "slot_id"]) {
@@ -95,6 +102,10 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
         const session = await request("/api/auth/get-session", { jar });
         assert.equal(session.status, 200); assert.ok(session.data.user);
         assert.equal((await request("/api/admin/status", { jar })).status, 200);
+        const anonymousLikes = await request(`/api/stories/${first.id}/likes`);
+        assert.equal(anonymousLikes.status, 200); assert.deepEqual(anonymousLikes.data, { count: readers.length, liked: false }); privateHeaders(anonymousLikes);
+        const personalLikes = await request(`/api/stories/${first.id}/likes`, { jar });
+        assert.equal(personalLikes.status, 200); assert.deepEqual(personalLikes.data, { count: readers.length, liked: true }); privateHeaders(personalLikes);
         const denied = await request(`/api/admin/stories/${first.id}/withdraw`, {
           method: "POST", jar, body: { expectedVersion: sourceStory.version },
         });

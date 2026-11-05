@@ -84,10 +84,11 @@ async function main() {
     try {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
-      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication"]);
+      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes"]);
       const configure = drafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges;
       await configure(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
+      await owner.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
     } finally { await owner.end(); }
     const runtime = new URL(ownerUrl); runtime.username = runtimeRole; runtime.password = rolePasswords[0];
     const maintenance = new URL(ownerUrl); maintenance.username = maintenanceRole; maintenance.password = rolePasswords[1];
@@ -124,7 +125,7 @@ async function main() {
       assert.equal(combined.passed, combined.total);
       console.log(`Combined draft/media database privileges: ${combined.passed}/${combined.total} checks passed`);
     } finally { await combinedRuntime.end(); }
-    console.log("PASS two independent databases apply 001 -> 006, repeated deploy, schema drift and private error logging");
+    console.log("PASS two independent databases apply 001 -> 007, repeated deploy, schema drift and private error logging");
     workspace = await mkdtemp(join(tmpdir(), "mq-media-upload-"));
     const devRoot = join(workspace, "private-development"), testRoot = join(workspace, "private-test");
     await mkdir(devRoot, { mode: 0o700 }); await mkdir(testRoot, { mode: 0o700 });
@@ -217,6 +218,7 @@ async function main() {
           try {
             await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: database });
             await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: database });
+            await owner.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
           } finally { await owner.end(); }
           const restoredRuntime = new URL(databaseURL); restoredRuntime.username = runtimeRole; restoredRuntime.password = rolePasswords[0];
           const restoredServer = await startServer(backendPort, { ...lifecycleEnv, DATABASE_URL: restoredRuntime.href,

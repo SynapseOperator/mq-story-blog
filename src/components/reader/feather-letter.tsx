@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import type { Story, LetterContentState, LetterPreviewSnapshot } from "@/lib/stories/story";
 import { AccountControls } from "../auth/account-controls";
+import { PublishedStoryLike } from "./published-story-like";
 
 type ReaderPhase = "opening" | "reading" | "closing";
 
@@ -212,7 +213,7 @@ export function FeatherLetter(props: FeatherLetterProps) {
             <p id="letter-demo-note" className="letter-demo-note">{snapshot
               ? snapshot.hasUnsavedChanges ? "包含未保存修改 · 预览不会保存或发布" : "仅预览当前编辑内容 · 不会保存或发布"
               : story?.source === "synthetic-demo"
-              ? "合成演示 · 非真实回忆" : "点赞与留言仍为演示，不会发送"}</p>
+              ? "合成演示 · 非真实回忆" : "登录后可以点赞；留言仍为演示，不会发送"}</p>
           </header>
           {props.mode !== "private-preview" && content && content.status !== "ready" ? <div className="letter-load-state"
             data-state={content.status === "loading" ? "loading" : content.unavailable ? "not-found" : "error"}
@@ -230,34 +231,34 @@ export function FeatherLetter(props: FeatherLetterProps) {
           {story ? <>
           <LetterProse story={story} />
           <div className="letter-divider" aria-hidden="true" />
-          <div className="letter-reactions">
+          {story.source === "published" ? <PublishedStoryLike storyId={story.id} /> : <div className="letter-reactions">
             <button type="button" className="letter-like" aria-pressed={liked} onClick={() => setLiked(!liked)}>
               <span aria-hidden="true">{liked ? "♥" : "♡"}</span>演示点赞 <span>{liked ? 1 : 0}</span>
             </button>
             <span className="letter-comment-count">留言示例 1</span>
             <span className="letter-reaction-note">仅本次阅读有效，不会发送</span>
-          </div>
+          </div>}
           <section className="letter-comments" aria-labelledby="letter-comments-title">
             <h3 id="letter-comments-title">留言</h3>
+            <p id="letter-comment-help">留言仅供演示，不会发送或保存。</p>
             <AccountControls reader />
-            <p id="letter-comment-help">写下此刻的想法。仅供演示，不会发送、公开或保存；真实留言审核功能尚未接入。</p>
             <form onSubmit={(event) => { event.preventDefault(); if (draft.trim()) setPreview(draft); }}>
               <label className="sr-only" htmlFor="letter-comment">演示留言</label>
               <textarea id="letter-comment" value={draft} rows={3} maxLength={500}
                 aria-describedby="letter-comment-help" placeholder="把想说的话，写在这里……"
                 onChange={(event) => { setDraft(event.target.value); setPreview(null); }} />
               <div className="letter-comment-actions">
-                <span>{draft.length}/500 · 原型限制</span>
+                <span>{draft.length} / 500</span>
                 <button type="submit" disabled={!draft.trim()}>预览留言（不发送）</button>
               </div>
             </form>
             <div className="letter-comment-preview" role="status" aria-live="polite">
-              {preview !== null ? <><h4>你的演示预览 · 尚未发送</h4><p>{preview}</p><small>输入仍保留，关闭时会询问是否放弃。</small></> : null}
+              {preview !== null ? <><h4>你的预览 · 未发送</h4><p>{preview}</p><small>输入仍保留，关闭时会询问是否放弃。</small></> : null}
             </div>
             <div className="letter-sample-comment">
               <span className="letter-comment-avatar" aria-hidden="true">星</span>
               <div>
-                <p><strong>演示访客</strong><span>合成留言示例</span></p>
+                <p><strong>演示访客</strong><span>合成示例</span></p>
                 <p>愿每一个平凡的夜晚，都有值得收藏的微光。</p>
               </div>
             </div>
