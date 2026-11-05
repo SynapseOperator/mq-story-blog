@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 本轮仅实施 P2-11 / Issue #41，基于已合并 P2-10B 的 main `0bbe77a1c42a13ee2e10da7384da818d1ffe90ac`。公开点赞使用数据库 Session、独立 GET/PUT/DELETE 与唯一约束；下架保留记录但拒绝新的公开读写。只替换公开信纸点赞区，复用 AuthDialog，保留阅读滚动和演示留言。新增 007，不修改 001–006。边界见 STORY_LIKES.md；仅隔离合成数据，Draft PR，不自动合并、部署或开始真实留言。
+- 本轮仅实施 P2-12A / Issue #43，基于已合并 P2-11 的 main `a2164478e974ec58d526ab5e97755331fb508452`。实现留言持久化、待审回执与受保护审核 API，新增 008，不修改 001–007。公开响应只含当前公开故事的 APPROVED 留言；审核使用 withAdmin 同一事务及独立受限签名函数。边界见 STORY_COMMENTS.md；仅隔离合成数据，不修改信纸/UI，不开始 P2-12B、部署或自动合并。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -13,6 +13,7 @@
 
 - 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
 - PR 说明面向代码评审者，直接写问题、改动原因、实际验证和剩余限制；减少模板套话、过程复述和重复状态清单。详细日志放证据链接，不堆进正文。
+- 新 PR 完成后默认 Ready for Review，并请求 SnorkelingBreather 正式独立评审；只有负责人明确要求 Draft 时保留 Draft。新提交必须匹配有效 Review 与 CI；取得 APPROVED 也不等于自动获得合并授权。
 - 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
 - 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
 - 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。

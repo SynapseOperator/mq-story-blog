@@ -58,6 +58,7 @@ model Story {
   draftRevision       StoryRevision   @relation("DraftRevision", fields: [id, draftRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
   publishedRevision   StoryRevision?  @relation("PublishedRevision", fields: [id, publishedRevisionId], references: [storyId, id], onDelete: Restrict, onUpdate: Restrict)
   likes               StoryLike[]
+  comments            StoryComment[]
 
   @@map("story")
 }
@@ -143,6 +144,37 @@ model User {
   adminGrant AdminGrant?
   adminSecurityEvents AdminSecurityEvent[]
   storyLikes StoryLike[]
+  storyComments StoryComment[] @relation("CommentAuthor")
+  moderatedComments StoryComment[] @relation("CommentModerator")
+}
+
+enum CommentState {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+// Immutable submissions; only the signed moderation function changes state.
+model StoryComment {
+  id                String       @id @default(uuid()) @db.Uuid
+  storyId           String       @map("story_id") @db.Uuid
+  userId            String?      @map("user_id")
+  body              String
+  submissionKeyHash String       @unique @map("submission_key_hash") @db.VarChar(64)
+  state             CommentState @default(PENDING)
+  version           Int          @default(0)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  moderatedAt       DateTime?    @map("moderated_at") @db.Timestamptz(3)
+  moderatedBy       String?      @map("moderated_by")
+  approvedAt        DateTime?    @map("approved_at") @db.Timestamptz(3)
+  story             Story        @relation(fields: [storyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user              User?        @relation("CommentAuthor", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  moderator         User?        @relation("CommentModerator", fields: [moderatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([storyId, state, createdAt, id])
+  @@index([state, createdAt, id])
+  @@map("story_comment")
 }
 
 // One persistent like per account/story; withdrawal never deletes this record.

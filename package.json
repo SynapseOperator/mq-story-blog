@@ -48,7 +48,8 @@
     "admin:maintain": "node scripts/admin/maintain.mjs",
     "test:admin-preview": "npm run db:generate && node scripts/admin-preview/integration.mjs",
     "test:publishing": "npm run db:generate && node scripts/publishing/integration.mjs",
-    "test:likes": "npm run db:generate && node scripts/likes/integration.mjs"
+    "test:likes": "npm run db:generate && node scripts/likes/integration.mjs",
+    "test:comments": "npm run db:generate && node scripts/comments/integration.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
