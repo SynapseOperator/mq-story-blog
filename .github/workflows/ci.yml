@@ -2,8 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    # P2-12B is stacked on A; remove the extra base after A merges and B is retargeted.
-    branches: [main, feat/p2-12a-story-comments]
+    branches: [main]
   push:
     branches: [main]
 

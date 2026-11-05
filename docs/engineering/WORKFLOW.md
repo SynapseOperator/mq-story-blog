@@ -2,6 +2,8 @@
 
 本文件记录 Codex 开发系统 V1 的项目接入，不替代 PRD、设计裁决或执行日志，不声明尚未取得的 CI、保护或产品验收结果。
 
+**当前说明（P3-01，2026-11-05）**：下文 Phase 0 环境、初始任务与停止条件是初始化历史记录。Phase 2 已合并；当前 `npm run check` 包含 lint、Prisma Schema、typecheck、单元测试与生产构建。最新 GitHub 证据及生产限制见 [部署就绪审查](DEPLOYMENT_READINESS.md)：main 当前未强制分支保护，Projects/Iteration 因缺少只读授权尚未核实，不能将历史人工核验描述为平台门禁。P3-01 不采购或部署。
+
 ## 本阶段与 V1 接入
 
 Phase 0 仅初始化 Next.js、TypeScript、Tailwind CSS、ESLint、资料与 GitHub 协作。Node 24.19.0、npm 11.17.0，锁文件为 `package-lock.json`。保持单仓库模块化单体；不加入数据库、真实账号、后台、私密故事或部署。

@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-12B 真实留言与管理员审核界面**（[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)），依赖尚未合并的 [P2-12A / PR #44](https://github.com/SynapseOperator/mq-story-blog/pull/44) 提交 `39af52e`。羽毛信接入匿名或账号留言，统一等待审核；`/admin/comments` 复用既有审核权限与 API。公开列表和数量只来自已通过留言，提交回执不代表公开。接口、权限及测试见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
+**Phase 2 核心业务已合并，当前进入 P3-01 部署就绪审查**（[Issue #47](https://github.com/SynapseOperator/mq-story-blog/issues/47)）。基线 main 为 `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc`；真实文章、登录、管理员权限、图片、发布、点赞及留言审核已实现并通过隔离测试，尚未生产开放。羽毛信的匿名或账号留言统一等待审核，公开列表和数量只包含已通过留言。接口见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)，部署阻塞与课程证据见 [DEPLOYMENT_READINESS.md](docs/engineering/DEPLOYMENT_READINESS.md)。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-本轮保留全部既有测试，`npm run test:comments` 同时验证真实数据库、HTTP/HTTPS 和生产浏览器的留言与审核流程。仅使用随机隔离数据库、受限身份与合成数据；留言写入默认关闭，认证与发布开关不变。完成后交付 Ready for Review PR 并请求 SnorkelingBreather，不自动合并或部署。Stacked PR 的 CI 临时包含 A 分支；A 合并后须将 B 改为 main、移除该过滤并重新验证。生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放前门槛。
+`npm run test:comments` 验证真实数据库、HTTP/HTTPS 和生产构建浏览器的留言与审核流程；所有既有测试保留。只使用随机隔离库、受限身份及合成数据。认证、媒体、发布及留言写入仍需显式受控启用；生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放门槛。P3-01 只清理已结束的 Stacked CI base 过滤及文档，不提供生产 Compose 或开放服务。新 PR 默认 Ready for Review，并请求 SnorkelingBreather；不自动合并。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -67,7 +67,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-本分支以 main 为 base，独立审查 P2-12A 增量。历史阶段文档保留原验收记录，当前操作以本文及生命周期/备份手册为准。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本轮不更改已验收界面。
+P3-01 从 main 独立开发。历史文档保留当时的验收与限制，当前部署状态以部署审查为准；现有生命周期/备份工具的目标限制不能绕过。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本轮不更改已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
@@ -82,11 +82,11 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 - `landscape.tsx`：背景/前景位移包装层、同层故事星与触区、独立火焰/暖光、局部草叶遮罩；按传入的稳定 slot 渲染现有位置。当前三个预设星位及其响应式位置不代表最终数量或星位策略。
 - `use-scene-motion.ts`：单个指针订阅与按需 rAF 平滑位移；触屏禁用视差，系统减少动态效果时关闭循环运动和视差，入口仍可操作。
 - `scene-page.tsx`：固定 Logo/导航/账号入口、阅读器入口状态及辅助目录。M/Q 保持建设中，不提供故事控件或循环动画。
-- `src/components/reader/feather-letter.tsx`：原生模态阅读层、内部滚动、草稿关闭确认与本地演示互动。`letter.css` 将固定纸张纹理、磨损边缘和羽毛装饰与内容分开。
+- `src/components/reader/feather-letter.tsx`：原生模态阅读层、内部滚动、草稿关闭确认，以及公开故事的真实点赞与留言组件。`letter.css` 将固定纸张纹理、磨损边缘和羽毛装饰与内容分开。
 
-读信时保留并暗化同一 MQ 场景，隐藏导航和普通账号入口，暂停背景响应；正文、配图、点赞和「留言」在同一信纸内部连续滚动。关闭按钮、Esc 和外围暗区共用关闭逻辑；有演示留言输入时先确认，继续编辑保留内容，关闭后恢复场景与触发入口焦点。展开/关闭期间拒绝冲突操作，减少动态效果模式取消舒展动画。
+读信时保留并暗化同一 MQ 场景，隐藏导航和普通账号入口，暂停背景响应；正文、配图、点赞和「留言」在同一信纸内部连续滚动。关闭按钮、Esc 和外围暗区共用关闭逻辑；有未提交留言或未知提交结果时先确认，继续编辑保留内容，关闭后恢复场景与触发入口焦点。展开/关闭期间拒绝冲突操作，减少动态效果模式取消舒展动画。
 
-公开故事的点赞保存在数据库中；四份合成演示夹具保留明确标注的本地演示状态。「预览留言（不发送）」保留临时草稿，不发送、公开或持久化评论，确认关闭后丢弃。分享 URL：从首页打开可后退/前进，外部直达时关闭仅回 MQ 首页，不跳回外部网站。未提交草稿在站内关闭/历史导航时复用原确认框；跨文档离开和刷新使用浏览器原生 beforeunload，限制见 [分享说明](docs/engineering/STORY_SHARING.md)。本分支新增真实留言后端，但该演示区域尚未接入，留待 P2-12B。
+公开故事的点赞与留言保存在数据库中。游客可匿名留言，登录用户可选择账号或匿名身份；提交只返回待审核回执，通过后才进入公开列表。四份合成演示夹具仍明确标注本地演示，管理员私有预览不显示互动区。分享 URL 支持前进/后退，外部直达时关闭仅回 MQ 首页。未提交草稿在关闭/历史导航时复用确认框，跨文档离开和刷新使用浏览器原生 beforeunload；不承诺浏览器崩溃后恢复，见 [分享说明](docs/engineering/STORY_SHARING.md)。
 
 当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
 
