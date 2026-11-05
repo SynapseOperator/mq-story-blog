@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-12A 真实留言与审核后端**（[Issue #43](https://github.com/SynapseOperator/mq-story-blog/issues/43)），基于已合并 P2-11 的 main `a2164478e974ec58d526ab5e97755331fb508452`。匿名和账号留言均先进入待审核状态，公开 API 只返回已通过留言；管理员审核使用同一权限事务及数据库受限函数。接口、权限及测试见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。本轮不接入前端，信纸留言区继续明确标注演示。
+当前分支为 **P2-12B 真实留言与管理员审核界面**（[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)），依赖尚未合并的 [P2-12A / PR #44](https://github.com/SynapseOperator/mq-story-blog/pull/44) 提交 `39af52e`。羽毛信接入匿名或账号留言，统一等待审核；`/admin/comments` 复用既有审核权限与 API。公开列表和数量只来自已通过留言，提交回执不代表公开。接口、权限及测试见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-本轮保留全部既有测试，新增 `npm run test:comments`。仅使用随机隔离数据库、受限身份与合成数据；留言写入默认关闭，认证与发布开关不变。完成后交付 Ready for Review PR 并请求 SnorkelingBreather，不自动合并、不部署、不开始 P2-12B。生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放前门槛。
+本轮保留全部既有测试，`npm run test:comments` 同时验证真实数据库、HTTP/HTTPS 和生产浏览器的留言与审核流程。仅使用随机隔离数据库、受限身份与合成数据；留言写入默认关闭，认证与发布开关不变。完成后交付 Ready for Review PR 并请求 SnorkelingBreather，不自动合并或部署。Stacked PR 的 CI 临时包含 A 分支；A 合并后须将 B 改为 main、移除该过滤并重新验证。生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放前门槛。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

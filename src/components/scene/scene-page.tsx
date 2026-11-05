@@ -184,7 +184,7 @@ export function ScenePage({ section, initialStorySlug }: { section: Section; ini
           <div className="sr-only">
             <h1>MQ · Our Stories</h1>
             <p>夜空下，情侣并肩坐在茂盛的青草山坡上，身旁燃着篝火。</p>
-            <p>选择已公开的故事星或篝火，在羽毛信中阅读。登录后可以点赞；留言仍为不发送的原型。</p>
+            <p>选择已公开的故事星或篝火，在羽毛信中阅读。登录后可以点赞，也可以匿名或使用账号留言。</p>
           </div>
         ) : (
           <section className="construction" aria-labelledby="construction-title">

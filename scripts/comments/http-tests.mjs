@@ -6,7 +6,7 @@ import { createAuthDatabaseClient } from "../../src/server/auth/database.ts";
 import { createStoryService } from "../../src/server/stories/service.ts";
 import { initializeAdmin, revokeAdmin, restoreAdmin } from "../../src/server/admin/maintenance.ts";
 import { assertTemporaryTarget, transport, observeWait, commentPath, moderatePath, createCommentFixtures,
-  assertReceipt, assertCommentPage, assertModerated, assertCommentError, submitAndDropResponse } from "./test-support.mjs";
+  assertReceipt, assertCommentPage, assertAdminComment, assertModerated, assertCommentError, submitAndDropResponse } from "./test-support.mjs";
 
 /** All submissions and moderation use the real HTTP routes. Owner connections
  * inspect synthetic rows, reset independent test quotas and inject bounded faults. */
@@ -90,6 +90,27 @@ export async function runCommentHttpTests({ connectionString, maintenanceUrl, ru
         assert.equal((await request(path, { ...options, jar: jars[0], headers: { "x-role": "admin", "x-user-id": grant.userId } })).status, 403);
       }
       assertCommentPage(await request("/api/admin/comments", { jar: adminJar }), { admin: true, count: 1 });
+    });
+    await check("admin exact reads reconcile across states and expose only protected story labels", async () => {
+      const receipt = assertReceipt(await submit(fixtures.second.id, "合成精确核对留言"));
+      const path = `/api/admin/comments?commentId=${receipt}`;
+      assert.equal((await request(path)).status, 401);
+      assert.equal((await request(path, { jar: jars[0] })).status, 403);
+      const pending = assertAdminComment(await request(path, { jar: adminJar }), receipt);
+      assert.equal(pending.state, "PENDING"); assert.equal(pending.storyDraftTitle, "另一篇合成留言故事");
+      assert.equal(pending.storyState, "PUBLISHED");
+      await approve(receipt);
+      assert.equal(assertAdminComment(await request(path, { jar: adminJar }), receipt).state, "APPROVED");
+      assertCommentPage(await request(`/api/admin/comments?state=PENDING&storyId=${fixtures.second.id}`, { jar: adminJar }), { admin: true, count: 0 });
+      assertModerated(await moderate(receipt, "withdraw", 1), { id: receipt, state: "WITHDRAWN", version: 2 });
+      assert.equal(assertAdminComment(await request(path, { jar: adminJar }), receipt).state, "WITHDRAWN");
+      assertCommentError(await request(`/api/admin/comments?commentId=${randomUUID()}`, { jar: adminJar }), 404, "COMMENT_NOT_FOUND");
+      for (const extra of ["limit=20", "cursor=abc", "state=PENDING", `storyId=${fixtures.second.id}`, `commentId=${receipt}`, "userId=other"]) {
+        assertCommentError(await request(`${path}&${extra}`, { jar: adminJar }), 400, "COMMENT_VALIDATION");
+      }
+      assertCommentError(await request("/api/admin/comments?commentId=bad", { jar: adminJar }), 400, "COMMENT_VALIDATION");
+      assertCommentError(await request(`${commentPath(id)}?commentId=${receipt}`), 400, "COMMENT_VALIDATION");
+      assertCommentPage(await request(commentPath(fixtures.second.id)), { count: 0 });
     });
     await check("explicit anonymous mode stays anonymous while account identity comes only from its signed session", async () => {
       const anonymous = assertReceipt(await submit(id, "合成登录后选择匿名", { jar: jars[0] }));
@@ -389,8 +410,8 @@ export async function runCommentHttpTests({ connectionString, maintenanceUrl, ru
     });
     await collectSecrets();
     const pendingId = (await owner.query("SELECT id FROM story_comment WHERE story_id=$1 AND state='PENDING' ORDER BY id LIMIT 1", [id])).rows[0].id;
-    return { passed, total: ca ? 22 : 21, fixtures, secrets,
-      adminJar, pendingId, logOnly: [...logOnly].filter(value => value.length >= 8), publicCount: await publicCount(id) };
+    return { passed, total: ca ? 23 : 22, fixtures, secrets,
+      admin, accounts, adminJar, pendingId, logOnly: [...logOnly].filter(value => value.length >= 8), publicCount: await publicCount(id) };
   } catch (error) {
     const location = error.stack?.split("\n").filter(line => line.trim().startsWith("at ") && /scripts[\\/]comments[\\/]/.test(line)).slice(0, 3);
     console.error(`Comments HTTP diagnostic: ${JSON.stringify({ ...lastHttp, location,

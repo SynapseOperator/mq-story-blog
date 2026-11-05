@@ -10,10 +10,13 @@ import { databaseUrl } from "../db/environment.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
 import { configureTemporaryDatabaseLogging, verifyDatabaseLogging } from "../db/log-privacy.mjs";
 import { applyAdminDatabasePrivileges } from "../admin/privileges.mjs";
+import { applyAdminDraftDatabasePrivileges } from "../admin-drafts/privileges.mjs";
+import { applyStoryLikeDatabasePrivileges } from "../likes/configure-privileges.mjs";
 import { startHttpsProxy } from "../auth/https-proxy.mjs";
 import { applyCommentDatabasePrivileges, initializeCommentKey } from "./privileges.mjs";
 import { runCommentDatabaseTests } from "./database-tests.mjs";
 import { runCommentHttpTests } from "./http-tests.mjs";
+import { runCommentBrowserTests } from "./browser-tests.mjs";
 import { transport, commentPath, moderatePath, assertCommentHeaders, assertCommentPage, assertCommentError } from "./test-support.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -56,7 +59,7 @@ async function main() {
   const passwords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")], key = randomBytes(32).toString("hex");
   const databases = [], roles = [], servers = [], secrets = new Set([base, key, ...passwords]), privateText = new Set();
   let tls, failure;
-  async function isolated() {
+  async function isolated(withDrafts = false) {
     const name = `mq_test_admin_${randomUUID().replaceAll("-", "")}`;
     assert.match(name, /^mq_test_admin_[a-f0-9]{32}$/);
     await control.query(`CREATE DATABASE "${name}"`); databases.push(name);
@@ -73,7 +76,9 @@ async function main() {
       const expected = (await readdir(new URL("../../prisma/migrations/", import.meta.url), { withFileTypes: true })).filter(item => item.isDirectory()).map(item => item.name).sort();
       const history = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
       assert.deepEqual(history, expected);
-      await applyAdminDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
+      await (withDrafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges)(owner,
+        { runtimeRole, maintenanceRole, expectedDatabase: name });
+      await applyStoryLikeDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
       await applyCommentDatabasePrivileges(owner, { runtimeRole, commentOwnerRole, expectedDatabase: name });
       await initializeCommentKey(owner, { expectedDatabase: name, key });
     } finally { await owner.end(); }
@@ -100,7 +105,7 @@ async function main() {
     assert.equal(database.passed, database.total); console.log(`Comments PostgreSQL: ${database.passed}/${database.total} checks passed`);
     for (const secure of [false, true]) {
       stage = `${secure ? "HTTPS" : "HTTP"} isolated application`;
-      const application = await isolated(), port = await unusedPort();
+      const application = await isolated(secure), port = await unusedPort();
       if (secure) { tls = await startHttpsProxy(port); secrets.add(tls.proxySecret); }
       const origin = secure ? tls.origin : `http://127.0.0.1:${port}`, secret = randomBytes(48).toString("base64url"); secrets.add(secret);
       const env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: application.runtimeUrl,
@@ -115,6 +120,15 @@ async function main() {
         } });
       assert.equal(result.passed, result.total); result.secrets.forEach(value => secrets.add(value));
       console.log(`Comments ${secure ? "HTTPS" : "HTTP"}: ${result.passed}/${result.total} checks passed`);
+      if (secure) {
+        stage = "production HTTPS reader and moderation browser";
+        const browser = await runCommentBrowserTests({ ...application, baseURL: origin, authSecret: secret,
+          admin: result.admin, accounts: result.accounts, fixtures: result.fixtures,
+          evidenceDirectory: process.env.COMMENTS_BROWSER_EVIDENCE_DIR });
+        assert.equal(browser.passed, browser.total); result.adminJar = browser.adminJar;
+        browser.secrets.forEach(value => secrets.add(value)); browser.privateText.forEach(value => privateText.add(value));
+        console.log(`Comments browser: ${browser.passed}/${browser.total} checks passed; ${browser.screenshots} screenshots`);
+      }
       await stopServer(server);
       stage = "disabled comments and disabled authentication retain public reads and refuse writes";
       for (const flags of [{ MQ_COMMENTS_ENABLED: "false" }, { MQ_AUTH_ENABLED: "false" }]) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AdminAccessError } from "../src/server/admin/policy.ts";
-import { COMMENT_BODY_LIMIT, CommentOperationError, commentId, commentIdempotencyHash,
+import { COMMENT_BODY_LIMIT, CommentOperationError, adminCommentRead, commentId, commentIdempotencyHash,
   commentModeration, commentPage, commentSigningKey, commentSubmission, encodeCommentCursor,
   inspectCommentOrigin, inspectCommentTarget, readCommentBody, requireCommentsEnabled } from "../src/server/comments/policy.ts";
 
@@ -108,6 +108,16 @@ test("moderation accepts one explicit action and bounded version without caller 
     { action: "approve", expectedVersion: 0, admin: true }, { action: "approve" }]) {
     assert.throws(() => commentModeration(value), rejects("COMMENT_VALIDATION"));
   }
+});
+
+test("admin exact reads use one UUID and cannot mix pagination, state, story or repeated keys", () => {
+  assert.deepEqual(adminCommentRead(new URLSearchParams({ commentId: id })), { commentId: id.toLowerCase() });
+  assert.deepEqual(adminCommentRead(new URLSearchParams()), { page: { limit: 20, state: "PENDING" } });
+  for (const query of ["commentId=", "commentId=bad", ...["limit=20", "cursor=abc", "state=PENDING", `storyId=${id}`,
+    `commentId=${id}`, "userId=other"].map(extra => `commentId=${id}&${extra}`)]) {
+    assert.throws(() => adminCommentRead(new URLSearchParams(query)), rejects("COMMENT_VALIDATION"));
+  }
+  assert.throws(() => commentPage(new URLSearchParams({ commentId: id })), rejects("COMMENT_VALIDATION"));
 });
 
 test("all comment writes default off and moderation uses an independent 64-hex key", () => {

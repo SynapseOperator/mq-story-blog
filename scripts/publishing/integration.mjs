@@ -84,7 +84,7 @@ async function main() {
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
       await applyPublishingDatabasePrivileges(owner, { runtimeRole, publicationOwnerRole, expectedDatabase: name });
       await initializePublishingKey(owner, { expectedDatabase: name, key });
-      await owner.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
+      await owner.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
     } finally { await owner.end(); }
     const runtime = new URL(ownerUrl); runtime.username = runtimeRole; runtime.password = passwords[0];
     const maintenance = new URL(ownerUrl); maintenance.username = maintenanceRole; maintenance.password = passwords[1];

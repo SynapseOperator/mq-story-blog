@@ -34,18 +34,28 @@ export function assertCommentPage(response, { admin = false, count } = {}) {
   assert.ok(page.nextCursor === null || (typeof page.nextCursor === "string" && page.nextCursor.length <= 1024));
   for (const item of page.items) {
     assert.deepEqual(Object.keys(item).sort(), (admin
-      ? ["id", "body", "author", "createdAt", "storyId", "state", "version", "moderatedAt", "approvedAt"]
+      ? ["id", "body", "author", "createdAt", "storyId", "storyDraftTitle", "storyState", "state", "version", "moderatedAt", "approvedAt"]
       : ["id", "body", "author", "createdAt"]).sort());
     assert.match(item.id, /^[a-f0-9-]{36}$/);
     assert.equal(typeof item.body, "string"); assert.equal(typeof item.author, "string");
     assert.ok(Number.isFinite(Date.parse(item.createdAt)));
     if (admin) {
+      assert.equal(typeof item.storyDraftTitle, "string"); assert.ok(item.storyDraftTitle.length > 0);
+      assert.ok(["DRAFT", "PUBLISHED", "WITHDRAWN"].includes(item.storyState));
       assert.ok(["PENDING", "APPROVED", "REJECTED", "WITHDRAWN"].includes(item.state));
       assert.ok(Number.isSafeInteger(item.version) && item.version >= 0);
       for (const field of ["moderatedAt", "approvedAt"]) assert.ok(item[field] === null || Number.isFinite(Date.parse(item[field])));
     }
   }
   return page;
+}
+
+export function assertAdminComment(response, id) {
+  assert.equal(response.status, 200); assertCommentHeaders(response);
+  assert.deepEqual(Object.keys(response.data), ["comment"]);
+  assertCommentPage({ ...response, data: { items: [response.data.comment], count: 1, nextCursor: null } }, { admin: true });
+  assert.equal(response.data.comment.id, id);
+  return response.data.comment;
 }
 
 export function assertModerated(response, { id, state, version }) {

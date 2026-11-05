@@ -257,7 +257,7 @@ export function StoryEditor({ initialId, publishingEnabled = false }: { initialI
 
   return <><main className="editor-workspace" data-testid="story-editor">
     <header className="editor-topbar"><a className="editor-home" aria-label="返回 MQ" href="/" onClick={event => { event.preventDefault(); navigate(() => window.location.assign("/")); }}><span className="editor-brand">MQ</span><span>返回 MQ</span></a>
-      <span className="editor-private">私有工作区 <span aria-hidden="true">·</span> 仅管理员</span></header>
+      <span className="editor-private"><a href="/admin/comments" onClick={event => { event.preventDefault(); navigate(() => window.location.assign("/admin/comments")); }}>留言审核</a><span aria-hidden="true">·</span>仅管理员</span></header>
     <div className="editor-heading"><div><p className="editor-eyebrow">OUR STORIES / MANUSCRIPTS</p><h1>把回忆写下来</h1><p>慢慢写，手动保存。这里的修改不会自动发布。</p></div><span className="editor-chapter" aria-hidden="true">手 稿</span></div>
     <div className="editor-columns">
       <aside className={`editor-library ${listOpen ? "is-open" : ""}`} aria-label="草稿列表">

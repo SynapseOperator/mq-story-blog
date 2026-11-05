@@ -120,7 +120,9 @@ async function main() {
     await owner.query(`REVOKE CREATE,TEMPORARY ON DATABASE "${name}" FROM PUBLIC`);
     await owner.query(`GRANT CONNECT ON DATABASE "${name}" TO "${role}"`);
     await owner.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
-    await owner.query(`GRANT SELECT ON public.story_like TO "${role}"`);
+    await owner.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${role}"`);
+    // Public comment authors expose only their username, never authentication fields.
+    await owner.query(`GRANT SELECT (id,username) ON public."User" TO "${role}"`);
     async function setDatabaseAvailable(available) {
       await owner.query(`${available ? "GRANT" : "REVOKE"} SELECT ON public.story,public.story_revision,public.star_slot ${available ? "TO" : "FROM"} "${role}"`);
     }

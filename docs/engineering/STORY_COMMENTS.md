@@ -68,11 +68,28 @@
 
 所有既有套件保留。媒体升级测试增加007→008，比较历史迁移校验和及已有故事/认证/点赞数据，检查 Prisma drift 和重复 deploy。完整原生备份包含留言和新私有 Schema；恢复后默认撤销全部PUBLIC授权，旧 Session/密钥是备份数据，不构成重新开放审核权限的授权。发布备份测试验证普通应用重新配置和误授 EXECUTE 均不能启用旧审核证明。
 
-本阶段不改UI、不创建真实用户、不公开生产。独立安全Review、生产运行身份、正式HTTPS/可信代理、Token原值存库、密钥轮换与加密备份仍是开放门槛。后续P2-12B必须把正文作为文本DOM渲染，不能使用 innerHTML。
+P2-12A 只实现后端，不创建真实用户或公开生产。独立安全Review、生产运行身份、正式HTTPS/可信代理、Token原值存库、密钥轮换与加密备份仍是开放门槛。
 
 设计依据：[PostgreSQL18 SECURITY DEFINER](https://www.postgresql.org/docs/18/sql-createfunction.html)、[行锁](https://www.postgresql.org/docs/18/explicit-locking.html)、[OWASP XSS输出处理](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。实际执行结果以本PR证据和CI为准。
 
-## 本轮本机结果
+## P2-12B 界面接入
+
+B 从 PR #44 的 `39af52e` 建立 Stacked 分支；A 尚未合并时不将其描述为 main 已有功能。B 不修改历史迁移、审核签名或数据库授权。
+
+公开羽毛信使用既有 GET/POST。提交时冻结正文、身份、Idempotency-Key 与本地编辑序号；请求成功只展示待审核回执。发送期间继续输入的新稿不会被旧回执清空。断网、超时或不确定响应保留冻结请求，由用户明确重试原提交；账号请求只能由原账号重试，不随登录身份变更而改写。请求结果未知时，即使输入框已清空也保留关闭确认。未提交内容和重试信息只留在当前页面内存；不承诺崩溃或确认离开后的恢复。
+
+公开列表和数量来自服务端 APPROVED 查询，支持有界分页；提交回执不增加数量，也不向列表插入待审核内容。正文按普通文本 DOM 渲染，输入法组合期间不截断或提交；长度沿用服务端的 500 Unicode 码点口径。真实数据库故事接入该组件，合成演示仍明确标注演示，管理员私有预览不显示留言。
+
+`/admin/comments` 先用现有 withAdmin 验证页面访问，再由受保护 API 读取列表；页面 HTML/RSC 和 metadata 不携带私人留言。默认待审核，可按状态和故事筛选。通过、拒绝和撤回复用既有签名审核接口；未知结果或409保留原行并要求重新读取，不自动重发或推断成功。
+
+既有管理员 GET 仅补充两项读取信息：
+
+- 每行增加 `storyDraftTitle` 和 `storyState`，用于显示当前工作区标题和故事状态，不增加公开 DTO 字段。
+- `GET /api/admin/comments?commentId=<uuid>` 精确核对单条留言，返回 `{comment}` 或404；不能与分页或其他筛选混用，仍在 withAdmin 同一事务内执行。
+
+测试使用锁定的 Playwright（本会话无 Browser plugin），生产构建与隔离 PostgreSQL。截图包含 CSS 视口与 DPR 2 PNG；界面验收与工程测试分开报告。依赖 A 合并后须重新调整 PR base、移除临时 CI base 过滤并验证完整回归。
+
+## P2-12A 本机结果（历史记录）
 
 Windows、Node24.19.0、PostgreSQL18.6；使用本任务独立临时容器及随机测试库，没有迁移开发库。以下命令最终退出码均为0：
 
@@ -92,3 +109,25 @@ Windows两项限制是文件符号链接权限与POSIX 0700/0600模式，现有�
 首轮留言HTTP测试的一项旧断言把在途撤权预期写成401；既有withAdmin在事务复核失败时明确返回403，已修正断言并完整重跑，没有更改授权逻辑或跳过用例。原失败日志保存在本机任务证据目录，未提交凭据、会话或数据库备份。CI结果与独立Review仍以PR当前HEAD为准。
 
 首轮 [Linux CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41969958330) 在旧点赞浏览器套件的320px reduced-motion初始化处失败：测试在正文异步加载完成前断言页面标题。将原有精确正文标题等待移到页面标题断言前，保留全部断言与原超时；不修改应用/UI，也不重试掩盖错误。失败诊断同时改为明确当前视口，避免显示上一用例名称。最终验证看修正后的HEAD及CI。
+
+## P2-12B 本机验证（2026-11-05）
+
+Windows / Node 24.19.0 / Docker Engine 29.9.2 / PostgreSQL 18.6。使用任务独立临时容器、随机数据库、既有受限角色配置和合成数据，未迁移开发库。最终退出码均为0：
+
+| 检查 | 结果 |
+| --- | --- |
+| `npm run check` | lint、Schema、typecheck、build通过；191项单测，189通过、2项既有Windows平台限制 |
+| `npm run test:comments` | PostgreSQL12/12、HTTP22/22、HTTPS23/23、生产浏览器29/29；默认关闭、日志隐私与清理通过 |
+| `npm run test:likes` | PostgreSQL7/7、HTTP10/10、HTTPS11/11、浏览器20/20；滚动修复后完整重跑 |
+| `test:db`、`test:media` | 迁移、故事领域、不可变引用、锁与隔离回归通过 |
+| `test:auth`、`test:auth:limiter`、`test:auth:logs`、`test:auth:transactions`、`test:auth:hash` | 认证、限流、日志控制、事务与密码成本回归通过 |
+| `test:admin`、`test:admin-drafts`、`test:admin-editor`、`test:admin-preview` | 管理权限、草稿及已有编辑/私有预览浏览器套件通过 |
+| `test:public`、`test:media:upload`、`test:media:stories`、`test:publishing`、`test:media:lifecycle` | 公开分享、图片、发布、删除及联合备份恢复通过 |
+
+新浏览器检查包含匿名/账号提交、审核通过/拒绝/撤回、公开及管理员分页、重复点击、丢回执、断网、429/409、权限失效、500码点与组合输入事件、文本XSS、刷新与重新登录、下架恢复、分享历史及关闭确认。HTTP/HTTPS原套件保留；管理员精确读取增加真实权限、严格参数互斥和公开DTO隔离检查。截图使用1536×1024、390×844、320×568 CSS视口及DPR2 PNG，触屏和reduced-motion也执行。Browser plugin未提供，使用项目锁定Playwright；不是实体手机或原生输入法硬件测试。
+
+本轮实际修复了移动端账号登录后27px滚动偏移：点赞重新读取时的加载提示不再占用临时布局行，仍保留读屏提示、按钮忙态，以及保存/失败信息。原2px滚动断言未放宽。旧点赞用例只将演示留言定位换成真实组件，全部20项保留。其他回归使用的受限身份增加留言只读能力；公开专用身份仅增加User(id,username)列读，不授予认证写权限。新审核页联合环境复用原草稿权限配置，不降低服务端权限审计。
+
+首轮lint、选择器/异步等待、联合测试权限配置、滚动回归及截图夹具失败日志均保存在本机证据目录。最终截图复用隔离库既有星位和生命周期服务，未添加正式星位、修改历史迁移或跳过业务用例。两项Windows文件系统限制继续由Linux CI执行；本机没有停止现有Compose开发实例跑持久化，CI保留该独立检查。CI数据库Job上限从30调整为40分钟，容纳新增浏览器套件，不使用continue-on-error。
+
+截图与日志保存在仓库外 `mq-p2-12b` 任务目录；没有提交会话、密码、数据库备份或真实留言。界面目前待负责人视觉与交互验收；独立Review与最新HEAD的Linux CI仍以PR实时状态为准。
