@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { URL } from "node:url";
@@ -13,7 +13,7 @@ import { assertTemporaryTarget } from "../admin-drafts/test-support.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
 import { verifyDatabaseLogging } from "../db/log-privacy.mjs";
 
-/** Native backup/restore of a populated 007 database. Keys and old sessions are
+/** Native backup/restore of a populated 008 database. Keys and old sessions are
  * preserved as data, never treated as permission to enable a restored service. */
 export async function runPublicationBackupTests({ source, controlURL, projectRoot, workspace, storage,
   runtimeRole, maintenanceRole, key, first, oldJar, origin, ca, secrets, rememberDatabase, withRestoredServer }) {
@@ -43,16 +43,31 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
     for (const user of readers) await pool.query("INSERT INTO story_like(user_id,story_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [user.id, first.id]);
     const sourceLikes = (await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows;
     assert.equal(sourceLikes.filter(like => like.story_id === first.id).length, readers.length);
+    const commentKey = randomBytes(32), commentId = randomUUID();
+    secrets.add(commentKey.toString("hex"));
+    await pool.query("INSERT INTO mq_comment_private.moderation_key(id,secret) VALUES(1,$1)", [commentKey]);
+    await pool.query(`INSERT INTO story_comment(id,story_id,user_id,body,submission_key_hash)
+      VALUES($1,$2,$3,$4,$5)`, [commentId, first.id, sourceGrant.userId, "合成备份留言：尚待审核",
+      createHash("sha256").update(randomUUID()).digest("hex")]);
+    const approvedCommentId = randomUUID();
+    await pool.query(`INSERT INTO story_comment(id,story_id,body,submission_key_hash) VALUES($1,$2,$3,$4)`,
+      [approvedCommentId, first.id, "合成备份留言：审核后可见", createHash("sha256").update(randomUUID()).digest("hex")]);
+    // The isolated migration identity seeds audit fields; runtime moderation is
+    // independently exercised by test:comments, not bypassed in the application.
+    await pool.query(`UPDATE story_comment SET state='APPROVED',version=1,moderated_by=$2,
+      moderated_at=clock_timestamp(),approved_at=clock_timestamp() WHERE id=$1`, [approvedCommentId, sourceGrant.userId]);
+    const sourceComments = (await pool.query("SELECT * FROM story_comment ORDER BY id")).rows;
+    assert.equal(sourceComments.length, 2);
 
     await check("full native archive contains nonempty private signing schema without exposing secrets in its manifest", async () => {
       archive = await createMediaBackup({ databaseURL: source.connectionString, expectedDatabase: source.name,
         storage, backupParent: backups, tools });
       await verifyMediaBackup(archive.directory);
       const manifest = await readFile(join(archive.directory, "manifest.json"), "utf8");
-      assert.ok(!manifest.includes(key) && !manifest.includes(oldJar.cookie));
+      assert.ok(!manifest.includes(key) && !manifest.includes(commentKey.toString("hex")) && !manifest.includes(oldJar.cookie));
       for (const session of sourceSessions) assert.ok(!manifest.includes(session.token));
     });
-    await check("restored 007 retains exact likes, key and sessions while PUBLIC privileges remain closed in all application schemas", async () => {
+    await check("restored 008 retains comments, likes, both private keys and sessions with PUBLIC privileges closed", async () => {
       result = await restoreMediaBackup({ directory: archive.directory, controlURL, restoreParent: restores, projectRoot, tools });
       rememberDatabase(result.database);
       restoredPool = new pg.Pool({ connectionString: result.databaseURL, max: 2 });
@@ -62,6 +77,8 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       assert.deepEqual((await restoredPool.query('SELECT * FROM "Session" ORDER BY id')).rows, sourceSessions);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0], sourceStory);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, sourceLikes);
+      assert.deepEqual((await restoredPool.query("SELECT * FROM story_comment ORDER BY id")).rows, sourceComments);
+      assert.ok((await restoredPool.query("SELECT secret FROM mq_comment_private.moderation_key WHERE id=1")).rows[0].secret.equals(commentKey));
       assert.ok((await restoredPool.query("SELECT to_regprocedure('public.mq_apply_story_publication(text,bytea)') IS NOT NULL AS present")).rows[0].present);
       const acl = (await restoredPool.query(`SELECT count(*)::int AS n FROM (
         SELECT a.grantee FROM pg_namespace ns,
@@ -88,16 +105,20 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
     await check("ordinary application reprovisioning cannot publish or reveal restored keys", async () => {
       await applyAdminDraftDatabasePrivileges(restoredPool, { runtimeRole, maintenanceRole, expectedDatabase: result.database });
       await applyMediaDatabasePrivileges(restoredPool, { runtimeRole, expectedDatabase: result.database });
-      await restoredPool.query(`GRANT SELECT ON public.story_like TO "${runtimeRole}"`);
+      await restoredPool.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
       runtime = new pg.Pool({ connectionString: restoredRuntime.href, max: 1 });
       await assert.rejects(runtime.query("SELECT secret FROM mq_publish_private.signing_key"), { code: "42501" });
+      await assert.rejects(runtime.query("SELECT secret FROM mq_comment_private.moderation_key"), { code: "42501" });
+      await assert.rejects(runtime.query("UPDATE story_comment SET state=state WHERE false"), { code: "42501" });
+      await assert.rejects(runtime.query("SELECT public.mq_apply_comment_moderation($1,$2)", ["[]", Buffer.alloc(32)]), { code: "42501" });
       for (const column of ["state", "published_revision_id", "slot_id"]) {
         await assert.rejects(runtime.query(`UPDATE story SET ${column}=${column} WHERE false`), { code: "42501" });
       }
       await assert.rejects(runtime.query("SELECT public.mq_apply_story_publication($1,$2)", ["[]", Buffer.alloc(32)]), { code: "42501" });
     });
     await check("old HTTPS cookie and matching old key cannot enable publication after only normal application provisioning", async () => {
-      await withRestoredServer({ DATABASE_URL: restoredRuntime.href, MQ_MEDIA_TEST_ROOT: result.privateRoot }, async () => {
+      await withRestoredServer({ DATABASE_URL: restoredRuntime.href, MQ_MEDIA_TEST_ROOT: result.privateRoot,
+        MQ_COMMENTS_ENABLED: "true", MQ_COMMENT_SIGNING_KEY: commentKey.toString("hex") }, async () => {
         const jar = { ...oldJar };
         const session = await request("/api/auth/get-session", { jar });
         assert.equal(session.status, 200); assert.ok(session.data.user);
@@ -106,6 +127,14 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
         assert.equal(anonymousLikes.status, 200); assert.deepEqual(anonymousLikes.data, { count: readers.length, liked: false }); privateHeaders(anonymousLikes);
         const personalLikes = await request(`/api/stories/${first.id}/likes`, { jar });
         assert.equal(personalLikes.status, 200); assert.deepEqual(personalLikes.data, { count: readers.length, liked: true }); privateHeaders(personalLikes);
+        const comments = await request(`/api/stories/${first.id}/comments`);
+        assert.equal(comments.status, 200); assert.equal(comments.data.count, 1); assert.equal(comments.data.nextCursor, null);
+        assert.deepEqual(comments.data.items.map(item => item.id), [approvedCommentId]); privateHeaders(comments);
+        const moderation = await request(`/api/admin/comments/${commentId}/moderate`, {
+          method: "POST", jar, body: { action: "approve", expectedVersion: 0 },
+        });
+        assert.equal(moderation.status, 503); privateHeaders(moderation);
+        assert.deepEqual((await restoredPool.query("SELECT * FROM story_comment ORDER BY id")).rows, sourceComments);
         const denied = await request(`/api/admin/stories/${first.id}/withdraw`, {
           method: "POST", jar, body: { expectedVersion: sourceStory.version },
         });
@@ -130,7 +159,23 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       }
       assert.deepEqual((await restoredPool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0], sourceStory);
     });
-    return { passed, total: 6 };
+    await check("restored comment function rejects old-key proof even after an accidental EXECUTE grant", async () => {
+      await restoredPool.query(`GRANT EXECUTE ON FUNCTION public.mq_apply_comment_moderation(text,bytea) TO "${runtimeRole}"`);
+      const tx = await runtime.connect();
+      try {
+        await tx.query("BEGIN");
+        const context = (await tx.query("SELECT current_database() AS db,session_user AS actor,pg_current_xact_id()::text AS xid")).rows[0];
+        const payload = JSON.stringify(["mq-comment-moderation-v1", context.db, context.actor, context.xid,
+          adminSession.id, sourceGrant.userId, "approve", first.id, commentId, "0"]);
+        const signature = createHmac("sha256", commentKey).update(payload).digest();
+        await assert.rejects(tx.query("SELECT public.mq_apply_comment_moderation($1,$2)", [payload, signature]), { code: "P7202" });
+      } finally {
+        await tx.query("ROLLBACK"); tx.release();
+        await restoredPool.query(`REVOKE ALL ON FUNCTION public.mq_apply_comment_moderation(text,bytea) FROM "${runtimeRole}"`);
+      }
+      assert.deepEqual((await restoredPool.query("SELECT * FROM story_comment ORDER BY id")).rows, sourceComments);
+    });
+    return { passed, total: 7 };
   } catch (error) { error.publishingStage = `backup: ${stage}`; throw error; }
   finally { await Promise.allSettled([pool.end(), restoredPool?.end(), runtime?.end()]); }
 }

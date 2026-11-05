@@ -79,7 +79,7 @@ async function main() {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
       assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle",
-        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes"]);
+        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments"]);
       await applyAdminDraftDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
       await applyPublishingDatabasePrivileges(owner, { runtimeRole, publicationOwnerRole, expectedDatabase: name });
@@ -136,7 +136,7 @@ async function main() {
       }
       await stopServer(server);
       if (secure) {
-        stage = "native 007 backup with likes and restored publication default-deny";
+        stage = "native 008 backup with comments, likes and restored privileged operations default-deny";
         const backupResult = await runPublicationBackupTests({
           source: application, controlURL: base, projectRoot: root, workspace,
           storage: { projectRoot: root, roots: { development: devRoot, test: storageRoot },
