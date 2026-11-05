@@ -131,7 +131,7 @@ Caddy首版直接面对客户端，不默认信任任意X-Forwarded-For。丢弃
 | 原评分项 | 实际证据 | 尚缺 |
 | --- | --- | --- |
 | 项目规划5% | PRD、历史DELIVERY_PHASES、[#1](https://github.com/SynapseOperator/mq-story-blog/issues/1)及分阶段工作项 | Projects Roadmap未核实 |
-| 工作项设置5% | 真实Issue范围/验收，例如[#43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、[#45](https://github.com/SynapseOperator/mq-story-blog/issues/45) | 实际负责人/标签/优先级/层级字段不齐，正文不等于字段 |
+| 工作项设置5% | 真实Issue范围/验收，例如[#43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、[#45](https://github.com/SynapseOperator/mq-story-blog/issues/45) | 负责人/标签字段未覆盖全部Issue；优先级与父子层级字段尚未核实，正文不等于字段 |
 | 迭代5% | Issue/PR真实时间线 | **Projects Iteration未核实**；普通Issue和milestone不能冒充Iteration |
 | 开发提交5% | 73个main commit及功能分支，例如[8479304](https://github.com/SynapseOperator/mq-story-blog/commit/84793043e741b0da0fbc7865a53506987b9e3a3f) | 最终按真实贡献整理过程报告 |
 | 代码检查5% | lint/typecheck/unit及独立Review | Next专用/JSX可访问性规则是历史已记缺口；生产安全审查另做 |
