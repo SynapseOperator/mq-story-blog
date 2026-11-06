@@ -220,10 +220,20 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Build production candidate images without credentials
         run: |
-          docker build --target app -t mq-p302-app:local .
-          docker build --target tools -t mq-p302-tools:local .
-          docker build --target proxy -t mq-p302-proxy:local .
-          docker build --target operations -t mq-p303-operations:local .
+          # A dedicated builder shares layers across these targets. Once loaded,
+          # remove only this job's builder/cache before the disk-reserve test.
+          # Never prune the daemon or remove unrelated runner directories.
+          builder="mq-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx create --name "$builder" --driver docker-container \
+            --driver-opt image=moby/buildkit@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+          trap 'docker buildx rm "$builder"' EXIT
+          docker buildx build --builder "$builder" --load --target app -t mq-p302-app:local .
+          docker buildx build --builder "$builder" --load --target tools -t mq-p302-tools:local .
+          docker buildx build --builder "$builder" --load --target proxy -t mq-p302-proxy:local .
+          docker buildx build --builder "$builder" --load --target operations -t mq-p303-operations:local .
+          docker buildx rm "$builder"
+          trap - EXIT
+          df -h .
       - name: Synthetic HTTPS deployment, least privilege and browser regression
         # Includes every original container check, then encrypted recovery and
         # real SCRAM/TLS rotation. No duplicate build or omitted regression.

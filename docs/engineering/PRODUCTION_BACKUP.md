@@ -72,4 +72,6 @@ node scripts/production/backup-cli.mjs restore --confirm-deployment=<目标部�
 
 容器 CI 输出脱敏的监控数值。共享 runner 刚构建镜像后的宿主高负载不作为未来 VPS 的容量验收，但必须真实产生 `HOST_LOAD_HIGH`，保留 `monitoring.ok=false`；生产探针仍非零退出。容器健康、磁盘、端口、备份和证书验证异常依旧使演练失败，不能用 CI 成功替代主机健康验收。
 
+Linux CI 的一次真实失败显示磁盘仅余 8,039,165,952 bytes，低于 8GiB 保留线。构建改为本次 job 独占的 BuildKit builder，四个镜像导出后删除其专属缓存，再运行演练；不降低磁盘阈值、不执行全局 prune 或删除 runner 的无关目录。
+
 最终命令退出码和 Linux CI 链接以 PR 验证记录为准。真实异地仓库、保留周期/RPO/RTO批准、定时调度告警接收者、磁盘配额、生产备份密钥托管/签名和真实VPS恢复仍待上线前验收。
