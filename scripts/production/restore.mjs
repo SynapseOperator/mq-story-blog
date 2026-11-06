@@ -10,7 +10,7 @@ import { verifyDeploymentMigrations } from "./database.mjs";
 import { initializeMediaVolume } from "./init-media.mjs";
 import { assertMaintenanceControl, MAINTENANCE_LOCK, WRITER_IDENTITIES } from "./rotation.mjs";
 import { removeBackupWorkChild, restoreSnapshot } from "./backup.mjs";
-import { containsPath, pgToolEnvironment, requireBackupSpace, runBackupTool } from "./backup-tools.mjs";
+import { backupBackend, containsPath, pgToolEnvironment, requireBackupSpace, runBackupTool } from "./backup-tools.mjs";
 
 const quote = value => `"${value.replaceAll('"', '""')}"`;
 
@@ -19,14 +19,16 @@ const quote = value => `"${value.replaceAll('"', '""')}"`;
  * the constrained migration identity, not the offline superuser. A failure
  * retains an isolated, paused target for diagnosis; there is no auto-resume. */
 export async function restoreDeployment({ controlPool, config, targetMigrationUrl, workspace, repository, passwordFile,
-  snapshotId, confirmDeploymentId }) {
+  snapshotId, confirmDeploymentId, backend = "local", s3, expectedRepositoryId }) {
+  const options = { repository, passwordFile, workspace, backend, s3, expectedRepositoryId };
+  backupBackend(options);
   assert.equal(confirmDeploymentId, config.deploymentId, "RESTORE_CONFIRMATION_REJECTED");
   const target = assertDatabaseUrl(targetMigrationUrl, config, "migration");
   await privatePath(config.media.root);
   assert.deepEqual(await readdir(config.media.root), [], "RESTORE_MEDIA_NOT_EMPTY");
-  assert.ok(!containsPath(workspace, config.media.root) && !containsPath(config.media.root, workspace)
-    && !containsPath(repository, config.media.root) && !containsPath(config.media.root, repository), "RESTORE_PATH_OVERLAP");
-  const { directory, manifest } = await restoreSnapshot({ repository, passwordFile, snapshotId, workspace });
+  assert.ok(!containsPath(workspace, config.media.root) && !containsPath(config.media.root, workspace), "RESTORE_PATH_OVERLAP");
+  if (backend === "local") assert.ok(!containsPath(repository, config.media.root) && !containsPath(config.media.root, repository), "RESTORE_PATH_OVERLAP");
+  const { directory, manifest } = await restoreSnapshot({ ...options, snapshotId });
   assert.notEqual(manifest.deployment.id, config.deploymentId, "RESTORE_SOURCE_TARGET_REUSE");
   // Production uses the same fixed database name on a replacement server.
   // A fresh deployment ID/tag plus the empty-object checks establish isolation;

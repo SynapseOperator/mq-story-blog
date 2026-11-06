@@ -1,0 +1,40 @@
+# Opt-in offline override, copied outside Git after reviewing exact targets.
+# No services are started or timers enabled by this file. Values are paths or
+# nonsecret metadata; referenced credentials must be UID10001 0400 files.
+services:
+  tools:
+    image: ${MQ_OPERATIONS_IMAGE:?Set the reviewed operations image digest}
+    entrypoint: [node]
+    environment:
+      BOOTSTRAP_DATABASE_URL_FILE: /run/secrets/backup_bootstrap_url
+      BACKUP_DATABASE_URL_FILE: /run/secrets/backup_database_url
+      MQ_BACKUP_BACKEND: s3
+      MQ_BACKUP_REPOSITORY: ${MQ_BACKUP_REPOSITORY:?Explicit HTTPS S3 repository}
+      MQ_BACKUP_REPOSITORY_ID: ${MQ_BACKUP_REPOSITORY_ID:?Expected repository ID}
+      MQ_BACKUP_S3_REGION: ${MQ_BACKUP_S3_REGION:?Explicit region}
+      MQ_BACKUP_S3_CREDENTIALS_FILE: /run/secrets/backup_s3_credentials
+      MQ_BACKUP_PASSWORD_FILE: /run/secrets/backup_restic_password
+      MQ_BACKUP_WORKSPACE: /var/lib/mq/backup-workspace
+      MQ_BACKUP_SOURCE_REVISION: ${MQ_BACKUP_SOURCE_REVISION:?Reviewed 40-character commit}
+    secrets: [backup_bootstrap_url, backup_database_url, backup_s3_credentials, backup_restic_password]
+    volumes:
+      - type: bind
+        source: /srv/mq/backup-workspace
+        target: /var/lib/mq/backup-workspace
+      - type: bind
+        source: /srv/mq/backup-status
+        target: /var/lib/mq/backup-status
+    networks: [database, backup-egress]
+
+secrets:
+  backup_bootstrap_url:
+    file: ${MQ_BACKUP_SECRET_DIRECTORY:?Private maintenance secret directory}/bootstrap_database_url
+  backup_database_url:
+    file: ${MQ_BACKUP_SECRET_DIRECTORY:?Private maintenance secret directory}/backup_database_url
+  backup_s3_credentials:
+    file: ${MQ_BACKUP_SECRET_DIRECTORY:?Private maintenance secret directory}/s3_credentials.json
+  backup_restic_password:
+    file: ${MQ_BACKUP_SECRET_DIRECTORY:?Private maintenance secret directory}/restic_password
+
+networks:
+  backup-egress: {}

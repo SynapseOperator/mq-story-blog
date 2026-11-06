@@ -1,0 +1,12 @@
+# Not installed/enabled by the application or this PR. Approve downtime first.
+[Unit]
+Description=MQ daily maintenance backup schedule for %i
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=5m
+Persistent=false
+Unit=mq-backup@%i.service
+
+[Install]
+WantedBy=timers.target

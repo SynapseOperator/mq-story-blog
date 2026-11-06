@@ -10,6 +10,9 @@ Phase 2 核心业务及 P3-02/P3-03 的生产基础与运维工具已进入 main
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
+
+本分支的 P4-01 工具包括[只读主机预检与 SSH 准备](docs/engineering/HOST_PREPARATION.md)、[手动发布候选和应用回退](docs/engineering/RELEASE_OPERATIONS.md)、S3 备份接入及 HTTPS 告警。生产 apply 明确拒绝；合成演练不代表已获得 VPS 部署许可。新增命令为 npm run test:release、npm run test:production:release 和 npm run host:preflight；前两项使用本地隔离容器，后者只读当前主机，不能把 Windows/容器结果当成 VPS 验收。
+
 ## 运行与检查
 
 环境：Node.js **24.19.0**、npm **11.17.0**。使用 npm 与 `package-lock.json`，不混用锁文件。在仓库根执行：

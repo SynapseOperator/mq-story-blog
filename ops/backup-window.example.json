@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "deploymentId": "REPLACE_WITH_CONFIRMED_DEPLOYMENT_UUID",
+  "project": "mq-production",
+  "releaseDirectory": "/srv/mq/current",
+  "composeEnvironmentFile": "/etc/mq/compose.env",
+  "overrideFile": "/etc/mq/backup/compose.yaml",
+  "deploymentFile": "/etc/mq/deployment.json",
+  "receiptDirectory": "/srv/mq/backup-status"
+}

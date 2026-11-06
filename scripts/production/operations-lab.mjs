@@ -6,6 +6,8 @@ import { URL } from "node:url";
 import { chromium } from "playwright";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
 import { collectOperations } from "./operations-check.mjs";
+import { startS3Lab } from "./s3-lab.mjs";
+import { runReleaseLab } from "./release-lab.mjs";
 
 /** Reuse the real deployment lab, including Caddy/HTTP, without introducing a
  * second application/bootstrap harness. Every name and secret is synthetic. */
@@ -14,6 +16,7 @@ async function runOperationsLabImpl(ctx, fixture) {
     directory, evidence, images, volume, volumeNames, secret, origin, ca, accounts, revision } = ctx;
   const { request, story, asset, adminJar, readerJar } = fixture;
   const result = { synthetic: true, productionDeployed: false, checks: [] };
+  const remote = ctx.release ? await startS3Lab(ctx) : null;
   const pass = name => { result.checks.push(name); console.log(`PASS operations: ${name}`); };
   const newImage = await request(`/api/admin/media/${asset.id}/content`, { jar: adminJar }); assert.equal(newImage.status, 200);
   const privateUpload = await request("/api/admin/media", { method: "POST", jar: adminJar, bytes: newImage.bytes,
@@ -50,11 +53,14 @@ async function runOperationsLabImpl(ctx, fixture) {
       "--mount", `type=volume,source=${target ? volumeNames["restore-media"] : `${project}_media`},target=/var/lib/mq/media`,
       "--mount", `type=volume,source=${volumeNames.operations},target=/var/lib/mq/operations`,
       "--mount", `type=volume,source=${volumeNames[group]},target=/run/secrets,readonly`];
+    if (remote) args.push("--mount", `type=volume,source=${volumeNames["remote-credentials"]},target=/run/s3,readonly`,
+      "--mount", `type=volume,source=${volumeNames["remote-ca"]},target=/etc/mq-s3,readonly`);
     const environment = { MQ_SYNTHETIC_LAB: "true", MQ_DEPLOYMENT_ENV: "staging", MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
       MQ_RESTORE_CONFIG: "/etc/mq-restore/deployment.json", BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url",
       BACKUP_DATABASE_URL_FILE: "/run/secrets/backup_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
       RUNTIME_DATABASE_URL_FILE: "/run/secrets/database_url", MQ_ROLE_PASSWORDS_FILE: "/run/secrets/role_passwords",
-      RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_LAB_REVISION: revision, ...env };
+      RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_LAB_REVISION: revision,
+      ...(remote ? { MQ_LAB_S3_REPOSITORY: remote.repository } : {}), ...env };
     for (const [name, value] of Object.entries(environment)) args.push("-e", `${name}=${value}`);
     return docker([...args, images.operations, script, action, ...extra], { fail, timeout: 600000 });
   };
@@ -68,6 +74,11 @@ async function runOperationsLabImpl(ctx, fixture) {
   // A second identical receipt/initialization is refused; no implicit overwrite.
   assert.equal(op("backup", { fail: false }).status, 1);
   pass("duplicate backup invocation cannot overwrite a verified receipt");
+  if (remote) {
+    op("remote-negative"); op("retention");
+    result.backupBackend = "s3-https-moto";
+    pass("S3 HTTPS repository identity, wrong password/credentials/CA, no receipt on failure and retention dry-run");
+  }
 
   op("create-target");
   op("bootstrap", { target: true, script: "scripts/production/database-cli.mjs" });
@@ -171,6 +182,13 @@ volumes:
   assert.equal((await request(`/api/admin/comments/${pending.data.receiptId}/moderate`, { method: "POST", jar: refreshed,
     body: { action: "approve", expectedVersion: 0 } })).status, 200);
   pass("five SCRAM credentials, auth/proxy and business key rotation with forced recreation and fresh login");
+  if (ctx.release) {
+    await volume("release-migration-secrets", { migration_database_url: changedUrl("migration") });
+    result.release = await runReleaseLab(ctx, { request, story, asset, privateAsset, oldJar: adminJar, currentJar: refreshed, receipt, databaseOperation: action => {
+      op(action, { group: action === "migrate" ? "release-migration-secrets" : action === "audit" ? "app-secrets" : "backup-secrets",
+        script: "scripts/production/database-cli.mjs" });
+    } });
+  }
   const receiptPath = join(evidence, "backup-receipt.json"); await writeFile(receiptPath, JSON.stringify(receipt));
   const monitoring = await collectOperations({ project, deploymentId: config.deploymentId, diskPath: directory, origin, receiptPath, ca, connectHost: "127.0.0.1" });
   console.log(`OPERATIONS_MONITOR ${JSON.stringify(monitoring)}`);
@@ -193,7 +211,8 @@ export async function runOperationsLab(ctx, fixture) {
   try { return await runOperationsLabImpl(ctx, fixture); }
   catch (error) {
     const line = /operations-lab\.mjs:(\d+):\d+/.exec(error.stack ?? "")?.[1];
-    console.error(`OPERATIONS_ASSERTION_FAILED${line ? ` line=${line}` : ""}`);
+    const code = ["S3_FIXTURE_NOT_READY", "S3_TLS_NOT_READY", "RELEASE_LAB_OCI_DIGEST_MISSING"].includes(error.message) ? ` ${error.message}` : "";
+    console.error(`OPERATIONS_ASSERTION_FAILED${line ? ` line=${line}` : ""}${code}`);
     throw error;
   }
 }

@@ -1,0 +1,85 @@
+name: Release candidate
+
+# Produces a private, short-lived download only. It never logs into a registry,
+# connects to SSH, reads deployment secrets, or deploys on a push event.
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full reviewed main commit SHA (an older main ancestor is allowed)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: release-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+    steps:
+      - name: Require a manually selected main workflow
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: test "$WORKFLOW_REF" = refs/heads/main && test "$EVENT_NAME" = workflow_dispatch
+      - name: Checkout trusted release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: control/.nvmrc
+          package-manager-cache: false
+      - name: Verify the exact merge, independent approval and main CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node control/scripts/release/cli.mjs gate "$SOURCE_SHA" "$RUNNER_TEMP/release-gate.json"
+      - name: Checkout only the verified candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Build OCI archives without deployment secrets
+        working-directory: candidate
+        run: |
+          set -eu
+          mkdir "$RUNNER_TEMP/mq-release"
+          builder="mq-release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx create --name "$builder" --driver docker-container \
+            --driver-opt image=moby/buildkit@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+          trap 'docker buildx rm "$builder"' EXIT
+          for target in app tools proxy operations; do
+            docker buildx build --builder "$builder" --platform linux/amd64 \
+              --target "$target" --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+              --tag "mq-release-$target:$SOURCE_SHA" \
+              --output "type=oci,dest=$RUNNER_TEMP/mq-release/$target.oci.tar" .
+          done
+      - name: Recheck approval and verify every OCI blob
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node control/scripts/release/cli.mjs gate "$SOURCE_SHA" "$RUNNER_TEMP/release-final-gate.json"
+          node control/scripts/release/cli.mjs manifest "$RUNNER_TEMP/mq-release" "$SOURCE_SHA" \
+            "$RUNNER_TEMP/release-final-gate.json" "$GITHUB_WORKSPACE/candidate" > "$RUNNER_TEMP/release-result.json"
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/release-result.json"));fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,"Source: `"+r.sourceSha+"`\n\nrelease.json SHA-256: `"+r.manifestSha256+"`\n\nDownload is a candidate, not deployment approval. No VPS was contacted.\n");'
+      - name: Upload private candidate bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mq-release-${{ inputs.source_sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/mq-release/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
