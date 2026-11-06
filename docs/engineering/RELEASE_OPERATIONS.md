@@ -75,3 +75,11 @@ node scripts/release/cli.mjs plan \
 - 完整应用/数据库/代理更新与故障回退证据由 P4 release lab 记录；最终以本 PR 最终 SHA 的 CI 为准，不把小镜像实验当作完整应用验收。
 - 新 workflow 尚未进入默认分支，**未实际执行手动候选 workflow 或验证 Artifact 上传**；GitHub 要求 workflow_dispatch 文件先进入默认分支。合并后还需负责人授权一次真实手动运行，核对配额、构建、下载和 run 摘要。[手动工作流前提](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 - 真实 VPS、真实域名、生产凭据、正式部署、独立产物签名和生产回退均未验证。不把合成环境通过称作上线完成。
+
+2026-11-06 本地联合验收：`npm run check`、`test:release`，以及 `test:db`、`test:production:db`、`test:auth:limiter`、`test:auth:transactions`、`test:auth:logs`、`test:auth`、`test:admin`、`test:admin-drafts`、`test:admin-editor`、`test:admin-preview`、`test:public`、`test:likes`、`test:comments`、`test:media`、`test:media:upload`、`test:media:stories`、`test:publishing`、`test:media:lifecycle`、`test:production:rotation`、`test:auth:session-spike` 均退出0。
+
+`test:production:operations` 与 `test:production:release` 均退出0，分别使用本地 Restic 和私网 HTTPS S3 模拟仓库。后者包含 PostgreSQL18完整迁移/身份核验、两个素材四个文件恢复、旧Session/签名失效、公开与私有图片GET/HEAD、DPR2桌面/手机实际图片解码、五类SCRAM与业务密钥轮换，以及故障镜像闭入口、按digest回退、断库503和恢复。最终一次本地备份/恢复/恢复到HTTPS耗时6.662/2.539/17.779秒，S3模式为9.419/3.838/18.511秒；不能据此承诺真实VPS或真实异地网络的RTO。
+
+S3仅使用固定官方 Moto 5.2.5 镜像和临时 Caddy CA，无host端口；启用IAM模拟并实际拒绝错误access key/签名。它能验证Restic的真实S3读写、TLS、加密和恢复路径，不能证明未来云供应商IAM、配额或网络可用性。[Moto服务模式](https://docs.getmoto.org/en/latest/docs/server_mode.html)、[IAM模拟限制](https://docs.getmoto.org/en/latest/docs/iam.html)。保留策略只执行dry-run，未删除任何真实备份。
+
+集成时修复了原始Compose的manifest挂载路径不一致，并对未覆盖的Compose配置增加断言；新演练初次因测试卷名称和Caddy测试配置而失败，修复后完整重跑。跨UID回执测试还发现测试容器的root专属/tmp阻止UID10001访问，现仅该无网络、无宿主挂载的测试使用1777/tmp，真实私密子目录仍700。原失败日志保留在本机临时证据目录，未上传含备份或秘密的测试目录。最终Linux CI以本PR最新提交的Actions链接为准。

@@ -248,7 +248,7 @@ jobs:
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \
             --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
-            --tmpfs /tmp:rw,nosuid,size=32m,mode=0700 \
+            --tmpfs /tmp:rw,nosuid,size=32m,mode=1777 \
             mq-p303-operations:local --test scripts/production/backup-window-root-tests.mjs
       - name: S3 HTTPS recovery, release containment and application rollback
         run: |

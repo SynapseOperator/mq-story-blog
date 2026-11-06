@@ -79,10 +79,19 @@ export async function collectOperations({ project, deploymentId, diskPath, origi
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const deploymentId = process.env.MQ_OPS_DEPLOYMENT_ID;
   try {
-    const result = await collectOperations({ project: process.env.MQ_OPS_PROJECT, deploymentId: process.env.MQ_OPS_DEPLOYMENT_ID, diskPath: process.env.MQ_OPS_DISK_PATH,
+    const result = await collectOperations({ project: process.env.MQ_OPS_PROJECT, deploymentId, diskPath: process.env.MQ_OPS_DISK_PATH,
       origin: process.env.MQ_OPS_ORIGIN, receiptPath: process.env.MQ_OPS_BACKUP_RECEIPT });
-    console.log(JSON.stringify({ check: "mq-operations", checkedAt: new Date().toISOString(), ...result }));
+    console.log(JSON.stringify({ check: "mq-operations", deploymentId, checkedAt: new Date().toISOString(), ...result }));
     if (!result.ok) process.exitCode = 1;
-  } catch { console.error("MQ_OPERATIONS_CHECK_FAILED"); process.exitCode = 1; }
+  } catch {
+    // An unavailable probe still produces a current, safe notification report.
+    // An invalid/missing target identifier must not invent a deployment identity.
+    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(deploymentId ?? "")) {
+      console.log(JSON.stringify({ check: "mq-operations", deploymentId, checkedAt: new Date().toISOString(),
+        ok: false, failures: ["OPERATIONS_CHECK_FAILED"] }));
+    }
+    console.error("MQ_OPERATIONS_CHECK_FAILED"); process.exitCode = 1;
+  }
 }

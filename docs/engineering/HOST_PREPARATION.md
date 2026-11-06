@@ -80,6 +80,20 @@ IPv4/IPv6仅报告非loopback接口是否具有对应地址，包含link-local�
 
 调用方提供的报告仅使用 `deploymentId`、`checkedAt` 和固定 `failures` 码；未知附加字段被丢弃，不转发 `sample`、日志、自由文本或响应正文。支持现有 operations 码及 `BACKUP_FAILED`、`RESTORE_FAILED`、`RELEASE_FAILED`。健康报告不读取 webhook 秘密、不发送网络请求。
 
+现有 `operations-check.mjs` 的JSON现含安全的 `deploymentId`，可直接重定向为报告。若UUID有效但Docker、磁盘等探针抛错，仍输出当前固定 `OPERATIONS_CHECK_FAILED` 报告并退出1；UUID无效时只输出固定stderr、不伪造目标。下面假设已按运维手册设置 `MQ_OPS_*`，报告目录已由运维人员准备：
+
+```sh
+umask 077
+monitor_status=0
+node scripts/production/operations-check.mjs > /srv/mq/operations/alert.json || monitor_status=$?
+alert_status=0
+MQ_ALERT_REPORT_FILE=/srv/mq/operations/alert.json \
+node scripts/production/alert-webhook.mjs || alert_status=$?
+test "$monitor_status" -eq 0 && test "$alert_status" -eq 0
+```
+
+示例保留监控的非零结果，不因告警预览成功就把检查变绿。不要使用 `monitor && alert`，那会在最需要告警时跳过发送器。经批准的真实发送再增加下述webhook秘密文件与 `--send`；无效UUID需要先修正配置。
+
 URL 可能含渠道 token，必须位于 Git 外的0400/0600普通文件，沿用既有秘密读取约束；不得将 URL 放入命令行或报告。报告文件最多16KiB。默认只生成安全 payload，不读 URL、不联网：
 
 ```sh
