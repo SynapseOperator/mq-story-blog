@@ -102,7 +102,7 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 
 | 检查 | 实际结果 |
 |---|---|
-| `npm run check` | lint、Schema、typecheck、212 单元测试（208 通过，4 个 Windows 平台跳过）、production build |
+| `npm run check` | lint、Schema、typecheck、218 单元测试（214 通过，4 个 Windows 平台跳过）、production build |
 | `test:production:db` | 随机 PG18.6 库，8 组检查；受限迁移、11 owner、角色隔离与危险权限漂移拒绝 |
 | Linux 新配置/媒体单测 | 18/18，通过实际 UID10001 容器运行，无跳过 |
 | `test:db`、`test:auth:limiter`、`test:auth:transactions`、`test:auth:logs` | 原有迁移、限流、事务与数据库日志回归 |
@@ -112,6 +112,8 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 | `test:production:container` | 空库到低权限 HTTPS 全流程、桌面/手机、重建持久化、撤权、错误配置及真实低容量 tmpfs 均通过 |
 
 构建环境为 Docker Engine 29.9.2 / Compose 5.6.1，应用 Node24.19.0 / Next16.4.2 / Prisma7.10.1，PG18.6 / Caddy2.11.9。首次本地演练暴露 tmpfs YAML 逗号解析错误，已改为完整引号字符串并添加 Docker 实际挂载回归；另修正 Caddy 可信头清理顺序。生产图片、账号和密钥未参与测试。
+
+首轮 [CI #42188671327](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42188671327) 的 quality/container 成功，database 在 8 组新检查通过后的清理阶段失败。`Pool.end()` 返回时服务器可能还未处理连接关闭，强制删库触发未处理 idle error，并打印驱动 Client 信息。本次日志没有发现数据库口令，但包含后端取消密钥，不能视为安全诊断格式。修复改为等待本次目标库连接数归零再正常 DROP，不强杀连接；新增生产脚本也监听 idle error，仅记录失败标志并固定码拒绝。保留真实延迟关闭/终止连接回归与入口故障测试；依据 [pg.Pool error 接口](https://node-postgres.com/apis/pool#error)。原失败记录保留，不作为通过证据。
 
 依赖扫描：`npm audit --omit=dev` 退出 0，运行依赖无已报告项；全量扫描报告 10 个 moderate，均在 ESLint/TypeScript ESLint/minimatch 开发工具链。未执行自动升级或修改锁文件。维护镜像含开发依赖，正式使用前仍需单独评估及更新验证。
 

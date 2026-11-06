@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { pathToFileURL, URL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
 import { databaseUrl } from "../db/environment.mjs";
 import { logPrivacySettings } from "../db/log-privacy.mjs";
@@ -10,9 +11,13 @@ import { bootstrapDeploymentDatabase, migrateDeploymentDatabase, provisionDeploy
 
 // Only the guarded local/CI test service may create this random staging target.
 // Neither mq_test nor the development database is migrated, seeded or cleared.
-export async function runProductionDatabaseTests() {
+export async function runProductionDatabaseTests({ beforeCleanup } = {}) {
   const base = new URL(await databaseUrl("test"));
   const control = new pg.Pool({ connectionString: base.href, max: 1, connectionTimeoutMillis: 5000 });
+  let poolFailed = false;
+  // pg's idle error includes a Client object. Retain only a failure flag so a
+  // disconnected backend fails this run without an uncaught credential dump.
+  control.on("error", () => { poolFailed = true; });
   const deploymentId = randomUUID(), name = `mq_staging_${deploymentId.replaceAll("-", "")}`;
   const config = validateDeploymentConfig({ version: 1, environment: "staging", deploymentId,
     database: { host: base.hostname, port: Number(base.port), name }, origin: "https://mq.localhost",
@@ -20,6 +25,7 @@ export async function runProductionDatabaseTests() {
   const passwords = Object.fromEntries(LOGIN_IDENTITIES.map(key => [key, randomBytes(32).toString("hex")]));
   const keys = { publication: randomBytes(32).toString("hex"), moderation: randomBytes(32).toString("hex") };
   const pools = {}, urls = {}, checks = [];
+  let result, failure;
   let created = false, initialized = false, stage = "test service identity";
   async function check(label, action) { stage = label; await action(); checks.push(label); console.log(`PASS production DB: ${label}`); }
   try {
@@ -34,6 +40,7 @@ export async function runProductionDatabaseTests() {
       const url = new URL(base); url.pathname = `/${name}`;
       if (key !== "bootstrap") { url.username = config.roles[key]; url.password = passwords[key]; }
       urls[key] = url.href; pools[key] = new pg.Pool({ connectionString: url.href, max: 1, connectionTimeoutMillis: 5000 });
+      pools[key].on("error", () => { poolFailed = true; });
     }
     await check("one-time empty-target bootstrap and non-superuser 001-008 migration", async () => {
       await pools.bootstrap.query("CREATE FUNCTION public.synthetic_preexisting() RETURNS integer LANGUAGE SQL AS 'SELECT 1'");
@@ -154,15 +161,32 @@ export async function runProductionDatabaseTests() {
       }
       assert.equal((await auditRuntimeDatabase(pools.runtime, config)).securityDefiners, 11);
     });
-    return { passed: checks.length, checks, serverVersion: identity.version };
+    // The regression hook delays a real socket shutdown or terminates an idle
+    // backend. It is never enabled by the ordinary suite or a production CLI.
+    if (beforeCleanup) await beforeCleanup({ control, pools, urls, config });
+    result = { passed: checks.length, checks, serverVersion: identity.version };
   } catch (error) {
-    throw new Error(`PRODUCTION_DATABASE_TEST_FAILED: ${stage}`, { cause: error });
-  } finally {
-    await Promise.all(Object.values(pools).map(pool => pool.end()));
-    if (created) await control.query(`DROP DATABASE "${name}" WITH (FORCE)`);
-    if (initialized) for (const role of [...LOGIN_IDENTITIES.map(key => config.roles[key]), ...Object.values(config.roles.owners)]) await control.query(`DROP ROLE "${role}"`);
-    await control.end();
+    failure = new Error(`PRODUCTION_DATABASE_TEST_FAILED: ${stage}`, { cause: error });
   }
+  try {
+    await Promise.all(Object.values(pools).map(pool => pool.end()));
+    if (created) {
+      // Pool.end() removes idle clients before their TCP close completes.
+      // Wait for PostgreSQL to observe every target connection leaving;
+      // FORCE here races pg's idle error listener and can dump a raw Client.
+      const deadline = Date.now() + 5000;
+      while ((await control.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1", [name])).rows[0].n !== 0) {
+        if (Date.now() >= deadline) throw new Error("PRODUCTION_DATABASE_DRAIN_TIMEOUT");
+        await delay(25);
+      }
+      await control.query(`DROP DATABASE "${name}"`);
+    }
+    if (initialized) for (const role of [...LOGIN_IDENTITIES.map(key => config.roles[key]), ...Object.values(config.roles.owners)]) await control.query(`DROP ROLE "${role}"`);
+  } catch (cause) { failure ??= new Error("PRODUCTION_DATABASE_CLEANUP_FAILED", { cause }); }
+  finally { await control.end(); }
+  if (poolFailed) failure ??= new Error("PRODUCTION_DATABASE_POOL_ERROR");
+  if (failure) throw failure;
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

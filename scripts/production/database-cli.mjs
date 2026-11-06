@@ -10,6 +10,7 @@ import { bootstrapDeploymentDatabase, migrateDeploymentDatabase, provisionDeploy
  * in argv. No credential or SQL detail is included in diagnostics. */
 export async function runDatabaseCommand(args, env = process.env) {
   let pool;
+  let poolFailed = false;
   try {
     const [operation, confirmation, ...extra] = args;
     if (!["bootstrap", "migrate", "provision", "keys", "audit"].includes(operation) || extra.length) {
@@ -28,6 +29,7 @@ export async function runDatabaseCommand(args, env = process.env) {
     if (operation === "migrate") result = await migrateDeploymentDatabase(connectionString, config);
     else {
       pool = new pg.Pool({ connectionString, max: 1, connectionTimeoutMillis: 5000 });
+      pool.on("error", () => { poolFailed = true; });
       if (operation === "bootstrap") {
         result = await bootstrapDeploymentDatabase(pool, config, JSON.parse(await readSecret("MQ_ROLE_PASSWORDS_FILE")));
       } else if (operation === "provision") result = await provisionDeploymentDatabase(pool, config);
@@ -36,12 +38,14 @@ export async function runDatabaseCommand(args, env = process.env) {
       });
       else result = await auditRuntimeDatabase(pool, config);
     }
+    if (pool) await pool.end();
+    if (poolFailed) throw new Error("DEPLOYMENT_DATABASE_CONNECTION_REJECTED");
     console.log(JSON.stringify({ operation, ...result }));
     return 0;
   } catch {
     console.error("DEPLOYMENT_DATABASE_COMMAND_REJECTED (check external files, target, identity and production confirmation; details withheld)");
     return 1;
-  } finally { if (pool) await pool.end(); }
+  } finally { if (pool && !pool.ending) await pool.end(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

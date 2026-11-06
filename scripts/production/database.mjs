@@ -106,13 +106,17 @@ export async function verifyMigrationConnection(pool, config) {
 export async function migrateDeploymentDatabase(connectionString, config) {
   assertDatabaseUrl(connectionString, config, "migration");
   const pool = new pg.Pool({ connectionString, max: 1, connectionTimeoutMillis: 5000 });
+  let poolFailed = false;
+  pool.on("error", () => { poolFailed = true; });
   try {
     await verifyMigrationConnection(pool, config);
     await runPrisma(["migrate", "deploy"], connectionString);
     await verifyDeploymentMigrations(pool);
+    await pool.end();
+    if (poolFailed) throw new Error("DEPLOYMENT_MIGRATION_CONNECTION_REJECTED");
     return { migrated: true, migrations: 8 };
   } catch (cause) { throw new Error("DEPLOYMENT_MIGRATION_REJECTED", { cause }); }
-  finally { await pool.end(); }
+  finally { if (!pool.ending) await pool.end(); }
 }
 
 export async function verifyDeploymentMigrations(connection) {

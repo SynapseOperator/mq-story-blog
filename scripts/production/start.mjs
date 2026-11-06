@@ -9,8 +9,12 @@ try {
   process.env = env;
   const pool = new pg.Pool({ connectionString: env.DATABASE_URL, max: 1,
     connectionTimeoutMillis: 5000, statement_timeout: 5000 });
+  // pg attaches its Client to idle errors; never let EventEmitter dump it.
+  let poolFailed = false;
+  pool.on("error", () => { poolFailed = true; });
   try { await auditRuntimeDatabase(pool, config); }
   finally { await pool.end(); }
+  if (poolFailed) throw new Error("DEPLOYMENT_DATABASE_POOL_FAILED");
   await import("../../server.js");
 } catch {
   console.error("MQ_STARTUP_REJECTED");
