@@ -223,9 +223,21 @@ jobs:
           package-manager-cache: false
       - name: Install locked toolchain
         run: |
+          # Keep this job's full locked Node toolchain in bounded RAM, instead
+          # of duplicating it on the small hosted disk beside the tool images.
+          # This does not change the app images or the 8GiB disk reserve gate.
+          test ! -e node_modules && test ! -L node_modules
+          mkdir node_modules
+          sudo mount -t tmpfs -o "size=1200m,uid=$(id -u),gid=$(id -g),mode=0700,exec,nodev,nosuid" \
+            "mq-node-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$PWD/node_modules"
+          export npm_config_cache="$RUNNER_TEMP/mq-npm-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir "$npm_config_cache"
+          trap 'rm -rf -- "$npm_config_cache"' EXIT
           npm install --global npm@11.17.0
           npm ci
-          npx playwright install --with-deps chromium
+          # The existing lab launches headless Chromium without a channel.
+          npx playwright install --with-deps --only-shell chromium
+          du -sh node_modules "$npm_config_cache"
       - name: Build production candidate images without credentials
         run: |
           # A dedicated builder shares layers across these targets. Once loaded,
@@ -242,12 +254,18 @@ jobs:
           docker buildx rm "$builder"
           trap - EXIT
           df -h .
+      - name: OCI candidate integrity and actual digest-based image execution
+        run: npm run test:release
+      - name: Release only this job's finished BuildKit image
+        # Both named builders are already gone. No force, daemon-wide prune,
+        # removal of preinstalled tools, or lowered reserve threshold.
+        run: |
+          docker image rm moby/buildkit@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+          df -h .
       - name: Synthetic HTTPS deployment, least privilege and browser regression
         # Includes every original container check, then encrypted recovery and
         # real SCRAM/TLS rotation. No duplicate build or omitted regression.
         run: npm run test:production:operations
-      - name: OCI candidate integrity and actual digest-based image execution
-        run: npm run test:release
       - name: Linux host classification and simulated HTTPS alert delivery
         run: |
           docker run --rm --network none --read-only --cap-drop ALL \
@@ -262,6 +280,15 @@ jobs:
       - name: S3 HTTPS recovery, release containment and application rollback
         run: |
           docker pull ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
+          df -h .
           npm run test:production:release
+      - name: Unmount only this job's temporary Node toolchain
+        if: always()
+        run: |
+          if mountpoint -q "$GITHUB_WORKSPACE/node_modules"; then
+            test "$(findmnt -n -o FSTYPE --target "$GITHUB_WORKSPACE/node_modules")" = tmpfs
+            test "$(findmnt -n -o SOURCE --target "$GITHUB_WORKSPACE/node_modules")" = "mq-node-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sudo umount "$GITHUB_WORKSPACE/node_modules"
+          fi
       # Lab credentials, database volumes and backups stay on this disposable
       # runner. No secret-bearing directory is uploaded as an artifact.

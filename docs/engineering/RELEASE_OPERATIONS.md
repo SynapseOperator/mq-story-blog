@@ -41,6 +41,8 @@ OCI 加载要求经验证的 Docker Engine containerd image store。工具不切
 
 CI 的 container Job 使用固定版本 Docker 29.9.2 和官方 `setup-docker-action`，在独立临时 daemon/context 中启用 containerd；不是切换已有主机的存储后端。首次 P4 CI [42251879975](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42251879975) 的 quality/database 及原容器演练通过，但 OCI 探针在 runner 默认环境中失败。原日志只记录通用错误码，无法据此断言唯一根因；现保留失败记录、补充固定脱敏诊断，并显式满足官方要求后重跑全部 CI。参见 [Docker 官方 Actions 说明](https://docs.docker.com/build/ci/github-actions/multi-platform/)。
 
+第二次 [42256184057](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42256184057) 已使用 containerd，真实恢复和轮换通过，但主机仅剩 7,874,203,648 bytes，低于 8 GiB，监控拒绝验收。CI 因此将本 Job 的完整锁定 Node 工具链放入有界 1200 MiB tmpfs，仅清理本次创建的 npm 下载缓存和已停止 builder 的固定镜像，并只安装原用例实际使用的 Chromium headless shell。应用镜像、测试和 8 GiB 门槛不变；不删除 runner 预装目录或执行全局 prune。该 RAM 安排仅用于 CI，不用于 4GB VPS。
+
 ## 默认计划、生产拒绝
 
 `cli.mjs plan` 只读取候选和当前版本、目标 manifest、已验证备份 receipt，然后输出计划，不加载镜像、不运行 Compose、不访问远端主机。配置和 receipt 必须在 Git 之外并符合既有文件权限规则。
