@@ -2,8 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    # Temporary stacked dependency for Issue #51; remove when #50 enters main.
-    branches: [main, feat/p3-02-production-foundation]
+    branches: [main]
   push:
     branches: [main]
 

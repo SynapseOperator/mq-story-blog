@@ -1,6 +1,8 @@
 # P3-02：生产身份与容器运行合同
 
-本轮在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)，本分支没有合并该 PR。这里交付生产候选配置和隔离演练工具；没有购买 VPS、生成正式凭据或部署网站。
+P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)，本分支没有合并该 PR。这里交付生产候选配置和隔离演练工具；没有购买 VPS、生成正式凭据或部署网站。
+
+后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；负责人后来已购买 VPS，但尚未连接、核验实际规格或部署。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。#50/#52 已进入 main，不代表正式生产开放获授权。
 
 ## 运行结构
 
@@ -67,7 +69,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 5. `... database-cli.mjs keys`：引导连接及两个独立签名秘密文件；只允许首次插入，不覆盖旧密钥，不是轮换命令。
 6. `... database-cli.mjs audit`：仅 `RUNTIME_DATABASE_URL_FILE`，只读核验。不得用引导身份代替 runtime 验收。
 7. 显式执行 `docker compose ... run --rm volumes-init`，再运行 `node scripts/production/init-media.mjs` 建立不可跨环境复用的 `.mq-deployment.json`；只接受空卷或完全匹配的现有身份。实际调用入口见隔离演练，不调用实验管理员初始化去创建正式账号。
-8. 最后才启动 app/proxy。应用在监听 3000 前完成全部校验。审核通过的生产管理员初始化、备份封装和密钥轮换另行授权，不使用实验 CLI 创建真实账号。
+8. 最后才启动 app/proxy。应用在监听 3000 前完成全部校验。正式管理员初始化仍需负责人授权，不使用实验 CLI 创建真实账号。备份恢复与密钥轮换的受控入口已在 P3-03 实现，执行顺序见对应手册；本地验证不授权操作正式凭据。
 
 上述 database-cli 的四个 production 写操作必须追加 `--confirm-production=<deploymentId>`；staging 不接受这个参数。该确认防误操作，不代替操作系统权限或负责人授权。错误目标、过高身份、不完整配置会返回非零，诊断不输出 SQL 或秘密。
 
@@ -119,7 +121,7 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 
 ## 尚未开放的门槛
 
-- Better Auth 1.7.12 默认 Session Token 仍原值存库。数据库/备份读取者能获取 token；Cookie 签名不等于 token 已哈希。兼容哈希方案需要独立 Spike，验证框架查询、注销、过期及管理员数据库函数，不能只改一列或声称本轮已修复。
-- 正式域名、可信 HTTPS、主机防火墙/SSH、备份加密签名与异地恢复、磁盘硬配额/告警、容器更新、生产密钥生成/轮换和独立安全审查尚未验收。
-- 新生产身份矩阵已在隔离库验证；现有备份/管理员维护工具的本地目标保护不被放宽。正式生产备份恢复与管理员运维入口须在下一轮受控 staging 演练，不把旧测试库恢复证据当作新生产身份的完整恢复证据。
-- 本轮不实现 Session 哈希、生产密钥轮换、远端 CD、购买/部署；这些涉及独立安全决定或尚不存在的 VPS。仓库合并和测试成功均不授权公开注册、留言或正式发布。
+- Better Auth 1.7.12 默认 Session Token 仍原值存库。数据库/备份读取者能获取 token；Cookie 签名不等于 token 已哈希。[Session Spike](SESSION_TOKEN_SPIKE.md) 已验证简单摘要 adapter 的撤销兼容缺口，未接入应用；正式开放前仍须明确风险处置和独立安全审查。
+- 加密备份、隔离恢复、数据库/认证/代理/业务密钥轮换及只读告警检查已在合成环境验证。正式域名/TLS、主机防火墙/SSH、异地恢复、生产密钥托管、磁盘硬配额及容量压力测试仍未在目标 VPS 验收。
+- 原有备份/管理员维护工具的本地目标保护保持不变；生产合同使用单独受控入口。恢复会清除 Session 与业务签名密钥，须按手册重新配置权限及验证，不能把恢复成功当作重新开放许可。
+- VPS 已购但尚未连接；主机验收、Session 摘要改造、远端 CD 和实际部署尚未完成。仓库合并和测试成功均不授权公开注册、留言或正式发布。

@@ -1,6 +1,6 @@
-# 留言提交与审核（P2-12A）
+# 留言提交与审核（P2-12A/B）
 
-对应 [Issue #43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、PRD v1.1 §09 / FN-05/06/07/17 和本轮负责人授权。本阶段只有服务端。信纸里的演示留言不调用这些接口；真实留言 UI 和审核页面留待 P2-12B。
+对应 [Issue #43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)、PRD v1.1 §09 / FN-05/06/07/17。P2-12A 后端与 P2-12B 羽毛信/管理员审核界面均已合并，负责人技术、视觉与交互验收通过。两个 PR 的独立 APPROVED 均匹配合并前 HEAD；最终 main `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc` 的 [CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41996598552) quality/database 成功。生产开放仍受 [部署审查](DEPLOYMENT_READINESS.md) 所列门槛限制。
 
 ## 合同
 
@@ -68,13 +68,13 @@
 
 所有既有套件保留。媒体升级测试增加007→008，比较历史迁移校验和及已有故事/认证/点赞数据，检查 Prisma drift 和重复 deploy。完整原生备份包含留言和新私有 Schema；恢复后默认撤销全部PUBLIC授权，旧 Session/密钥是备份数据，不构成重新开放审核权限的授权。发布备份测试验证普通应用重新配置和误授 EXECUTE 均不能启用旧审核证明。
 
-P2-12A 只实现后端，不创建真实用户或公开生产。独立安全Review、生产运行身份、正式HTTPS/可信代理、Token原值存库、密钥轮换与加密备份仍是开放门槛。
+P2-12A 实现后端，P2-12B 已接入界面；两者未创建真实用户或开放生产。生产运行身份、正式HTTPS/可信代理、Token原值存库、密钥轮换、加密备份与整体独立安全审查仍是开放门槛。
 
 设计依据：[PostgreSQL18 SECURITY DEFINER](https://www.postgresql.org/docs/18/sql-createfunction.html)、[行锁](https://www.postgresql.org/docs/18/explicit-locking.html)、[OWASP XSS输出处理](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)。实际执行结果以本PR证据和CI为准。
 
 ## P2-12B 界面接入
 
-B 从 PR #44 的 `39af52e` 建立 Stacked 分支；A 尚未合并时不将其描述为 main 已有功能。B 不修改历史迁移、审核签名或数据库授权。
+B 最初从 PR #44 的 `39af52e` 建立 Stacked 分支。A 普通合并后，B 已调整 base 为 main 并以 `224eb14` 普通合并；没有重写提交或沿用不匹配的审批。B 未修改历史迁移、审核签名或数据库授权。
 
 公开羽毛信使用既有 GET/POST。提交时冻结正文、身份、Idempotency-Key 与本地编辑序号；请求成功只展示待审核回执。发送期间继续输入的新稿不会被旧回执清空。断网、超时或不确定响应保留冻结请求，由用户明确重试原提交；账号请求只能由原账号重试，不随登录身份变更而改写。请求结果未知时，即使输入框已清空也保留关闭确认。未提交内容和重试信息只留在当前页面内存；不承诺崩溃或确认离开后的恢复。
 
@@ -87,7 +87,7 @@ B 从 PR #44 的 `39af52e` 建立 Stacked 分支；A 尚未合并时不将其描
 - 每行增加 `storyDraftTitle` 和 `storyState`，用于显示当前工作区标题和故事状态，不增加公开 DTO 字段。
 - `GET /api/admin/comments?commentId=<uuid>` 精确核对单条留言，返回 `{comment}` 或404；不能与分页或其他筛选混用，仍在 withAdmin 同一事务内执行。
 
-测试使用锁定的 Playwright（本会话无 Browser plugin），生产构建与隔离 PostgreSQL。截图包含 CSS 视口与 DPR 2 PNG；界面验收与工程测试分开报告。依赖 A 合并后须重新调整 PR base、移除临时 CI base 过滤并验证完整回归。
+测试使用锁定的 Playwright、生产构建与隔离 PostgreSQL，截图包含 CSS 视口与 DPR 2 PNG。合并时已完成完整回归与单独的负责人视觉验收；临时 CI base 过滤在 P3-01 中清理，不删除任何测试。
 
 ## P2-12A 本机结果（历史记录）
 
@@ -130,4 +130,4 @@ Windows / Node 24.19.0 / Docker Engine 29.9.2 / PostgreSQL 18.6。使用任务�
 
 首轮lint、选择器/异步等待、联合测试权限配置、滚动回归及截图夹具失败日志均保存在本机证据目录。最终截图复用隔离库既有星位和生命周期服务，未添加正式星位、修改历史迁移或跳过业务用例。两项Windows文件系统限制继续由Linux CI执行；本机没有停止现有Compose开发实例跑持久化，CI保留该独立检查。CI数据库Job上限从30调整为40分钟，容纳新增浏览器套件，不使用continue-on-error。
 
-截图与日志保存在仓库外 `mq-p2-12b` 任务目录；没有提交会话、密码、数据库备份或真实留言。界面目前待负责人视觉与交互验收；独立Review与最新HEAD的Linux CI仍以PR实时状态为准。
+截图与日志保存在仓库外 `mq-p2-12b` 任务目录；没有提交会话、密码、数据库备份或真实留言。上述本机检查是开发时记录；后续负责人视觉签收、独立Review及合并收尾见 [PR #46](https://github.com/SynapseOperator/mq-story-blog/pull/46)。历史测试结果不代表生产安全验证。
