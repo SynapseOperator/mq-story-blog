@@ -6,7 +6,7 @@ Phase 2 核心业务及 P3-02/P3-03 的生产基础与运维工具已进入 main
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-全部既有测试保留；`test:production:operations` 包含原容器验收及加密恢复、HTTPS 和轮换，`test:production:rotation` 验证数据库凭据与签名，`test:auth:session-spike` 验证锁定框架的 token 路径。生产开关默认关闭。[Session Spike](docs/engineering/SESSION_TOKEN_SPIKE.md) 发现摘要候选的撤销兼容问题，未改动实际认证。新 PR 默认 Ready for Review 并请求 SnorkelingBreather，最新提交须有匹配的独立 Review 和 CI，合并与部署各需明确授权。域名/TLS、主机验收、异地备份、容量、Session 风险处置及独立安全审查仍是正式开放门槛。留言合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
+全部既有测试保留；`test:production:operations` 包含原容器验收及加密恢复、HTTPS 和轮换，`test:production:rotation` 验证数据库凭据与签名，`test:auth:session-spike` 验证锁定框架的 token 路径。生产开关默认关闭。[Session Spike](docs/engineering/SESSION_TOKEN_SPIKE.md) 发现摘要候选的撤销兼容问题，未改动实际认证。新 PR 默认 Ready for Review，审核由负责人口头协调，工具不得向协作者发送 Review 请求、@提及或催审提醒。最新提交仍须有匹配的独立 Review 和 CI，合并与部署各需明确授权。域名/TLS、主机验收、异地备份、容量、Session 风险处置及独立安全审查仍是正式开放门槛。留言合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

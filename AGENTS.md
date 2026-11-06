@@ -13,7 +13,7 @@
 
 - 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
 - PR 说明面向代码评审者，直接写问题、改动原因、实际验证和剩余限制；减少模板套话、过程复述和重复状态清单。详细日志放证据链接，不堆进正文。
-- 新 PR 完成后默认 Ready for Review，并请求 SnorkelingBreather 正式独立评审；只有负责人明确要求 Draft 时保留 Draft。新提交必须匹配有效 Review 与 CI；取得 APPROVED 也不等于自动获得合并授权。
+- 新 PR 完成后默认 Ready for Review；只有负责人明确要求 Draft 时保留 Draft。禁止向协作者发送 Review 请求、@提及、催审评论或其他审核提醒；需要审核时只向负责人报告 PR 与最新提交，由负责人自行口头协调。此规则取代此前自动请求协作者评审的约定。新提交仍须匹配有效独立 Review 与 CI；取得 APPROVED 也不等于自动获得合并授权。
 - 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
 - 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
 - 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。
