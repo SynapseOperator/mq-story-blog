@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-当前分支为 **P2-12B 真实留言与管理员审核界面**（[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)），依赖尚未合并的 [P2-12A / PR #44](https://github.com/SynapseOperator/mq-story-blog/pull/44) 提交 `39af52e`。羽毛信接入匿名或账号留言，统一等待审核；`/admin/comments` 复用既有审核权限与 API。公开列表和数量只来自已通过留言，提交回执不代表公开。接口、权限及测试见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
+Phase 2 核心业务已合并。当前分支实施 **P3-02 生产身份、秘密配置与本地容器化验证**（[Issue #49](https://github.com/SynapseOperator/mq-story-blog/issues/49)），直接基于 main，不依赖或合并待审的 [P3-01 / PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)。容器运行、身份矩阵和操作顺序见 [PRODUCTION_FOUNDATION.md](docs/engineering/PRODUCTION_FOUNDATION.md)。这是一套生产候选配置，尚未部署 VPS。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-本轮保留全部既有测试，`npm run test:comments` 同时验证真实数据库、HTTP/HTTPS 和生产浏览器的留言与审核流程。仅使用随机隔离数据库、受限身份与合成数据；留言写入默认关闭，认证与发布开关不变。完成后交付 Ready for Review PR 并请求 SnorkelingBreather，不自动合并或部署。Stacked PR 的 CI 临时包含 A 分支；A 合并后须将 B 改为 main、移除该过滤并重新验证。生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放前门槛。
+本轮保留全部既有测试，新增 `test:production:db` 和 `test:production:container`。仅使用隔离合成数据，生产开关默认关闭。新 PR 为 Ready for Review 并请求 SnorkelingBreather，不自动合并或部署。真实域名/HTTPS、主机权限、Session Token、日志备份、容量和独立安全审查仍是正式开放门槛。留言提交和审核合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -86,7 +86,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 读信时保留并暗化同一 MQ 场景，隐藏导航和普通账号入口，暂停背景响应；正文、配图、点赞和「留言」在同一信纸内部连续滚动。关闭按钮、Esc 和外围暗区共用关闭逻辑；有演示留言输入时先确认，继续编辑保留内容，关闭后恢复场景与触发入口焦点。展开/关闭期间拒绝冲突操作，减少动态效果模式取消舒展动画。
 
-公开故事的点赞保存在数据库中；四份合成演示夹具保留明确标注的本地演示状态。「预览留言（不发送）」保留临时草稿，不发送、公开或持久化评论，确认关闭后丢弃。分享 URL：从首页打开可后退/前进，外部直达时关闭仅回 MQ 首页，不跳回外部网站。未提交草稿在站内关闭/历史导航时复用原确认框；跨文档离开和刷新使用浏览器原生 beforeunload，限制见 [分享说明](docs/engineering/STORY_SHARING.md)。本分支新增真实留言后端，但该演示区域尚未接入，留待 P2-12B。
+公开故事的点赞保存在数据库中；留言允许匿名或账号身份提交，统一审核后才进入公开列表与计数。四份合成演示夹具保留明确标注的本地演示状态。分享 URL：从首页打开可后退/前进，外部直达时关闭仅回 MQ 首页，不跳回外部网站。未提交留言在站内关闭/历史导航时复用原确认框；跨文档离开和刷新使用浏览器原生 beforeunload，限制见 [分享说明](docs/engineering/STORY_SHARING.md)。
 
 当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
 
