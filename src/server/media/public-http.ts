@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "../../generated/prisma/client.ts";
 import { createDatabaseClient } from "../../lib/db/client.ts";
 import { isPublicStoryId } from "../stories/public-service.ts";
-import { createLocalMediaStore } from "./local-store.ts";
+import { createLocalMediaStore, mediaConfigurationFromEnvironment } from "./local-store.ts";
 import { MEDIA_DISPLAY_LIMIT } from "./processor.ts";
 
 const headers = {
@@ -60,9 +60,7 @@ export async function handlePublicMedia(request: Request, storyId: string, asset
     const media = await readPublicMedia(db, storyId, assetId);
     if (!media) return failure(request, "PUBLIC_MEDIA_NOT_FOUND", 404);
     // No database transaction or authorization lock remains open during I/O.
-    const store = await createLocalMediaStore({ projectRoot: process.cwd(),
-      roots: { development: process.env.MQ_MEDIA_DEVELOPMENT_ROOT ?? "", test: process.env.MQ_MEDIA_TEST_ROOT ?? "" },
-      environment: process.env.MQ_MEDIA_ENV as "development" | "test", maxVariantBytes: MEDIA_DISPLAY_LIMIT });
+    const store = await createLocalMediaStore(mediaConfigurationFromEnvironment(MEDIA_DISPLAY_LIMIT));
     const bytes = await store.read(media.storageKey, "display");
     if (bytes.byteLength !== media.byteLength || createHash("sha256").update(bytes).digest("hex") !== media.sha256) {
       throw new Error("PUBLIC_MEDIA_UNAVAILABLE");

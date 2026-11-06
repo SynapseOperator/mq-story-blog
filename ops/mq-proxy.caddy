@@ -1,0 +1,31 @@
+header {
+	-Server
+	X-Content-Type-Options nosniff
+	Referrer-Policy no-referrer
+	Strict-Transport-Security "max-age=31536000"
+}
+# HeaderOps applies deletes after sets. Strip client-controlled MQ fields in a
+# separate request handler before the proxy writes its trusted values.
+request_header -X-Mq-*
+request_header -Forwarded
+@auth path /api/auth/*
+request_body @auth {
+	max_size 4KiB
+}
+@comments path /api/stories/*/comments
+request_body @comments {
+	max_size 8KiB
+}
+# Existing structured drafts can exceed a login body; the app still checks its
+# own route-specific DTOs. This ceiling also covers raw media upload (3 MiB).
+request_body {
+	max_size 3MiB
+}
+reverse_proxy app:3000 {
+	header_up X-Mq-Proxy-Key {env.MQ_PROXY_SECRET}
+	header_up X-Mq-Client-IP {http.request.remote.host}
+	transport http {
+		dial_timeout 5s
+		response_header_timeout 45s
+	}
+}

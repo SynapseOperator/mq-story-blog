@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-**Phase 2 核心业务已合并，当前进入 P3-01 部署就绪审查**（[Issue #47](https://github.com/SynapseOperator/mq-story-blog/issues/47)）。基线 main 为 `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc`；真实文章、登录、管理员权限、图片、发布、点赞及留言审核已实现并通过隔离测试，尚未生产开放。羽毛信的匿名或账号留言统一等待审核，公开列表和数量只包含已通过留言。接口见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)，部署阻塞与课程证据见 [DEPLOYMENT_READINESS.md](docs/engineering/DEPLOYMENT_READINESS.md)。
+Phase 2 核心业务及 P3-02/P3-03 的生产基础与运维工具已进入 main（[PR #50](https://github.com/SynapseOperator/mq-story-blog/pull/50)、[PR #52](https://github.com/SynapseOperator/mq-story-blog/pull/52)）。数据库身份、文件秘密、Compose、加密备份、隔离恢复和密钥轮换已在合成环境验证。负责人已购买 VPS，尚未连接或部署，实际规格待获授权后只读核验，也未开放真实用户。历史部署审查见 [DEPLOYMENT_READINESS.md](docs/engineering/DEPLOYMENT_READINESS.md)，当前合同见 [生产基础](docs/engineering/PRODUCTION_FOUNDATION.md)、[备份恢复](docs/engineering/PRODUCTION_BACKUP.md)、[秘密轮换](docs/engineering/SECRET_ROTATION.md)和[主机运维](docs/engineering/OPERATIONS_RUNBOOK.md)。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-`npm run test:comments` 验证真实数据库、HTTP/HTTPS 和生产构建浏览器的留言与审核流程；所有既有测试保留。只使用随机隔离库、受限身份及合成数据。认证、媒体、发布及留言写入仍需显式受控启用；生产身份、HTTPS/代理、Session Token、日志备份和独立安全审查仍是开放门槛。P3-01 只清理已结束的 Stacked CI base 过滤及文档，不提供生产 Compose 或开放服务。新 PR 默认 Ready for Review，并请求 SnorkelingBreather；不自动合并。
+全部既有测试保留；`test:production:operations` 包含原容器验收及加密恢复、HTTPS 和轮换，`test:production:rotation` 验证数据库凭据与签名，`test:auth:session-spike` 验证锁定框架的 token 路径。生产开关默认关闭。[Session Spike](docs/engineering/SESSION_TOKEN_SPIKE.md) 发现摘要候选的撤销兼容问题，未改动实际认证。新 PR 默认 Ready for Review 并请求 SnorkelingBreather，最新提交须有匹配的独立 Review 和 CI，合并与部署各需明确授权。域名/TLS、主机验收、异地备份、容量、Session 风险处置及独立安全审查仍是正式开放门槛。留言合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
@@ -67,7 +67,7 @@ PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审�
 
 任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
 
-P3-01 从 main 独立开发。历史文档保留当时的验收与限制，当前部署状态以部署审查为准；现有生命周期/备份工具的目标限制不能绕过。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本轮不更改已验收界面。
+历史阶段文档保留当时的验收与限制；当前操作以生产基础、备份恢复和安全运维手册为准，原有本地工具的目标限制不能绕过。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本次不更改已验收界面。
 
 已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
 
@@ -90,4 +90,4 @@ P3-01 从 main 独立开发。历史文档保留当时的验收与限制，当�
 
 当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
 
-Issue #3 的四项读信依赖已随 Issue #4 完成联合验收和收尾，P2-01 数据解耦亦已验收。后续改动仍须按实际影响验证，不能把历史通过结论当作新提交的测试结果；工程检查与产品验收分别记录。真实业务与剩余课程验收保留后续阶段。
+Issue #3 的四项读信依赖已随 Issue #4 完成联合验收和收尾，P2-01 数据解耦亦已验收。后续改动仍须按实际影响验证，不能把历史通过结论当作新提交的测试结果；工程检查与产品验收分别记录。剩余生产开放与课程验收须按各自门槛继续完成。

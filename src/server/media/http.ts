@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { MediaAsset, Prisma } from "../../generated/prisma/client.ts";
 import { withAdmin } from "../admin/access.ts";
 import { AdminAccessError } from "../admin/policy.ts";
-import { createLocalMediaStore, type LocalMediaStore } from "./local-store.ts";
+import { createLocalMediaStore, mediaConfigurationFromEnvironment, type LocalMediaStore } from "./local-store.ts";
 import { MEDIA_INPUT_LIMIT, MEDIA_DISPLAY_LIMIT, MediaProcessingError, processMediaImage } from "./processor.ts";
 import { beginMediaDeletion, finishMediaDeletion, MediaLifecycleError } from "./lifecycle.ts";
 
@@ -26,9 +26,7 @@ function configured() {
   if (process.env.MQ_MEDIA_ENABLED !== "true") fail("MEDIA_UNAVAILABLE", 503);
 }
 function storage() {
-  return createLocalMediaStore({ projectRoot: process.cwd(),
-    roots: { development: process.env.MQ_MEDIA_DEVELOPMENT_ROOT ?? "", test: process.env.MQ_MEDIA_TEST_ROOT ?? "" },
-    environment: process.env.MQ_MEDIA_ENV as "development" | "test", maxVariantBytes: MEDIA_DISPLAY_LIMIT });
+  return createLocalMediaStore(mediaConfigurationFromEnvironment(MEDIA_DISPLAY_LIMIT));
 }
 function assetId(value: string) { if (!uuid.test(value)) fail("INVALID_ASSET_ID", 400); return value; }
 function metadata(asset: MediaAsset, publishedStoryCount = 0) {

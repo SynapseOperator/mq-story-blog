@@ -2,7 +2,9 @@
 
 本文件记录 Codex 开发系统 V1 的项目接入，不替代 PRD、设计裁决或执行日志，不声明尚未取得的 CI、保护或产品验收结果。
 
-**当前说明（P3-01，2026-11-05）**：下文 Phase 0 环境、初始任务与停止条件是初始化历史记录。Phase 2 已合并；当前 `npm run check` 包含 lint、Prisma Schema、typecheck、单元测试与生产构建。最新 GitHub 证据及生产限制见 [部署就绪审查](DEPLOYMENT_READINESS.md)：main 当前未强制分支保护，Projects/Iteration 因缺少只读授权尚未核实，不能将历史人工核验描述为平台门禁。P3-01 不采购或部署。
+**历史检查记录（P3-01，2026-11-05）**：下文 Phase 0 环境、初始任务与停止条件是初始化历史。当天核实 main 未强制分支保护，Projects/Iteration 因缺少只读授权未能确认；详见 [部署审查](DEPLOYMENT_READINESS.md)。这些观察不是后续实时状态，不能把人工核验当作平台门禁。
+
+**后续工程状态**：P3-02/#50 与 P3-03/#52 已合并；CI 保留 quality、database、container，容器套件包含加密备份、隔离恢复和轮换。当前 `npm run check` 包含 lint、Prisma Schema、typecheck、单元测试与生产构建。操作合同见 [生产基础](PRODUCTION_FOUNDATION.md)及[运维手册](OPERATIONS_RUNBOOK.md)。VPS 已购但尚未连接，主机规格与运行环境待只读核验，域名和生产部署仍未完成。P4 分支须在 P3 全部 PR 合并且 main CI 通过后创建，不以开发授权代替主机操作或上线授权。
 
 ## 本阶段与 V1 接入
 

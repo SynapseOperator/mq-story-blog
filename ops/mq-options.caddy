@@ -1,0 +1,28 @@
+admin off
+persist_config off
+grace_period 15s
+servers {
+	protocols h1 h2
+	strict_sni_host on
+	max_header_size 16KiB
+	timeouts {
+		read_header 5s
+		read_body 30s
+		write 60s
+		idle 60s
+	}
+}
+# Keep operational errors; neither access logs nor full request/header objects
+# are written. Docker limits and rotates this stream separately.
+log default {
+	level WARN
+	format filter {
+		wrap json
+		fields {
+			request delete
+			headers delete
+			resp_headers delete
+			config delete
+		}
+	}
+}

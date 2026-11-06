@@ -49,7 +49,12 @@
     "test:admin-preview": "npm run db:generate && node scripts/admin-preview/integration.mjs",
     "test:publishing": "npm run db:generate && node scripts/publishing/integration.mjs",
     "test:likes": "npm run db:generate && node scripts/likes/integration.mjs",
-    "test:comments": "npm run db:generate && node scripts/comments/integration.mjs"
+    "test:comments": "npm run db:generate && node scripts/comments/integration.mjs",
+    "test:production:db": "npm run db:generate && node scripts/production/database-tests.mjs && node scripts/production/database-cleanup-tests.mjs",
+    "test:production:container": "node scripts/production/lab.mjs",
+    "test:production:operations": "node scripts/production/lab.mjs --operations",
+    "test:production:rotation": "npm run db:generate && node scripts/production/rotation-tests.mjs",
+    "test:auth:session-spike": "npm run db:generate && node scripts/auth/session-token-spike.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

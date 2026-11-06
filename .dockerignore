@@ -1,0 +1,39 @@
+# Start from an empty context: private inputs and ignored local files never enter
+# the daemon/build cache. Add a path only when an image target needs it.
+**
+!package.json
+!package-lock.json
+!next.config.ts
+!tsconfig.json
+!eslint.config.mjs
+!postcss.config.mjs
+!prisma.config.ts
+!src/
+!src/**
+!public/
+!public/**
+!prisma/
+!prisma/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!config/
+!config/**
+!ops/
+!ops/**
+!Dockerfile
+# Generated host output must never replace the Linux-generated client.
+src/generated/prisma/**
+**/.env*
+**/*.pem
+**/*.key
+**/*.log
+**/*.dump
+**/*.zip
+**/*backup*
+!scripts/media/backup*.mjs
+!scripts/production/backup*.mjs
+!tests/production-backup*.test.mjs
+**/node_modules/**
+**/.next/**

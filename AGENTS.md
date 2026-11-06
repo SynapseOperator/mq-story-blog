@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 2 核心业务已合并，基线 main 为 `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc`。当前 P3-01 / Issue #47 仅做部署就绪审查、课程证据核对和过时 CI/阶段说明清理；依据见 [部署审查](docs/engineering/DEPLOYMENT_READINESS.md)。保留 001–008 历史迁移、全部测试、权限边界与已验收视觉。已实现、隔离测试通过、生产验证须分别报告；本轮不实施 P3-02/P3-03、不生成生产凭据、不采购或部署。PR 需独立 Review，不自动合并。
+- Phase 2 核心业务与 P3-02/P3-03 生产基础、加密备份和安全运维工具已进入 main；已通过的合成环境验证不等于生产上线。VPS 已购但尚未连接或部署，实际规格未核验。P4 已获有条件开发授权，仅在 P3 全部 PR 正式合并且 main CI 通过后才可创建 P4 分支；本次仍只收敛文档。保留 001–008、全部测试、权限边界及已验收视觉。当前操作见 `docs/engineering/PRODUCTION_FOUNDATION.md`、`PRODUCTION_BACKUP.md`、`SECRET_ROTATION.md` 与 `OPERATIONS_RUNBOOK.md`；Session Token 摘要候选仅为 Spike，未接入应用。主机连接须先满足运维手册的操作门槛；不得据此生成正式凭据、部署或开放真实用户。新提交必须匹配有效独立 Review 与 CI。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。

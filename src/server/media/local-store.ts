@@ -1,11 +1,11 @@
 import { constants } from "node:fs";
-import { lstat, realpath, mkdir, open, link, unlink, readdir, rmdir } from "node:fs/promises";
+import { lstat, realpath, mkdir, open, link, unlink, readdir, rmdir, readFile, statfs } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
 export type MediaVariant = "display" | "thumbnail";
 export type MediaStorageCode = "INVALID_CONFIGURATION" | "INVALID_OBJECT" | "UNSAFE_PATH"
-  | "TOO_LARGE" | "ALREADY_EXISTS" | "NOT_FOUND" | "STORAGE_UNAVAILABLE";
+  | "TOO_LARGE" | "ALREADY_EXISTS" | "NOT_FOUND" | "STORAGE_UNAVAILABLE" | "LOW_DISK_SPACE";
 
 /** Fixed codes only: private filesystem paths and driver messages are not public errors. */
 export class MediaStorageError extends Error {
@@ -19,10 +19,37 @@ export class MediaStorageError extends Error {
 
 export type LocalMediaConfiguration = {
   projectRoot: string;
-  roots: { development: string; test: string };
-  environment: "development" | "test";
   maxVariantBytes: number;
-};
+} & ({ roots: { development: string; test: string }; environment: "development" | "test" }
+  | { root: string; environment: "staging" | "production"; deploymentId: string; minimumFreeBytes: number });
+
+/** The deployment entrypoint derives these variables from the read-only
+ * manifest. Local development keeps its existing separate-root contract. */
+export function mediaConfigurationFromEnvironment(maxVariantBytes: number, env: NodeJS.ProcessEnv = process.env,
+  projectRoot = process.cwd()): LocalMediaConfiguration {
+  if (env.MQ_DEPLOYMENT_ENV !== undefined || ["staging", "production"].includes(env.MQ_MEDIA_ENV ?? "")
+    || env.MQ_MEDIA_ROOT !== undefined || env.MQ_MEDIA_DEPLOYMENT_ID !== undefined || env.MQ_MEDIA_MIN_FREE_BYTES !== undefined) {
+    if (!["staging", "production"].includes(env.MQ_DEPLOYMENT_ENV ?? "")
+      || env.MQ_MEDIA_ENV !== env.MQ_DEPLOYMENT_ENV
+      || env.MQ_MEDIA_DEVELOPMENT_ROOT !== undefined || env.MQ_MEDIA_TEST_ROOT !== undefined) {
+      throw new MediaStorageError("INVALID_CONFIGURATION");
+    }
+    return { projectRoot, maxVariantBytes, environment: env.MQ_MEDIA_ENV as "staging" | "production",
+      root: env.MQ_MEDIA_ROOT ?? "", deploymentId: env.MQ_MEDIA_DEPLOYMENT_ID ?? "",
+      minimumFreeBytes: Number(env.MQ_MEDIA_MIN_FREE_BYTES) };
+  }
+  return { projectRoot, maxVariantBytes, environment: env.MQ_MEDIA_ENV as "development" | "test",
+    roots: { development: env.MQ_MEDIA_DEVELOPMENT_ROOT ?? "", test: env.MQ_MEDIA_TEST_ROOT ?? "" } };
+}
+
+/** This is a write admission reserve, not a hard filesystem quota. Reads and
+ * controlled cleanup can still operate when capacity is low. */
+export async function checkMediaFreeSpace(root: string, reserve: number, pendingBytes = 0) {
+  try {
+    const space = await statfs(root, { bigint: true });
+    if (space.bavail * space.bsize < BigInt(reserve) + BigInt(pendingBytes)) throw new MediaStorageError("LOW_DISK_SPACE");
+  } catch (error) { throw storageError(error); }
+}
 
 export type LocalMediaStore = Readonly<{
   write(storageKey: string, variant: MediaVariant, processedWebp: Uint8Array): Promise<{ byteLength: number }>;
@@ -98,31 +125,62 @@ async function outsideGit(path: string) {
  */
 export async function createLocalMediaStore(config: LocalMediaConfiguration): Promise<LocalMediaStore> {
   let root: string;
+  let minimumFreeBytes = 0;
   const maxBytes = config?.maxVariantBytes;
   try {
-    const roots = [config?.projectRoot, config?.roots?.development, config?.roots?.test];
-    if (roots.some(value => typeof value !== "string" || !isAbsolute(value))
-      || !["development", "test"].includes(config?.environment)
-      || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new MediaStorageError("INVALID_CONFIGURATION");
-    const [projectRoot, development, test] = roots.map(value => resolve(value));
-    if ([development, test].some(value => contains(projectRoot, value) || contains(value, projectRoot))
-      || contains(development, test) || contains(test, development)) throw new MediaStorageError("INVALID_CONFIGURATION");
-    await inspectPath(projectRoot, true);
-    // Only the selected root needs to exist; validation never creates or touches
-    // the other environment. Existing aliases of either root are still rejected.
-    for (const candidate of [development, test]) {
-      let existing = candidate;
-      while (true) {
-        try { await inspectPath(existing, true); break; }
-        catch (error) {
-          if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ENOENT" || dirname(existing) === existing) throw error;
-          existing = dirname(existing);
-        }
+    if (config?.environment === "staging" || config?.environment === "production") {
+      if (typeof config.projectRoot !== "string" || !isAbsolute(config.projectRoot)
+        || typeof config.root !== "string" || !isAbsolute(config.root)
+        || !keyPattern.test(config.deploymentId) || !Number.isSafeInteger(maxBytes) || maxBytes <= 0
+        || !Number.isSafeInteger(config.minimumFreeBytes) || config.minimumFreeBytes < 256 * 1024 * 1024
+        || config.minimumFreeBytes > 16 * 1024 * 1024 * 1024) throw new MediaStorageError("INVALID_CONFIGURATION");
+      root = resolve(config.root);
+      const projectRoot = resolve(config.projectRoot);
+      if (contains(projectRoot, root) || contains(root, projectRoot)) throw new MediaStorageError("INVALID_CONFIGURATION");
+      await inspectPath(projectRoot, true);
+      const rootInfo = await inspectPath(root, true);
+      privateMode(rootInfo.mode, 0o700);
+      if (process.platform !== "win32" && (rootInfo.uid !== 10001 || (rootInfo.mode & 0o7000) !== 0)) {
+        throw new MediaStorageError("UNSAFE_PATH");
       }
-      await outsideGit(existing);
+      await outsideGit(root);
+      const marker = join(root, ".mq-deployment.json");
+      const info = await inspectPath(marker, false);
+      privateMode(info.mode, 0o600);
+      if (info.nlink !== 1 || (process.platform !== "win32" && (info.uid !== 10001 || (info.mode & 0o7000) !== 0))) {
+        throw new MediaStorageError("UNSAFE_PATH");
+      }
+      if (info.size > 1024) throw new MediaStorageError("INVALID_CONFIGURATION");
+      const identity = JSON.parse(await readFile(marker, "utf8"));
+      if (identity?.version !== 1 || identity.environment !== config.environment || identity.deploymentId !== config.deploymentId
+        || Object.keys(identity).sort().join(",") !== "deploymentId,environment,version") throw new MediaStorageError("INVALID_CONFIGURATION");
+      minimumFreeBytes = config.minimumFreeBytes;
+    } else {
+      if (!config || !("roots" in config)) throw new MediaStorageError("INVALID_CONFIGURATION");
+      const roots = [config?.projectRoot, config?.roots?.development, config?.roots?.test];
+      if (roots.some(value => typeof value !== "string" || !isAbsolute(value))
+        || !["development", "test"].includes(config?.environment)
+        || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new MediaStorageError("INVALID_CONFIGURATION");
+      const [projectRoot, development, test] = roots.map(value => resolve(value));
+      if ([development, test].some(value => contains(projectRoot, value) || contains(value, projectRoot))
+        || contains(development, test) || contains(test, development)) throw new MediaStorageError("INVALID_CONFIGURATION");
+      await inspectPath(projectRoot, true);
+      // Only the selected root needs to exist; validation never creates or touches
+      // the other environment. Existing aliases of either root are still rejected.
+      for (const candidate of [development, test]) {
+        let existing = candidate;
+        while (true) {
+          try { await inspectPath(existing, true); break; }
+          catch (error) {
+            if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ENOENT" || dirname(existing) === existing) throw error;
+            existing = dirname(existing);
+          }
+        }
+        await outsideGit(existing);
+      }
+      root = config.environment === "development" ? development : test;
+      privateMode((await inspectPath(root, true)).mode, 0o700);
     }
-    root = config.environment === "development" ? development : test;
-    privateMode((await inspectPath(root, true)).mode, 0o700);
   } catch (error) {
     if (error instanceof MediaStorageError) throw error;
     throw new MediaStorageError("INVALID_CONFIGURATION");
@@ -143,6 +201,7 @@ export async function createLocalMediaStore(config: LocalMediaConfiguration): Pr
     let temporary: string | undefined;
     try {
       privateMode((await inspectPath(root, true)).mode, 0o700);
+      if (minimumFreeBytes) await checkMediaFreeSpace(root, minimumFreeBytes, processedWebp.byteLength);
       try { await mkdir(target.directory, { mode: 0o700 }); }
       catch (error) {
         if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") throw error;
