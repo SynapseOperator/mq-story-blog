@@ -1,0 +1,7 @@
+{
+	import /etc/caddy/mq-options.caddy
+}
+
+{$MQ_PUBLIC_HOST} {
+	import /etc/caddy/mq-proxy.caddy
+}

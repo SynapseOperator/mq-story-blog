@@ -1,0 +1,10 @@
+# Local synthetic staging only. The entrypoint rejects this mode in production.
+{
+	import /etc/caddy/mq-options.caddy
+	skip_install_trust
+}
+
+{$MQ_PUBLIC_HOST} {
+	tls internal
+	import /etc/caddy/mq-proxy.caddy
+}

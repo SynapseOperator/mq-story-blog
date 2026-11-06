@@ -3,7 +3,7 @@ import type { Prisma } from "../../../generated/prisma/client.ts";
 import type { AdminPrincipal } from "../access.ts";
 import { AdminAccessError } from "../policy.ts";
 import type { PublicationWriter, VersionInput } from "../../stories/operations.ts";
-import { createLocalMediaStore } from "../../media/local-store.ts";
+import { createLocalMediaStore, mediaConfigurationFromEnvironment } from "../../media/local-store.ts";
 import { MEDIA_DISPLAY_LIMIT } from "../../media/processor.ts";
 import { PublicationError, type PublishAction } from "./policy.ts";
 
@@ -58,9 +58,7 @@ export async function verifyPublicationFiles(snapshot: Awaited<ReturnType<typeof
   if (snapshot.assets.length === 0) return;
   try {
     if (process.env.MQ_MEDIA_ENABLED !== "true") throw new Error("MEDIA_DISABLED");
-    const store = await createLocalMediaStore({ projectRoot: process.cwd(),
-      roots: { development: process.env.MQ_MEDIA_DEVELOPMENT_ROOT ?? "", test: process.env.MQ_MEDIA_TEST_ROOT ?? "" },
-      environment: process.env.MQ_MEDIA_ENV as "development" | "test", maxVariantBytes: MEDIA_DISPLAY_LIMIT });
+    const store = await createLocalMediaStore(mediaConfigurationFromEnvironment(MEDIA_DISPLAY_LIMIT));
     // Bounded sequential I/O: at most one <=4 MiB variant in memory. No database
     // transaction or admin lock is held while opening/reading/hashing files.
     for (const asset of snapshot.assets) {
