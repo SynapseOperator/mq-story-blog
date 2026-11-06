@@ -2,11 +2,11 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-Phase 2 核心业务已合并。当前分支实施 **P3-02 生产身份、秘密配置与本地容器化验证**（[Issue #49](https://github.com/SynapseOperator/mq-story-blog/issues/49)），直接基于 main，不依赖或合并待审的 [P3-01 / PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)。容器运行、身份矩阵和操作顺序见 [PRODUCTION_FOUNDATION.md](docs/engineering/PRODUCTION_FOUNDATION.md)。这是一套生产候选配置，尚未部署 VPS。
+Phase 2 核心业务已合并。当前分支实施 **P3-03 加密备份与安全运维**（[Issue #51](https://github.com/SynapseOperator/mq-story-blog/issues/51)），叠加在未合并的 [PR #50](https://github.com/SynapseOperator/mq-story-blog/pull/50) `052fbc4` 上；[PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48) 也未由本任务合并。生产身份和容器合同见 [PRODUCTION_FOUNDATION.md](docs/engineering/PRODUCTION_FOUNDATION.md)，操作手册见 [备份恢复](docs/engineering/PRODUCTION_BACKUP.md)、[秘密轮换](docs/engineering/SECRET_ROTATION.md)、[主机运维](docs/engineering/OPERATIONS_RUNBOOK.md)。尚未购买或部署 VPS。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
-本轮保留全部既有测试，新增 `test:production:db` 和 `test:production:container`。仅使用隔离合成数据，生产开关默认关闭。新 PR 为 Ready for Review 并请求 SnorkelingBreather，不自动合并或部署。真实域名/HTTPS、主机权限、Session Token、日志备份、容量和独立安全审查仍是正式开放门槛。留言提交和审核合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
+本轮保留全部既有测试；`test:production:operations` 在原完整容器验收后执行加密恢复、真实 HTTPS 与轮换，`test:production:rotation` 验证数据库凭据/签名，`test:auth:session-spike` 验证锁定框架的 token 路径。仅使用隔离合成数据，生产开关默认关闭。[Session Spike](docs/engineering/SESSION_TOKEN_SPIKE.md) 发现摘要候选的撤销兼容问题，未改动实际认证。新 PR 为 Ready for Review 并请求 SnorkelingBreather，不自动合并。真实域名/主机、异地备份、容量、Session 风险处置与独立安全审查仍是正式开放门槛。留言合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
 
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 

@@ -33,5 +33,7 @@ src/generated/prisma/**
 **/*.zip
 **/*backup*
 !scripts/media/backup*.mjs
+!scripts/production/backup*.mjs
+!tests/production-backup*.test.mjs
 **/node_modules/**
 **/.next/**

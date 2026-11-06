@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 当前范围为 P3-02 / Issue #49：生产数据库身份、文件秘密、私有媒体与 Compose 容器化基础。直接基于 main，不合并待审的 PR #48；保留 001–008 历史迁移、全部业务测试和已验收视觉。部署合同见 `docs/engineering/PRODUCTION_FOUNDATION.md`。只在隔离合成环境验证，不生成正式账号/密钥、不采购或部署；Session 哈希兼容性、正式密钥轮换及生产安全审查仍需独立确认。
+- 当前范围为 P3-03 / Issue #51：加密备份、隔离恢复、密钥运维与上线检查。分支叠加在未合并 PR #50 的 `052fbc4`，不合并 #48/#50；保留 001–008、全部业务测试和已验收视觉。部署合同见 `PRODUCTION_FOUNDATION.md`，备份、轮换和检查分别见 engineering 目录下 `PRODUCTION_BACKUP.md`、`SECRET_ROTATION.md`、`OPERATIONS_RUNBOOK.md`。Session Token 实验见 `SESSION_TOKEN_SPIKE.md`，摘要候选不接入应用。只使用隔离合成环境，不生成正式凭据、不采购或部署；最终 Review 必须匹配新提交。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。

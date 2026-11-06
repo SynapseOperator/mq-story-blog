@@ -13,16 +13,31 @@ FROM dependencies AS build
 COPY . .
 RUN npm run build
 
-# Offline maintenance/test target: no secret is copied into the image. Its
-# operator grants one operation's files at runtime; it is not the web container.
-FROM build AS tools
+# Offline targets share the full toolchain layer instead of copying /app into a
+# second image. Both use PG18 native tools and Bookworm-compatible Node/Prisma.
+# No database server is started here; this is not the web container.
+FROM postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf9d97663600538c294c5 AS tools
+WORKDIR /app
+COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
+COPY --from=dependencies /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=build /app /app
 RUN groupadd --gid 10001 mq && useradd --uid 10001 --gid 10001 --no-create-home mq \
+    && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && mkdir -p /var/lib/mq/media && chown 10001:10001 /var/lib/mq/media \
-    && chmod 0700 /var/lib/mq/media
+    && chmod 0700 /var/lib/mq/media && node --version && test "$(npm --version)" = "11.17.0" && pg_dump --version
 USER 10001:10001
 ENV NODE_ENV=production
 ENTRYPOINT ["node"]
 CMD ["scripts/production/database-cli.mjs", "audit"]
+
+# Offline backup/restore target only. Native PG tools match the server major;
+# restic is a pinned upstream static binary, absent from the application image.
+FROM restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510 AS restic
+FROM tools AS operations
+COPY --from=restic /usr/bin/restic /usr/local/bin/restic
+RUN node --version && pg_dump --version && restic version
+CMD ["scripts/production/operations-check.mjs"]
 
 FROM caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3 AS proxy
 COPY ops/Caddyfile ops/Caddyfile.local ops/mq-options.caddy ops/mq-proxy.caddy /etc/caddy/

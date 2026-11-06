@@ -2,7 +2,8 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main]
+    # Temporary stacked dependency for Issue #51; remove when #50 enters main.
+    branches: [main, feat/p3-02-production-foundation]
   push:
     branches: [main]
 
@@ -114,6 +115,12 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:auth:limiter
+      - name: Session token compatibility spike and isolated credential rotation
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: |
+          npm run test:auth:session-spike
+          npm run test:production:rotation
       - name: PostgreSQL log disclosure controls and negative control
         run: npm run test:auth:logs
       - name: Bounded authentication transaction acquisition regression
@@ -213,10 +220,23 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Build production candidate images without credentials
         run: |
-          docker build --target app -t mq-p302-app:local .
-          docker build --target tools -t mq-p302-tools:local .
-          docker build --target proxy -t mq-p302-proxy:local .
+          # A dedicated builder shares layers across these targets. Once loaded,
+          # remove only this job's builder/cache before the disk-reserve test.
+          # Never prune the daemon or remove unrelated runner directories.
+          builder="mq-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx create --name "$builder" --driver docker-container \
+            --driver-opt image=moby/buildkit@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+          trap 'docker buildx rm "$builder"' EXIT
+          docker buildx build --builder "$builder" --load --target app -t mq-p302-app:local .
+          docker buildx build --builder "$builder" --load --target tools -t mq-p302-tools:local .
+          docker buildx build --builder "$builder" --load --target proxy -t mq-p302-proxy:local .
+          docker buildx build --builder "$builder" --load --target operations -t mq-p303-operations:local .
+          docker buildx rm "$builder"
+          trap - EXIT
+          df -h .
       - name: Synthetic HTTPS deployment, least privilege and browser regression
-        run: npm run test:production:container
+        # Includes every original container check, then encrypted recovery and
+        # real SCRAM/TLS rotation. No duplicate build or omitted regression.
+        run: npm run test:production:operations
       # Lab credentials, database volumes and backups stay on this disposable
       # runner. No secret-bearing directory is uploaded as an artifact.
