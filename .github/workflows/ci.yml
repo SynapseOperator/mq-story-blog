@@ -207,6 +207,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Isolated Docker with OCI image-store support
+        # The hosted runner's legacy store cannot load OCI indexes. This action
+        # starts its own job-scoped daemon/context and tears it down afterwards;
+        # it does not change the host daemon or any VPS configuration.
+        uses: docker/setup-docker-action@3f1ab1ab0e29231562e4db4ca600c1a49653bac6 # v5.7.0
+        with:
+          version: v29.9.2
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true},"debug":false}
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:

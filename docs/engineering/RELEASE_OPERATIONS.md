@@ -39,6 +39,8 @@ node scripts/release/cli.mjs verify /private/download/mq-release EXPECTED_RELEAS
 
 OCI 加载要求经验证的 Docker Engine containerd image store。工具不切换现有主机 storage driver；旧驱动会被拒绝。切换驱动可能暂时隐藏已有镜像/容器，必须另行安排。依据：[OCI 导出](https://docs.docker.com/build/exporters/oci-docker/)、[OCI image layout](https://github.com/opencontainers/image-spec/blob/main/image-layout.md)、[Docker containerd store](https://docs.docker.com/engine/storage/containerd/)。
 
+CI 的 container Job 使用固定版本 Docker 29.9.2 和官方 `setup-docker-action`，在独立临时 daemon/context 中启用 containerd；不是切换已有主机的存储后端。首次 P4 CI [42251879975](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42251879975) 的 quality/database 及原容器演练通过，但 OCI 探针在 runner 默认环境中失败。原日志只记录通用错误码，无法据此断言唯一根因；现保留失败记录、补充固定脱敏诊断，并显式满足官方要求后重跑全部 CI。参见 [Docker 官方 Actions 说明](https://docs.docker.com/build/ci/github-actions/multi-platform/)。
+
 ## 默认计划、生产拒绝
 
 `cli.mjs plan` 只读取候选和当前版本、目标 manifest、已验证备份 receipt，然后输出计划，不加载镜像、不运行 Compose、不访问远端主机。配置和 receipt 必须在 Git 之外并符合既有文件权限规则。

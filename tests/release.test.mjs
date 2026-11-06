@@ -6,6 +6,16 @@ import { join } from "node:path";
 import { verifyReleaseGate } from "../scripts/release/gate.mjs";
 import { inspectOciArchive, sha256, TARGETS } from "../scripts/release/bundle.mjs";
 import { planRelease, applySyntheticRelease } from "../scripts/release/deploy.mjs";
+import { releaseProbeFailure } from "../scripts/release/integration.mjs";
+
+test("release probe diagnostics distinguish required storage without printing arbitrary errors or private paths", () => {
+  const storage = Object.assign(new Error("RELEASE_CONTAINERD_REQUIRED"), { releaseProbeStage: "docker-info" });
+  assert.deepEqual(releaseProbeFailure(storage), { code: "RELEASE_CONTAINERD_REQUIRED", stage: "docker-info" });
+  const child = Object.assign(new Error("RELEASE_CONTAINER_COMMAND_FAILED: arbitrary-private-value"), { releaseProbeStage: "oci-load" });
+  assert.deepEqual(releaseProbeFailure(child), { code: "RELEASE_CONTAINER_COMMAND_FAILED", stage: "oci-load" });
+  const privateError = Object.assign(new Error("secret=synthetic-credential /private/path"), { releaseProbeStage: "secret-private-path" });
+  assert.deepEqual(releaseProbeFailure(privateError), { code: "RELEASE_CONTAINER_PROBE_FAILED", stage: "unknown" });
+});
 
 const sourceSha = "a".repeat(40), otherSha = "b".repeat(40);
 function githubFixture(change = {}) {
