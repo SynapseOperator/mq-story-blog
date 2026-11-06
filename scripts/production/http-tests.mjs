@@ -48,7 +48,7 @@ export function laboratoryTransport(origin, ca, secrets) {
   });
 }
 
-export async function runProductionHttpChecks({ origin, ca, admin, reader, secrets, restart, revoke, directRequest, evidenceDirectory }) {
+export async function runProductionHttpChecks({ origin, ca, admin, reader, secrets, restart, revoke, directRequest, evidenceDirectory, operations }) {
   const request = laboratoryTransport(origin, ca, secrets), adminJar = {}, readerJar = {};
   const checks = [];
   let stage = "empty public catalog", story, asset, commentId;
@@ -179,6 +179,12 @@ export async function runProductionHttpChecks({ origin, ca, admin, reader, secre
       for (const method of ["GET", "HEAD"]) expect(await request(`/api/stories/${story.id}/media/${asset.id}`, { method }), 404);
       expect(await request(`/api/stories/${story.id}/comments`), 404);
       await publication("restore"); expect(await request(`/api/stories/${story.id}/media/${asset.id}`), 200);
+    });
+    if (operations) await check("encrypted restore and rotation preserve data while invalidating old authority", async () => {
+      await operations({ story, asset, commentId, adminJar, readerJar, request });
+      // Operations invalidates sessions intentionally. The final original
+      // revocation regression still exercises a freshly authenticated account.
+      expect(await request("/api/auth/sign-in/username", { method: "POST", body: admin, jar: adminJar }), 200);
     });
     await check("revocation invalidates the old administrator cookie immediately", async () => {
       await revoke(); expect(await request("/api/admin/stories", { jar: adminJar }), 401);

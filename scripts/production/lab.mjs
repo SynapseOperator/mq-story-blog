@@ -11,6 +11,7 @@ import { fileURLToPath, URL } from "node:url";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
 import { runProductionHttpChecks, laboratoryTransport } from "./http-tests.mjs";
 import { runImageConfigurationChecks } from "./container-checks.mjs";
+import { runOperationsLab } from "./operations-lab.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 let stage = "prepare isolated container laboratory";
@@ -33,6 +34,8 @@ async function unusedPort() {
 }
 
 async function main() {
+  assert.ok(process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === "--operations"));
+  const operations = process.argv[2] === "--operations";
   const id = randomUUID(), suffix = id.replaceAll("-", ""), project = `mq-p302-${suffix}`;
   const directory = await mkdtemp(join(tmpdir(), "mq-p302-lab-"));
   const evidence = process.env.PRODUCTION_EVIDENCE_DIR || join(directory, "evidence");
@@ -46,7 +49,8 @@ async function main() {
     media: { root: mediaRoot, minFreeBytes: 512 * 1024 * 1024 } };
   const config = validateDeploymentConfig(manifest);
   const images = { app: process.env.MQ_LAB_APP_IMAGE || "mq-p302-app:local", tools: process.env.MQ_LAB_TOOLS_IMAGE || "mq-p302-tools:local",
-    proxy: process.env.MQ_LAB_PROXY_IMAGE || "mq-p302-proxy:local" };
+    proxy: process.env.MQ_LAB_PROXY_IMAGE || "mq-p302-proxy:local",
+    ...(operations ? { operations: process.env.MQ_LAB_OPERATIONS_IMAGE || "mq-p303-operations:local" } : {}) };
   const secret = () => { const value = randomBytes(32).toString("hex"); secretValues.add(value); return value; };
   const passwords = Object.fromEntries(LOGIN_IDENTITIES.map(name => [name, secret()])), bootstrapPassword = secret();
   const url = role => `postgresql://${role}:${role === "mq_bootstrap" ? bootstrapPassword : passwords[Object.keys(config.roles).find(key => config.roles[key] === role)]}@postgres:5432/${config.database.name}`;
@@ -63,7 +67,7 @@ async function main() {
   const secretDirectory = join(directory, "files"); await mkdir(secretDirectory, { mode: 0o700 });
   for (const [name, value] of Object.entries(files)) { secretValues.add(value); await writeFile(join(secretDirectory, name), value + "\n", { mode: 0o600 }); }
   await writeFile(join(directory, "deployment.json"), JSON.stringify(manifest), { mode: 0o644 });
-  const volumeNames = {}, temporaryContainers = new Set();
+  const volumeNames = {}, volumeEntries = {}, temporaryContainers = new Set();
   const environmentPath = join(directory, "compose.env"), overridePath = join(directory, "lab.yaml");
   // This file contains only non-secret paths, image names, flags and the test hostname.
   await writeFile(environmentPath, Object.entries({ MQ_DEPLOYMENT_ENV: "staging", MQ_DATABASE_NAME: manifest.database.name,
@@ -74,14 +78,16 @@ async function main() {
   const composeBase = ["compose", "--env-file", environmentPath, "--project-name", project, "-f", join(root, "compose.production.yaml"), "-f", overridePath];
   const compose = (args, options) => docker([...composeBase, ...args], options);
   async function volume(name, entries = {}, uid = 10001) {
+    assert.match(name, /^[a-z][a-z-]*$/);
     const full = `${project}_${name}`; volumeNames[name] = full;
+    volumeEntries[name] = entries;
     docker(["volume", "create", "--label", `mq.lab=${id}`, full]);
-    const stageDirectory = join(directory, name); await mkdir(stageDirectory);
+    const stageDirectory = await mkdtemp(join(directory, `${name}-`));
     for (const [file, value] of Object.entries(entries)) await writeFile(join(stageDirectory, file), value, { mode: 0o600 });
-    const container = `${project}-init-${name}`; temporaryContainers.add(container);
+    const container = `${project}-init-${name}-${randomUUID().slice(0, 8)}`; temporaryContainers.add(container);
     docker(["create", "--name", container, "--network", "none", "--user", "0:0", "--mount", `type=volume,source=${full},target=/target`,
       "--entrypoint", "/bin/sh", images.tools, "-c",
-      `cp -R /staged/. /target/ && chown -R ${uid}:${uid} /target && chmod 0700 /target && find /target -type f -exec chmod ${name === "manifest" ? "0444" : "0400"} {} +`]);
+      `cp -R /staged/. /target/ && chown -R ${uid}:${uid} /target && chmod 0700 /target && find /target -type f -exec chmod ${name.endsWith("manifest") ? "0444" : "0400"} {} +`]);
     docker(["cp", `${stageDirectory}${process.platform === "win32" ? "\\" : "/"}.`, `${container}:/staged`]);
     docker(["start", "--attach", container]); docker(["rm", container]); temporaryContainers.delete(container);
     return full;
@@ -91,6 +97,16 @@ async function main() {
     stage = "initialize scoped private volumes";
     for (const image of Object.values(images)) docker(["image", "inspect", image, "--format", "{{.Id}}"]);
     runImageConfigurationChecks({ appImage: images.app, toolsImage: images.tools, proxyImage: images.proxy });
+    if (operations) {
+      docker(["run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001,mode=0700",
+        images.operations, "scripts/production/backup-tools-tests.mjs"]);
+      docker(["run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,size=8m,uid=10001,gid=10001,mode=0700",
+        images.operations, "--input-type=module", "--eval",
+        "import assert from 'node:assert/strict'; import {requireBackupSpace} from './scripts/production/backup-tools.mjs'; await assert.rejects(requireBackupSpace('/tmp',1),/BACKUP_DISK_SPACE_LOW/);"]);
+      console.log("PASS operations: real Restic faults and actual low-capacity filesystem admission");
+    }
     await volume("manifest", { "deployment.json": JSON.stringify(manifest) });
     await volume("app-secrets", Object.fromEntries(["database_url", "auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => [name, files[name]])));
     await volume("pg-secrets", { postgres_password: files.postgres_password }, 999);
@@ -182,6 +198,11 @@ ${external}
         return JSON.parse(result.stdout.trim().split("\n").at(-1)).status;
       },
       revoke: async () => { operation("admin-revoke", "maintenance-secrets", { MAINTENANCE_DATABASE_URL_FILE: "/run/secrets/maintenance_database_url" }, "scripts/production/lab-actions.mjs"); },
+      ...(operations ? { operations: async fixture => runOperationsLab({ docker, compose, composeBase, project, config, manifest,
+        files, passwords, bootstrapUrl, directory, evidence, images, volume, volumeNames, secret, origin, ca, accounts,
+        revision: spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim(),
+        readVolumeSecret: async (name, file) => volumeEntries[name][file],
+      }, fixture) } : {}),
     });
     stage = "startup failure is closed with malformed configuration";
     for (const setting of ["MQ_DEPLOYMENT_ENV=development", "AUTH_SECRET=not-allowed-raw-value"]) {
