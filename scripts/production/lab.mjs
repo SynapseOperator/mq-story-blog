@@ -86,6 +86,9 @@ async function main() {
     for (const [file, value] of Object.entries(entries)) await writeFile(join(stageDirectory, file), value, { mode: 0o600 });
     const container = `${project}-init-${name}-${randomUUID().slice(0, 8)}`; temporaryContainers.add(container);
     docker(["create", "--name", container, "--network", "none", "--user", "0:0", "--mount", `type=volume,source=${full},target=/target`,
+      // The offline tools base declares a PG data volume, unused by this copy
+      // helper. An explicit tiny tmpfs avoids creating orphan anonymous volumes.
+      "--mount", "type=tmpfs,destination=/var/lib/postgresql,tmpfs-size=1048576",
       "--entrypoint", "/bin/sh", images.tools, "-c",
       `cp -R /staged/. /target/ && chown -R ${uid}:${uid} /target && chmod 0700 /target && find /target -type f -exec chmod ${name.endsWith("manifest") ? "0444" : "0400"} {} +`]);
     docker(["cp", `${stageDirectory}${process.platform === "win32" ? "\\" : "/"}.`, `${container}:/staged`]);

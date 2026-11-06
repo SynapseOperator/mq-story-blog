@@ -74,4 +74,6 @@ node scripts/production/backup-cli.mjs restore --confirm-deployment=<目标部�
 
 Linux CI 的一次真实失败显示磁盘仅余 8,039,165,952 bytes，低于 8GiB 保留线。构建改为本次 job 独占的 BuildKit builder，四个镜像导出后删除其专属缓存，再运行演练；不降低磁盘阈值、不执行全局 prune 或删除 runner 的无关目录。
 
+仅清缓存后仍约余 7.6GiB，因此离线 tools/operations 改为共享 PG18、Node 和工程依赖层，operations 只额外添加 Restic，避免两次保存相同依赖。应用镜像不变；两种维护镜像继续使用 UID10001，需通过完整迁移、权限、备份恢复及轮换演练。
+
 最终命令退出码和 Linux CI 链接以 PR 验证记录为准。真实异地仓库、保留周期/RPO/RTO批准、定时调度告警接收者、磁盘配额、生产备份密钥托管/签名和真实VPS恢复仍待上线前验收。
