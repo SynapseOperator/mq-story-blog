@@ -70,4 +70,6 @@ node scripts/production/backup-cli.mjs restore --confirm-deployment=<目标部�
 
 这是小型合成数据、Windows 宿主上的 Linux 容器结果，不是 4GB VPS 的性能或恢复时间承诺。本地 CA 签发的 12 小时证书触发了预期的临期告警，未降低正式监控阈值。首次演练发现原生 pg_restore 需显式 `--dbname`，第二次发现恢复后 LOGIN 状态与既有权限审计顺序不一致；两项修正后重新执行了完整演练，未放宽权限检查。
 
+容器 CI 输出脱敏的监控数值。共享 runner 刚构建镜像后的宿主高负载不作为未来 VPS 的容量验收，但必须真实产生 `HOST_LOAD_HIGH`，保留 `monitoring.ok=false`；生产探针仍非零退出。容器健康、磁盘、端口、备份和证书验证异常依旧使演练失败，不能用 CI 成功替代主机健康验收。
+
 最终命令退出码和 Linux CI 链接以 PR 验证记录为准。真实异地仓库、保留周期/RPO/RTO批准、定时调度告警接收者、磁盘配额、生产备份密钥托管/签名和真实VPS恢复仍待上线前验收。

@@ -173,9 +173,15 @@ volumes:
   pass("five SCRAM credentials, auth/proxy and business key rotation with forced recreation and fresh login");
   const receiptPath = join(evidence, "backup-receipt.json"); await writeFile(receiptPath, JSON.stringify(receipt));
   const monitoring = await collectOperations({ project, deploymentId: config.deploymentId, diskPath: directory, origin, receiptPath, ca, connectHost: "127.0.0.1" });
+  console.log(`OPERATIONS_MONITOR ${JSON.stringify(monitoring)}`);
   // Caddy's disposable local certificate is deliberately short lived. Production
   // expiry thresholds remain unchanged and must alert, not be waived globally.
-  assert.ok(monitoring.failures.every(code => code === "TLS_EXPIRY_OR_VERIFICATION_FAILED"));
+  // A hosted CI runner has just built four images: its load average is real
+  // telemetry, not a capacity acceptance test for the future VPS. Preserve that
+  // alert and its nonzero CLI behavior; all service/storage/TLS checks still apply.
+  assert.ok(monitoring.failures.every(code => code === "TLS_EXPIRY_OR_VERIFICATION_FAILED"
+    || (process.env.CI === "true" && code === "HOST_LOAD_HIGH" && monitoring.sample.loadPerCpu > 1.5)));
+  assert.equal(monitoring.failures.includes("HOST_LOAD_HIGH"), monitoring.sample.loadPerCpu > 1.5);
   assert.ok(monitoring.sample.certificateDays > 0);
   result.monitoring = monitoring;
   pass("read-only host/container/backup/TLS monitoring; local short-lived certificate alert retained");
