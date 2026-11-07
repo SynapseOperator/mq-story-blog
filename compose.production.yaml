@@ -87,7 +87,9 @@ services:
       AUTH_PROXY_SECRET_FILE: /run/secrets/auth_proxy_secret
       MQ_PUBLISH_SIGNING_KEY_FILE: /run/secrets/publish_signing_key
       MQ_COMMENT_SIGNING_KEY_FILE: /run/secrets/comment_signing_key
-    configs: [deployment]
+    configs:
+      - source: deployment
+        target: /etc/mq/deployment.json
     secrets: [database_url, auth_secret, auth_proxy_secret, publish_signing_key, comment_signing_key]
     volumes: [media:/var/lib/mq/media]
     tmpfs:
@@ -147,7 +149,9 @@ services:
     environment:
       MQ_DEPLOYMENT_ENV: ${MQ_DEPLOYMENT_ENV:?Choose staging or production}
       MQ_DEPLOYMENT_CONFIG: /etc/mq/deployment.json
-    configs: [deployment]
+    configs:
+      - source: deployment
+        target: /etc/mq/deployment.json
     volumes: [media:/var/lib/mq/media]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=0700"]
     networks: [database]

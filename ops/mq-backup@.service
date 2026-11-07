@@ -1,0 +1,21 @@
+# Template only: copying this file does not authorize or enable any operation.
+[Unit]
+Description=MQ verified maintenance backup for %i
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/etc/mq/backup/%i.enabled
+OnFailure=mq-backup-alert@%i.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+WorkingDirectory=/srv/mq/current
+EnvironmentFile=/etc/mq/backup/%i.env
+ExecStart=/usr/bin/node /srv/mq/current/scripts/production/backup-window.mjs run --confirm-deployment=%i
+ExecStopPost=/usr/bin/node /srv/mq/current/scripts/production/backup-window.mjs close-after-failure --confirm-deployment=%i
+TimeoutStartSec=2h
+TimeoutStopSec=20min
+KillMode=mixed

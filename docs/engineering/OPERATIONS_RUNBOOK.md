@@ -6,7 +6,7 @@
 
 负责人已购买小鸡云香港 CN2 轻量 B，申报系统为 Ubuntu 24.04；这些是购买信息，尚未登录核验实际 CPU、内存、磁盘或网络。原规划为约 4 vCPU / 4GB / 40GB、Docker Compose，两个月 VPS 预算上限人民币 100 元，域名另计；不将规划规格或预算视为已实测配置或已核实账单。获授权后核对 CPU 架构、容量、流量/端口限制、续费与附加费用，并从实际访问地区验证晚高峰延迟与丢包。香港地点和 CN2 产品标签不代替线路实测。不要在 4GB 主机同时常驻两套环境，镜像在 CI 构建。
 
-**连接前门槛**：已暴露的初始 root 密码须先由负责人通过供应商可信控制台轮换，并建立 SSH 公钥登录。完成这些步骤并获得明确连接授权前，不进行 SSH 连接或执行远端命令；后续首次获准连接时再核验公钥登录与主机信息。新密码不得放入聊天、Git、命令行或日志。P4 的代码开发还须等待 P3 全部 PR 正式合并且 main CI 通过；开发授权不等于上线授权。
+**连接前门槛**：已暴露的初始 root 密码须先由负责人通过供应商可信控制台轮换，并建立 SSH 公钥登录。完成这些步骤并获得明确连接授权前，不进行 SSH 连接或执行远端命令；后续首次获准连接时再核验公钥登录与主机信息。新密码不得放入聊天、Git、命令行或日志。P3 的合并与 main CI 前置条件已满足；P4 开发授权仍不等于上线授权。安全连接顺序和只读工具见 [HOST_PREPARATION.md](HOST_PREPARATION.md)。
 
 首次登录保留供应商控制台和当前 SSH 会话。由负责人指定管理来源 IP/VPN 和 SSH 公钥；创建独立 sudo 运维账号，验证第二个终端能够密钥登录后，才在 `/etc/ssh/sshd_config.d/` 设置 `PermitRootLogin no`、`PasswordAuthentication no`、`KbdInteractiveAuthentication no`。先 `sshd -t`，再 reload，确认新连接成功后再退出旧连接。不要远程盲目启用防火墙或禁用全部登录方式。安装安全更新并规划重启窗口，保持 AppArmor；不关闭 Docker 的网络隔离或系统保护。
 
@@ -45,7 +45,7 @@ node scripts/production/operations-check.mjs
 
 ## 更新与回滚
 
-1. 负责人批准匹配 SHA 的独立 Review、全部 CI 和目标镜像 digest；记录当前/候选 digest、001–008 checksum、manifest deploymentId 和秘密文件版本号（不记录秘密值）。本轮没有实现 GHCR 发布/CD，也不把本地 image tag 当成受签名发布产物。
+1. 负责人批准匹配 SHA 的独立 Review、全部 CI 和目标镜像 digest；记录当前/候选 digest、001–008 checksum、manifest deploymentId 和秘密文件版本号（不记录秘密值）。P4 已提供手动 OCI 候选工作流和摘要校验，见 [RELEASE_OPERATIONS.md](RELEASE_OPERATIONS.md)；它不自动部署，也不把本地 image tag 当成受签名发布产物。
 2. 进入短维护窗口，停止 app 及所有维护写任务；执行 pause、等待排空，制作并校验加密成套备份，记录 snapshot ID。备份失败不继续升级。没有回滚兼容性结论也不继续。
 3. 备份完成后、app 和其他维护进程仍停止且数据库仍在私网时，显式 resume 数据库 LOGIN（pause 也关闭了 migration，不能在暂停状态直接迁移）。仅启动独立迁移工具执行受审迁移，再 provision/audit；本轮不新增或修改历史迁移。部署候选 digest 后先在受控入口验收健康、公开故事/图片、登录和管理权限。验证通过后由负责人决定开放开关；不要将 main push 直接视为生产部署授权。
 4. 应用回滚只切回已证明兼容当前 Schema、内容版本、权限和秘密合同的前一 digest。停止新实例再切换，不回写旧秘密。数据库无法兼容时优先向前修复；禁止 reset/down migration。
@@ -54,7 +54,7 @@ node scripts/production/operations-check.mjs
 ## 上线人工门禁
 
 - [ ] VPS/域名/预算及线路测试、管理来源和运维负责人已确认。
-- [ ] 独立安全 Review 匹配最终提交；PR #48/#50 及本 PR 的真实合并状态核实。
+- [ ] 独立安全 Review 匹配最终提交；发布候选来源、合并状态及最终 main CI 已核实。
 - [ ] SSH 第二会话、控制台恢复、补丁重启、IPv4/IPv6 防火墙和外部扫描有证据。
 - [ ] runtime/11 owner 权限核验通过；秘密只按服务挂载，生产密钥生成另获授权。
 - [ ] Session Token Spike 的风险处置经负责人和独立安全审查确认。

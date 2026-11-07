@@ -9,7 +9,7 @@ import { fileDigest, mediaInventorySql, verifyMediaBackup } from "../media/backu
 import { assertDatabaseUrl, deploymentDatabaseTag } from "./database-config.mjs";
 import { verifyDeploymentMigrations } from "./database.mjs";
 import { assertMaintenanceControl, assertWritersPaused, MAINTENANCE_LOCK } from "./rotation.mjs";
-import { assertBackupPaths, containsPath, requireBackupSpace, runBackupTool, pgToolEnvironment, restic } from "./backup-tools.mjs";
+import { assertBackupPaths, backupBackend, containsPath, requireBackupSpace, runBackupTool, pgToolEnvironment, restic } from "./backup-tools.mjs";
 
 export { initializeBackupRepository } from "./backup-tools.mjs";
 
@@ -32,12 +32,13 @@ export async function removeBackupWorkChild(directory, workspace) {
 
 /** Every extracted snapshot is fully authenticated by Restic and then checked
  * against the independent database/file inventory. Only explicit snapshot IDs. */
-export async function restoreSnapshot({ repository, passwordFile, snapshotId, workspace }) {
+export async function restoreSnapshot({ repository, passwordFile, snapshotId, workspace, backend = "local", s3, expectedRepositoryId }) {
+  const options = { repository, passwordFile, workspace, backend, s3, expectedRepositoryId };
   assert.match(snapshotId ?? "", /^[a-f0-9]{64}$/);
-  await assertBackupPaths({ repository, passwordFile, workspace });
-  await restic(["check", "--read-data"], { repository, passwordFile });
+  await assertBackupPaths(options);
+  await restic(["check", "--read-data"], options);
   const directory = await createPrivateChild(workspace, "mq-verify-");
-  await restic(["restore", `${snapshotId}:/payload`, "--target", directory, "--verify"], { repository, passwordFile });
+  await restic(["restore", `${snapshotId}:/payload`, "--target", directory, "--verify"], options);
   const manifest = await verifyMediaBackup(directory);
   assert.equal(manifest.deployment?.format, "mq-deployment-backup-v1");
   assert.match(manifest.deployment.id ?? "", uuid);
@@ -48,14 +49,17 @@ export async function restoreSnapshot({ repository, passwordFile, snapshotId, wo
 /** Cold maintenance backup: all four writer roles must be NOLOGIN and fully
  * drained. The shared maintenance lock prevents resume/key rotation while the
  * snapshot is copied. No application/admin transaction is held across I/O. */
-export async function backupDeployment({ controlPool, backupUrl, config, workspace, repository, passwordFile, receiptFile, sourceRevision }) {
+export async function backupDeployment({ controlPool, backupUrl, config, workspace, repository, passwordFile, receiptFile, sourceRevision,
+  backend = "local", s3, expectedRepositoryId }) {
+  const options = { workspace, repository, passwordFile, backend, s3, expectedRepositoryId };
+  backupBackend(options);
   const target = assertDatabaseUrl(backupUrl, config, "backup");
   assert.match(sourceRevision ?? "", /^[a-f0-9]{40}$/);
-  await assertBackupPaths({ repository, passwordFile, workspace });
+  await assertBackupPaths(options);
   await privatePath(dirname(receiptFile));
   assert.ok(!containsPath(process.cwd(), receiptFile), "BACKUP_PATH_IN_APPLICATION");
-  assert.ok(!containsPath(repository, receiptFile) && !containsPath(config.media.root, workspace)
-    && !containsPath(workspace, config.media.root), "BACKUP_PATH_OVERLAP");
+  assert.ok(!containsPath(config.media.root, workspace) && !containsPath(workspace, config.media.root), "BACKUP_PATH_OVERLAP");
+  if (backend === "local") assert.ok(!containsPath(repository, receiptFile), "BACKUP_PATH_OVERLAP");
   // Receipts are unique per attempt. An existing success receipt is never
   // overwritten or re-used to suggest that a failed new attempt succeeded.
   assert.ok(!(await readdir(dirname(receiptFile))).includes(basename(receiptFile)), "BACKUP_RECEIPT_EXISTS");
@@ -96,7 +100,7 @@ export async function backupDeployment({ controlPool, backupUrl, config, workspa
     // Conservative 3x admission also covers repo/workspace on the same disk:
     // export + authenticated re-extraction + an incompressible encrypted copy.
     await requireBackupSpace(workspace, 3 * (databaseSize + mediaBytes));
-    await requireBackupSpace(repository, 3 * (databaseSize + mediaBytes));
+    if (backend === "local") await requireBackupSpace(repository, 3 * (databaseSize + mediaBytes));
     const child = await createPrivateChild(workspace, "mq-export-"), directory = join(child, "payload");
     await mkdir(directory, { mode: 0o700 }); await mkdir(join(directory, "media"), { mode: 0o700 });
     const store = await createLocalMediaStore({ projectRoot: process.cwd(), environment: config.environment,
@@ -126,11 +130,11 @@ export async function backupDeployment({ controlPool, backupUrl, config, workspa
       manifestSha256: digest(manifestBytes), databaseSha256: database.sha256 })));
     await verifyMediaBackup(directory);
     phase = "encryption";
-    const output = await restic(["backup", "--json", "--host", `mq-${config.deploymentId}`, "--tag", "mq-deployment-v1", "payload"], { repository, passwordFile, cwd: child });
+    const output = await restic(["backup", "--json", "--host", `mq-${config.deploymentId}`, "--tag", "mq-deployment-v1", "payload"], { ...options, cwd: child });
     const summary = output.trim().split("\n").map(line => JSON.parse(line)).find(row => row.message_type === "summary");
     const snapshotId = summary?.snapshot_id; assert.match(snapshotId ?? "", /^[a-f0-9]{64}$/);
     phase = "repository-verification";
-    const verified = await restoreSnapshot({ repository, passwordFile, snapshotId, workspace });
+    const verified = await restoreSnapshot({ ...options, snapshotId });
     await assertWritersPaused(control, config);
     assert.equal(failed, false);
     // The durable copy is encrypted. Remove only this attempt's verified,
@@ -139,7 +143,8 @@ export async function backupDeployment({ controlPool, backupUrl, config, workspa
     await removeBackupWorkChild(verified.directory, workspace);
     await removeBackupWorkChild(child, workspace);
     const receipt = { verified: true, snapshotId, completedAt: new Date().toISOString(), sourceRevision,
-      deploymentId: config.deploymentId, assets: ready.length, files: ready.length * 2 };
+      deploymentId: config.deploymentId, assets: ready.length, files: ready.length * 2, backend,
+      ...(expectedRepositoryId ? { repositoryId: expectedRepositoryId } : {}) };
     phase = "receipt";
     await writeBackupReceipt(receiptFile, receipt);
     return { ...receipt, manifest };

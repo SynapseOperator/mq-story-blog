@@ -38,6 +38,10 @@ export function runImageConfigurationChecks({ appImage, toolsImage, proxyImage }
       compose.services[service].image, "-eu", "-c", probe, "mq-tmpfs-probe", ...mounts.map(mount => mount.split(":")[0])]);
   }
   assert.deepEqual(Object.keys(compose.services).filter(name => compose.services[name].ports?.length), ["proxy"]);
+  for (const service of ["app", "tools"]) {
+    assert.deepEqual(compose.services[service].configs.map(({ source, target }) => ({ source, target })),
+      [{ source: "deployment", target: compose.services[service].environment.MQ_DEPLOYMENT_CONFIG }]);
+  }
   assert.ok(!compose.services.tools.secrets);
   assert.equal(compose.services["volumes-init"].network_mode, "none");
   assert.ok(!compose.services["volumes-init"].secrets);

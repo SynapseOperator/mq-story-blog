@@ -34,8 +34,9 @@ async function unusedPort() {
 }
 
 async function main() {
-  assert.ok(process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === "--operations"));
-  const operations = process.argv[2] === "--operations";
+  assert.ok(process.argv.length === 2 || (process.argv.length === 3 && ["--operations", "--release"].includes(process.argv[2])));
+  const release = process.argv[2] === "--release";
+  const operations = process.argv[2] === "--operations" || release;
   const id = randomUUID(), suffix = id.replaceAll("-", ""), project = `mq-p302-${suffix}`;
   const directory = await mkdtemp(join(tmpdir(), "mq-p302-lab-"));
   const evidence = process.env.PRODUCTION_EVIDENCE_DIR || join(directory, "evidence");
@@ -203,6 +204,7 @@ ${external}
       revoke: async () => { operation("admin-revoke", "maintenance-secrets", { MAINTENANCE_DATABASE_URL_FILE: "/run/secrets/maintenance_database_url" }, "scripts/production/lab-actions.mjs"); },
       ...(operations ? { operations: async fixture => runOperationsLab({ docker, compose, composeBase, project, config, manifest,
         files, passwords, bootstrapUrl, directory, evidence, images, volume, volumeNames, secret, origin, ca, accounts,
+        release, temporaryContainers,
         revision: spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim(),
         readVolumeSecret: async (name, file) => volumeEntries[name][file],
       }, fixture) } : {}),

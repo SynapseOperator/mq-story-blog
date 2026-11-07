@@ -53,6 +53,9 @@
     "test:production:db": "npm run db:generate && node scripts/production/database-tests.mjs && node scripts/production/database-cleanup-tests.mjs",
     "test:production:container": "node scripts/production/lab.mjs",
     "test:production:operations": "node scripts/production/lab.mjs --operations",
+    "test:production:release": "node scripts/production/lab.mjs --release",
+    "test:release": "node scripts/release/integration.mjs",
+    "host:preflight": "node scripts/production/host-preflight.mjs",
     "test:production:rotation": "npm run db:generate && node scripts/production/rotation-tests.mjs",
     "test:auth:session-spike": "npm run db:generate && node scripts/auth/session-token-spike.mjs"
   },

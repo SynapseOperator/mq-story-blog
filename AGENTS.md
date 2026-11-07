@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- Phase 2 核心业务与 P3-02/P3-03 生产基础、加密备份和安全运维工具已进入 main；已通过的合成环境验证不等于生产上线。VPS 已购但尚未连接或部署，实际规格未核验。P4 已获有条件开发授权，仅在 P3 全部 PR 正式合并且 main CI 通过后才可创建 P4 分支；本次仍只收敛文档。保留 001–008、全部测试、权限边界及已验收视觉。当前操作见 `docs/engineering/PRODUCTION_FOUNDATION.md`、`PRODUCTION_BACKUP.md`、`SECRET_ROTATION.md` 与 `OPERATIONS_RUNBOOK.md`；Session Token 摘要候选仅为 Spike，未接入应用。主机连接须先满足运维手册的操作门槛；不得据此生成正式凭据、部署或开放真实用户。新提交必须匹配有效独立 Review 与 CI。
+- Phase 2 核心业务与 P3-02/P3-03 生产基础、加密备份和安全运维工具已进入 main；已通过的合成环境验证不等于生产上线。VPS 已购但尚未连接或部署，实际规格未核验。P3 #48/#50/#52 已正式合并且最终 main CI 通过；当前 P4-01 只交付主机预检、发布候选、备份与告警准备，执行限隔离合成环境。生产部署需另行授权。保留 001–008、全部测试、权限边界及已验收视觉。当前操作见 `docs/engineering/PRODUCTION_FOUNDATION.md`、`PRODUCTION_BACKUP.md`、`SECRET_ROTATION.md` 与 `OPERATIONS_RUNBOOK.md`；Session Token 摘要候选仅为 Spike，未接入应用。主机连接须先满足运维手册的操作门槛；不得据此生成正式凭据、部署或开放真实用户。新提交必须匹配有效独立 Review 与 CI。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是唯一首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动；最新场景、动效及羽毛信精修版已获产品验收，本轮保持现有视觉。目录最终位置、移动端高清素材与后续星位数量仍待决定。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
@@ -13,7 +13,7 @@
 
 - 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
 - PR 说明面向代码评审者，直接写问题、改动原因、实际验证和剩余限制；减少模板套话、过程复述和重复状态清单。详细日志放证据链接，不堆进正文。
-- 新 PR 完成后默认 Ready for Review，并请求 SnorkelingBreather 正式独立评审；只有负责人明确要求 Draft 时保留 Draft。新提交必须匹配有效 Review 与 CI；取得 APPROVED 也不等于自动获得合并授权。
+- 新 PR 完成后默认 Ready for Review；只有负责人明确要求 Draft 时保留 Draft。禁止向协作者发送 Review 请求、@提及、催审评论或其他审核提醒；需要审核时只向负责人报告 PR 与最新提交，由负责人自行口头协调。此规则取代此前自动请求协作者评审的约定。新提交仍须匹配有效独立 Review 与 CI；取得 APPROVED 也不等于自动获得合并授权。
 - 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
 - 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
 - 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。

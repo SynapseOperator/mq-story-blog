@@ -198,7 +198,7 @@ jobs:
   container:
     name: container
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -207,6 +207,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Isolated Docker with OCI image-store support
+        # The hosted runner's legacy store cannot load OCI indexes. This action
+        # starts its own job-scoped daemon/context and tears it down afterwards;
+        # it does not change the host daemon or any VPS configuration.
+        uses: docker/setup-docker-action@3f1ab1ab0e29231562e4db4ca600c1a49653bac6 # v5.7.0
+        with:
+          version: v29.9.2
+          daemon-config: |
+            {"features":{"containerd-snapshotter":true},"debug":false}
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -214,9 +223,21 @@ jobs:
           package-manager-cache: false
       - name: Install locked toolchain
         run: |
+          # Keep this job's full locked Node toolchain in bounded RAM, instead
+          # of duplicating it on the small hosted disk beside the tool images.
+          # This does not change the app images or the 8GiB disk reserve gate.
+          test ! -e node_modules && test ! -L node_modules
+          mkdir node_modules
+          sudo mount -t tmpfs -o "size=1200m,uid=$(id -u),gid=$(id -g),mode=0700,exec,nodev,nosuid" \
+            "mq-node-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$PWD/node_modules"
+          export npm_config_cache="$RUNNER_TEMP/mq-npm-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir "$npm_config_cache"
+          trap 'rm -rf -- "$npm_config_cache"' EXIT
           npm install --global npm@11.17.0
           npm ci
-          npx playwright install --with-deps chromium
+          # The existing lab launches headless Chromium without a channel.
+          npx playwright install --with-deps --only-shell chromium
+          du -sh node_modules "$npm_config_cache"
       - name: Build production candidate images without credentials
         run: |
           # A dedicated builder shares layers across these targets. Once loaded,
@@ -233,9 +254,41 @@ jobs:
           docker buildx rm "$builder"
           trap - EXIT
           df -h .
+      - name: OCI candidate integrity and actual digest-based image execution
+        run: npm run test:release
+      - name: Release only this job's finished BuildKit image
+        # Both named builders are already gone. No force, daemon-wide prune,
+        # removal of preinstalled tools, or lowered reserve threshold.
+        run: |
+          docker image rm moby/buildkit@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe
+          df -h .
       - name: Synthetic HTTPS deployment, least privilege and browser regression
         # Includes every original container check, then encrypted recovery and
         # real SCRAM/TLS rotation. No duplicate build or omitted regression.
         run: npm run test:production:operations
+      - name: Linux host classification and simulated HTTPS alert delivery
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --tmpfs /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001,mode=0700 \
+            mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-alert-webhook.test.mjs
+      - name: Root maintenance reads UID10001 receipts without weakening secret permissions
+        run: |
+          docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \
+            --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+            --tmpfs /tmp:rw,nosuid,size=32m,mode=1777 \
+            mq-p303-operations:local --test scripts/production/backup-window-root-tests.mjs
+      - name: S3 HTTPS recovery, release containment and application rollback
+        run: |
+          docker pull ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
+          df -h .
+          npm run test:production:release
+      - name: Unmount only this job's temporary Node toolchain
+        if: always()
+        run: |
+          if mountpoint -q "$GITHUB_WORKSPACE/node_modules"; then
+            test "$(findmnt -n -o FSTYPE --target "$GITHUB_WORKSPACE/node_modules")" = tmpfs
+            test "$(findmnt -n -o SOURCE --target "$GITHUB_WORKSPACE/node_modules")" = "mq-node-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sudo umount "$GITHUB_WORKSPACE/node_modules"
+          fi
       # Lab credentials, database volumes and backups stay on this disposable
       # runner. No secret-bearing directory is uploaded as an artifact.

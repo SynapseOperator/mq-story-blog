@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, chmod, access } from "node:fs/promises";
 import { URL } from "node:url";
 import pg from "pg";
 import { readDeploymentManifest, readDeploymentFile } from "./runtime-config.mjs";
@@ -22,6 +22,12 @@ try {
   pool = new pg.Pool({ connectionString: controlUrl, max: 1, connectionTimeoutMillis: 5000 });
   pool.on("error", () => { failed = true; });
   const action = process.argv[2];
+  const repository = process.env.MQ_LAB_S3_REPOSITORY || "/var/lib/mq/operations/repository";
+  const workspace = "/var/lib/mq/operations/work", passwordFile = process.env.RESTIC_PASSWORD_FILE;
+  const remote = Boolean(process.env.MQ_LAB_S3_REPOSITORY);
+  const options = { repository, passwordFile, workspace, ...(remote ? { backend: "s3",
+    s3: { region: "us-east-1", credentialsFile: "/run/s3/s3_credentials", caCertificateFile: "/etc/mq-s3/ca.crt" } } : {}) };
+  if (remote && action !== "backup") options.expectedRepositoryId = (await readFile("/var/lib/mq/operations/repository-id", "utf8")).trim();
   let result;
   if (action === "create-target") {
     // Cluster administrator creates only this lab's fresh database. Never
@@ -40,13 +46,22 @@ try {
     result = { createdIsolatedTarget: true };
   } else if (action === "backup") {
     const { backupDeployment, initializeBackupRepository } = await import("./backup.mjs");
-    const workspace = "/var/lib/mq/operations/work", repository = "/var/lib/mq/operations/repository";
     await mkdir(workspace, { mode: 0o700, recursive: true });
-    await mkdir(repository, { mode: 0o700, recursive: true });
-    const passwordFile = process.env.RESTIC_PASSWORD_FILE;
-    await initializeBackupRepository({ repository, passwordFile });
+    if (remote) {
+      assert.match(repository, /^s3:https:\/\/mq-backup\.localhost\/mq-lab\/mq-p302-[a-f0-9]{32}$/);
+      const { readS3CredentialsEnvironment, runBackupTool } = await import("./backup-tools.mjs");
+      const env = { ...await readS3CredentialsEnvironment(options.s3.credentialsFile), AWS_DEFAULT_REGION: "us-east-1", GOMAXPROCS: "2" };
+      const args = ["--repo", repository, "--password-file", passwordFile, "--cacert", options.s3.caCertificateFile, "--no-cache"];
+      // Explicit initialization only of this private fixture's pre-created bucket.
+      await runBackupTool("restic", [...args, "init", "--repository-version", "2"], { env });
+      options.expectedRepositoryId = JSON.parse(await runBackupTool("restic", [...args, "cat", "config"], { env })).id;
+      await writeFile("/var/lib/mq/operations/repository-id", options.expectedRepositoryId, { flag: "wx", mode: 0o600 });
+    } else {
+      await mkdir(repository, { mode: 0o700, recursive: true });
+      await initializeBackupRepository(options);
+    }
     const backupUrl = await secret("BACKUP_DATABASE_URL_FILE");
-    const backupOptions = { controlPool: pool, backupUrl, config, workspace, repository, passwordFile,
+    const backupOptions = { ...options, controlPool: pool, backupUrl, config,
       receiptFile: "/var/lib/mq/operations/verified.json", sourceRevision: process.env.MQ_LAB_REVISION };
     await assert.rejects(backupDeployment(backupOptions));
     await pauseDeploymentWriters(pool, config);
@@ -56,10 +71,30 @@ try {
     result = await backupDeployment(backupOptions);
   } else if (action === "restore") {
     const { restoreDeployment } = await import("./restore.mjs");
-    result = await restoreDeployment({ controlPool: pool, config, targetMigrationUrl: await secret("MIGRATION_DATABASE_URL_FILE"),
-      workspace: "/var/lib/mq/operations/work", repository: "/var/lib/mq/operations/repository",
-      passwordFile: process.env.RESTIC_PASSWORD_FILE, snapshotId: process.env.MQ_BACKUP_SNAPSHOT_ID,
+    result = await restoreDeployment({ ...options, controlPool: pool, config, targetMigrationUrl: await secret("MIGRATION_DATABASE_URL_FILE"),
+      snapshotId: process.env.MQ_BACKUP_SNAPSHOT_ID,
       confirmDeploymentId: config.deploymentId });
+  } else if (action === "remote-negative") {
+    assert.ok(remote);
+    const { restic } = await import("./backup-tools.mjs");
+    const { backupDeployment } = await import("./backup.mjs");
+    await writeFile("/tmp/wrong-password", "wrong-synthetic-password-".repeat(3), { mode: 0o400 });
+    await writeFile("/tmp/wrong-credentials", JSON.stringify({ accessKeyId: "synthetic-invalid", secretAccessKey: "synthetic-invalid" }), { mode: 0o400 });
+    await writeFile("/tmp/wrong-ca", "not a certificate"); await chmod("/tmp/wrong-ca", 0o444);
+    for (const invalid of [{ passwordFile: "/tmp/wrong-password" }, { expectedRepositoryId: "0".repeat(64) },
+      { s3: { ...options.s3, credentialsFile: "/tmp/wrong-credentials" } }, { s3: { ...options.s3, caCertificateFile: "/tmp/wrong-ca" } }]) {
+      await assert.rejects(restic(["check", "--read-data"], { ...options, ...invalid }));
+    }
+    await assert.rejects(backupDeployment({ ...options, expectedRepositoryId: "0".repeat(64), controlPool: pool,
+      backupUrl: await secret("BACKUP_DATABASE_URL_FILE"), config,
+      receiptFile: "/var/lib/mq/operations/failed.json", sourceRevision: process.env.MQ_LAB_REVISION }));
+    await assert.rejects(access("/var/lib/mq/operations/failed.json"));
+    result = { rejected: 5 };
+  } else if (action === "retention") {
+    const { retentionDryRun } = await import("./backup-tools.mjs");
+    const plan = await retentionDryRun({ ...options, deploymentId: config.deploymentId });
+    assert.equal(plan.deleted, 0); assert.equal(plan.dryRun, true);
+    result = { noDeletion: true };
   } else if (action === "assert-restored") {
     const sessions = (await pool.query('SELECT count(*)::int AS n FROM public."Session"')).rows[0].n;
     const keys = (await pool.query("SELECT (SELECT count(*) FROM mq_publish_private.signing_key)+(SELECT count(*) FROM mq_comment_private.moderation_key) AS n")).rows[0].n;
