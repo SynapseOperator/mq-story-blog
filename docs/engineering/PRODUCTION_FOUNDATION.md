@@ -2,7 +2,7 @@
 
 P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)，本分支没有合并该 PR。这里交付生产候选配置和隔离演练工具；没有购买 VPS、生成正式凭据或部署网站。
 
-后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；负责人后来已购买 VPS，但尚未连接、核验实际规格或部署。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。#50/#52 已进入 main，不代表正式生产开放获授权。
+后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；P4-02 已完成真实 VPS 只读容量检查，见 [VPS_READINESS.md](VPS_READINESS.md)，尚未安装组件或部署。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。#50/#52 已进入 main，不代表正式生产开放获授权。
 
 ## 运行结构
 
@@ -124,4 +124,4 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 - Better Auth 1.7.12 默认 Session Token 仍原值存库。数据库/备份读取者能获取 token；Cookie 签名不等于 token 已哈希。[Session Spike](SESSION_TOKEN_SPIKE.md) 已验证简单摘要 adapter 的撤销兼容缺口，未接入应用；正式开放前仍须明确风险处置和独立安全审查。
 - 加密备份、隔离恢复、数据库/认证/代理/业务密钥轮换及只读告警检查已在合成环境验证。正式域名/TLS、主机防火墙/SSH、异地恢复、生产密钥托管、磁盘硬配额及容量压力测试仍未在目标 VPS 验收。
 - 原有备份/管理员维护工具的本地目标保护保持不变；生产合同使用单独受控入口。恢复会清除 Session 与业务签名密钥，须按手册重新配置权限及验证，不能把恢复成功当作重新开放许可。
-- VPS 已购但尚未连接；主机验收、Session 摘要改造、远端 CD 和实际部署尚未完成。仓库合并和测试成功均不授权公开注册、留言或正式发布。
+- VPS 已完成只读容量核验；主机加固、运行组件、Session 摘要改造、远端 CD 和实际部署尚未完成。仓库合并和测试成功均不授权公开注册、留言或正式发布。

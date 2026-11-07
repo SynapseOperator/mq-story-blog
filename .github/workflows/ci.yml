@@ -2,7 +2,8 @@ name: Quality
 
 on:
   pull_request:
-    branches: [main]
+    # Temporary P4-02 stacked base; remove after #54 is merged and this PR retargeted.
+    branches: [main, feat/p4-01-release-operations]
   push:
     branches: [main]
 
@@ -270,7 +271,7 @@ jobs:
         run: |
           docker run --rm --network none --read-only --cap-drop ALL \
             --tmpfs /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001,mode=0700 \
-            mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-alert-webhook.test.mjs
+            mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-host-native.test.mjs tests/production-alert-webhook.test.mjs
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \
@@ -282,6 +283,9 @@ jobs:
           docker pull ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
           df -h .
           npm run test:production:release
+      - name: Ubuntu OpenSSH include and connection-specific authentication policy
+        # Synthetic keys/configuration inside one disposable container only.
+        run: node scripts/production/ssh-hardening-tests.mjs
       - name: Unmount only this job's temporary Node toolchain
         if: always()
         run: |

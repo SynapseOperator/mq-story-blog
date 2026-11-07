@@ -1,12 +1,12 @@
 # P3-03：单机运维与上线前检查
 
-关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。负责人已购买 VPS，尚未连接或部署，实际规格待获授权后只读核验；域名、正式生产密钥和上线验收仍未完成。本手册中的主机步骤尚未在目标 VPS 执行；本地容器证据不能替代这些步骤。备份与轮换的实际合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)。
+关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 已完成真实 VPS 只读采集，见 [VPS_READINESS.md](VPS_READINESS.md)；尚未安装组件、加固或部署。域名已购买但公开DNS仍受阻，正式密钥和上线验收未完成。本手册中的变更步骤尚未在目标 VPS 执行；本地容器证据不能替代实机验收。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)。
 
 ## 主机、网络和账号
 
-负责人已购买小鸡云香港 CN2 轻量 B，申报系统为 Ubuntu 24.04；这些是购买信息，尚未登录核验实际 CPU、内存、磁盘或网络。原规划为约 4 vCPU / 4GB / 40GB、Docker Compose，两个月 VPS 预算上限人民币 100 元，域名另计；不将规划规格或预算视为已实测配置或已核实账单。获授权后核对 CPU 架构、容量、流量/端口限制、续费与附加费用，并从实际访问地区验证晚高峰延迟与丢包。香港地点和 CN2 产品标签不代替线路实测。不要在 4GB 主机同时常驻两套环境，镜像在 CI 构建。
+负责人已购买小鸡云香港 CN2 轻量 B。P4-02 实测 Ubuntu24.04/x86_64、4vCPU、3.82GiB内存、37.70GiB根文件系统。两个月 VPS 预算上限人民币100元、域名另计；账单、流量、续费、网络线路与晚高峰性能仍未核实，CN2标签不代替线路实测。不要在此主机同时常驻两套环境，镜像在 CI 构建。
 
-**连接前门槛**：已暴露的初始 root 密码须先由负责人通过供应商可信控制台轮换，并建立 SSH 公钥登录。完成这些步骤并获得明确连接授权前，不进行 SSH 连接或执行远端命令；后续首次获准连接时再核验公钥登录与主机信息。新密码不得放入聊天、Git、命令行或日志。P3 的合并与 main CI 前置条件已满足；P4 开发授权仍不等于上线授权。安全连接顺序和只读工具见 [HOST_PREPARATION.md](HOST_PREPARATION.md)。
+**连接交接已完成**：负责人已轮换暴露的初始root密码，配置mqops公钥登录，并完成第二会话、重连和控制台指纹核对。本轮授权只读连接，不授权后续主机变更。密码/私钥不得放入聊天、Git、命令行或日志。P3 的合并与 main CI 前置条件已满足；P4 开发授权不等于上线授权。安全连接顺序和只读工具见 [HOST_PREPARATION.md](HOST_PREPARATION.md)。
 
 首次登录保留供应商控制台和当前 SSH 会话。由负责人指定管理来源 IP/VPN 和 SSH 公钥；创建独立 sudo 运维账号，验证第二个终端能够密钥登录后，才在 `/etc/ssh/sshd_config.d/` 设置 `PermitRootLogin no`、`PasswordAuthentication no`、`KbdInteractiveAuthentication no`。先 `sshd -t`，再 reload，确认新连接成功后再退出旧连接。不要远程盲目启用防火墙或禁用全部登录方式。安装安全更新并规划重启窗口，保持 AppArmor；不关闭 Docker 的网络隔离或系统保护。
 

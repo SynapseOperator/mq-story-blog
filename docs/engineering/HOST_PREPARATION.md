@@ -1,10 +1,10 @@
 # P4-01：Ubuntu 主机预检与告警接入
 
-关联 Issue #53。本页补充 [运维手册](OPERATIONS_RUNBOOK.md)，不替代生产数据库、秘密轮换或备份恢复流程。新增脚本已使用合成输入、Windows 本机和本地 Linux 容器验证；没有连接目标 VPS，也没有安装软件、修改 SSH/防火墙或向外部通知渠道发送消息。
+关联 Issue #53。本页保留 P4-01 的合成验证与通用操作说明，不替代生产数据库、秘密轮换或备份恢复流程。后续 P4-02 真实只读结果、无需远端 Node 的采集方式及待授权加固步骤见 [VPS_READINESS.md](VPS_READINESS.md)。尚未安装软件、修改 SSH/防火墙或向外部通知渠道发送消息。
 
 ## 连接前先完成的事
 
-已暴露的初始 root 密码必须由负责人在供应商可信控制台轮换。先建立 SSH 公钥登录、核对可信控制台提供的主机公钥指纹，再明确授权连接；新密码和私钥不能进入聊天、Git、命令参数或日志。不要使用 `StrictHostKeyChecking=no` 绕过首次身份确认。
+负责人已确认完成暴露的初始 root 密码轮换、mqops 公钥登录、第二会话和可信控制台指纹核对，并授权本轮只读连接。不要再将未轮换旧密码列为当前阻塞。新密码和私钥不能进入聊天、Git、命令参数或日志，不使用 `StrictHostKeyChecking=no` 绕过身份确认。后续 SSH/防火墙变更仍需单独授权。
 
 首版发布镜像只支持 `linux/amd64`。供应商的“Ubuntu 24.04 / 香港”标签不能证明实际架构、资源、线路或安全配置；若实际是 ARM，应停止使用当前镜像并另行评估，不能靠容器模拟得到的 x64 指标作主机验收。
 
@@ -119,4 +119,4 @@ node scripts/production/alert-webhook.mjs --send
 
 `node --test tests/production-host-preflight.test.mjs tests/production-alert-webhook.test.mjs` 在 Windows 与非root、只读、无外网的 Linux operations 容器均通过21项测试，退出码0。覆盖真实本地 HTTPS、合成 CA、无效信任链、403/429/503、重定向、响应丢失、有界重试、dry-run 零请求、实际发送失败的非零退出、OnFailure无状态文件及输出脱敏。Ubuntu24.04 的健康/故障分类使用合成采样；实际 collector 也读取了本机/容器，明确保留其环境限制。
 
-尚未验证：目标 VPS 的实际架构/容量、SSH访问、云防火墙、外部扫描、时间同步、正式证书、告警渠道送达及主机容量压测。这些不能由本地测试的绿色结果替代。
+以上为 P4-01 时点证据；P4-02 已补充真实架构/容量与一次 SSH 只读采集，见 [VPS_READINESS.md](VPS_READINESS.md)。云防火墙、特权 SSH 配置、外部扫描、时间同步修复、正式证书、告警送达及主机容量压测仍未完成，不能由本地绿色结果替代。
