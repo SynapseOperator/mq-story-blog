@@ -12,9 +12,12 @@ const execute = promisify(execFile);
 
 const healthy = () => ({ freeBytes: 10 * 1024 ** 3, reserveBytes: 8 * 1024 ** 3,
   inodes: 1000, freeInodes: 500, freeMemoryBytes: 1024 ** 3, loadPerCpu: 0.5,
-  certificateDays: 40, backupAgeHours: 2,
+  certificateDays: 40, httpAvailable: true, backupAgeHours: 2,
   services: ["app", "postgres", "proxy"].map(name => ({ name, running: true, oom: false, health: "healthy", exposed: name === "proxy", memoryPercent: 30 })) });
 test("operations accepts healthy isolated services and recent verified backup", () => assert.equal(assessOperations(healthy()).ok, true));
+test("a healthy TLS socket with an unavailable application still alerts", () => {
+  assert.deepEqual(assessOperations({ ...healthy(), httpAvailable: false }).failures, ["HTTPS_UNAVAILABLE"]);
+});
 test("missing backup, failed TLS and disk/inode pressure produce actionable non-success", () => {
   const result = assessOperations({ ...healthy(), freeBytes: 10, freeInodes: 1, certificateDays: NaN, backupAgeHours: NaN });
   assert.deepEqual(result.failures, ["DISK_RESERVE_LOW", "INODES_LOW", "TLS_EXPIRY_OR_VERIFICATION_FAILED", "BACKUP_MISSING_OR_STALE"]);

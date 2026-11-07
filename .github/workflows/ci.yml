@@ -114,6 +114,10 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: npm run test:auth:limiter
+      - name: Offline administrator maintenance with deployment identities
+        env:
+          TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
+        run: npm run test:production:admin
       - name: Session token compatibility spike and isolated credential rotation
         env:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
@@ -270,13 +274,15 @@ jobs:
         run: |
           docker run --rm --network none --read-only --cap-drop ALL \
             --tmpfs /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001,mode=0700 \
-            mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-host-native.test.mjs tests/production-alert-webhook.test.mjs
+            mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-host-native.test.mjs tests/production-alert-webhook.test.mjs tests/production-external-alerts.test.mjs
+      - name: Production contract bootstrap, disabled ingress and protected maintenance
+        run: npm run test:production:bootstrap
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \
             --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
             --tmpfs /tmp:rw,nosuid,size=32m,mode=1777 \
-            mq-p303-operations:local --test scripts/production/backup-window-root-tests.mjs
+            mq-p303-operations:local --test scripts/production/backup-window-root-tests.mjs scripts/release/production-host-tests.mjs tests/production-release-plan.test.mjs
       - name: S3 HTTPS recovery, release containment and application rollback
         run: |
           docker pull ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a

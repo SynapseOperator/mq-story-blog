@@ -35,5 +35,8 @@ src/generated/prisma/**
 !scripts/media/backup*.mjs
 !scripts/production/backup*.mjs
 !tests/production-backup*.test.mjs
+!ops/mq-backup@.service
+!ops/mq-backup@.timer
+!ops/mq-backup-alert@.service
 **/node_modules/**
 **/.next/**

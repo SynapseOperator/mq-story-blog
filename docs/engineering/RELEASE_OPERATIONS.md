@@ -43,7 +43,7 @@ CI 的 container Job 使用固定版本 Docker 29.9.2 和官方 `setup-docker-ac
 
 第二次 [42256184057](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42256184057) 已使用 containerd，真实恢复和轮换通过，但主机仅剩 7,874,203,648 bytes，低于 8 GiB，监控拒绝验收。CI 因此将本 Job 的完整锁定 Node 工具链放入有界 1200 MiB tmpfs，仅清理本次创建的 npm 下载缓存和已停止 builder 的固定镜像，并只安装原用例实际使用的 Chromium headless shell。应用镜像、测试和 8 GiB 门槛不变；不删除 runner 预装目录或执行全局 prune。该 RAM 安排仅用于 CI，不用于 4GB VPS。
 
-## 默认计划、生产拒绝
+## P4 合成计划与生产拒绝
 
 `cli.mjs plan` 只读取候选和当前版本、目标 manifest、已验证备份 receipt，然后输出计划，不加载镜像、不运行 Compose、不访问远端主机。配置和 receipt 必须在 Git 之外并符合既有文件权限规则。
 
@@ -68,7 +68,7 @@ node scripts/release/cli.mjs plan \
 3. 关闭入口/写进程，暂停身份并排空连接，完成成套加密备份和恢复可用性检查。备份失败停止更新。
 4. 在 app 停止且数据库私网隔离状态下显式恢复迁移登录，分别用 migration/provision 所需身份执行既有 CLI；运行 runtime audit。不要把引导/迁移文件挂到 app。
 5. 校验归档后加载镜像，核对实际 Docker descriptor digest；用精确 digest 配置候选，保持既有秘密和数据库/媒体持久卷。主机没有任何拉取凭据也能加载已验证 OCI archive。
-6. 受控验证健康、HTTPS、公开图文/分享、登录、管理权限、点赞/留言和备份，不误开放生产开关；负责人确认后才开放入口。程序当前没有生产 apply，届时须单独授权、审查并演练具体主机执行路径。
+6. 受控验证健康、HTTPS、公开图文/分享、登录、管理权限、点赞/留言和备份，不误开放生产开关；负责人确认后才开放入口。P5-02 提供另行审查的独立生产路径，见 [PRODUCTION_LAUNCH.md](PRODUCTION_LAUNCH.md)；bootstrap 不开放入口，activate 需新的精确批准。本文 P4 合成执行器仍拒绝 production。
 7. 故障时入口保持关闭；兼容回退仅切镜像。数据库 down migration、reset、旧秘密恢复不属于回退。不可兼容时向前修复或经独立授权恢复到全新隔离目标，明确恢复会损失 snapshot 后的数据。
 
 ## 本轮证据与未验证部分

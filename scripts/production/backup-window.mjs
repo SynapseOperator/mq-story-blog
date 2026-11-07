@@ -8,9 +8,12 @@ import { pathToFileURL } from "node:url";
 import { privatePath, writePrivate } from "../media/backup-files.mjs";
 import { readDeploymentFile, readDeploymentManifest } from "./runtime-config.mjs";
 import { runBackupTool } from "./backup-tools.mjs";
+import { claimProductionOperation, confirmInterruptedBackup } from "./operation-lock.mjs";
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-const digestImage = /^[^\s]+@sha256:[a-f0-9]{64}$/;
+// A locally verified OCI index may be loaded by its content digest without a
+// registry repository name. Both forms are immutable; mutable tags still fail.
+const digestImage = /^(?:[^\s]+@)?sha256:[a-f0-9]{64}$/;
 const runDocker = args => runBackupTool("docker", args, { timeoutMs: 900_000 });
 
 /** Only nonsecret backup receipt metadata crosses from tools UID10001 to the
@@ -71,14 +74,15 @@ async function publishStatus(config, name, value) {
 
 /** Fixed maintenance sequence. The injected runner is for deterministic
  * failure tests; production only executes Docker with fixed argument arrays. */
-export async function runBackupWindow(config, { run = runDocker, interrupted = () => false, closeOnly = false } = {}) {
+export async function runBackupWindow(config, { run = runDocker, interrupted = () => false, closeOnly = false,
+  claimOperation = claimProductionOperation, confirmInterrupted = confirmInterruptedBackup } = {}) {
   const base = ["compose", "--project-name", config.project, "--env-file", config.composeEnvironmentFile,
     "-f", join(config.releaseDirectory, "compose.production.yaml"), "-f", config.overrideFile];
   const compose = args => run([...base, ...args]);
   const operation = (script, action, extra = []) => compose(["run", "--rm", "--no-deps", ...extra,
     "tools", `scripts/production/${script}-cli.mjs`, action, `--confirm-deployment=${config.deploymentId}`]);
   const lock = join(config.receiptDirectory, "backup-window.lock");
-  let ownedLock = false, changed = false, success = false, phase = "preflight";
+  let ownedLock = false, changed = false, success = false, phase = "preflight", productionClaim;
   const checkInterruption = () => { if (interrupted()) throw new Error("BACKUP_WINDOW_INTERRUPTED"); };
   try {
     // Resolve configuration without printing it: it may contain private paths.
@@ -117,6 +121,14 @@ export async function runBackupWindow(config, { run = runDocker, interrupted = (
         if (service !== "proxy") assert.equal(container.State.Health?.Status, "healthy");
       }
     }
+    if (config.deployment.environment === "production") {
+      if (closeOnly) await confirmInterrupted(config.deploymentId);
+      else productionClaim = await claimOperation({ deploymentId: config.deploymentId, kind: "backup", operationId: randomUUID() });
+      // Release and backup preflights can overlap; after obtaining ownership,
+      // recheck that no intervening release changed the inspected target.
+      assert.deepEqual(JSON.parse(await compose(["config", "--format", "json"])), spec);
+      assert.deepEqual((await compose(["ps", "--all", "--quiet", "app", "proxy", "postgres"])).trim().split(/\s+/), ids);
+    }
     if (!closeOnly) { await mkdir(lock, { mode: 0o700 }); ownedLock = true; }
     checkInterruption(); changed = true; phase = "stop";
     await compose(["stop", "proxy", "app"]);
@@ -139,7 +151,9 @@ export async function runBackupWindow(config, { run = runDocker, interrupted = (
     await publishStatus(config, "latest.json", receipt);
     checkInterruption(); phase = "resume"; await operation("rotation", "resume");
     checkInterruption(); phase = "start"; await compose(["up", "-d", "--wait", "app", "proxy"]);
-    checkInterruption(); success = true;
+    checkInterruption();
+    if (productionClaim) await productionClaim.complete();
+    success = true;
     return { completed: true, deploymentId: config.deploymentId, snapshotId: receipt.snapshotId, entryRestored: true };
   } catch {
     let closureConfirmed = false;

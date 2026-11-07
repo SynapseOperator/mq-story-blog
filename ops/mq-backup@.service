@@ -14,8 +14,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 WorkingDirectory=/srv/mq/current
 EnvironmentFile=/etc/mq/backup/%i.env
-ExecStart=/usr/bin/node /srv/mq/current/scripts/production/backup-window.mjs run --confirm-deployment=%i
-ExecStopPost=/usr/bin/node /srv/mq/current/scripts/production/backup-window.mjs close-after-failure --confirm-deployment=%i
+ExecStart=/opt/mq/node-v24.19.0/bin/node /srv/mq/current/scripts/production/backup-window.mjs run --confirm-deployment=%i
+ExecStopPost=/opt/mq/node-v24.19.0/bin/node /srv/mq/current/scripts/production/backup-window.mjs close-after-failure --confirm-deployment=%i
 TimeoutStartSec=2h
 TimeoutStopSec=20min
 KillMode=mixed

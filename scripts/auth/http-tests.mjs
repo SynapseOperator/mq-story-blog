@@ -298,7 +298,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
     });
 
     await run("all unapproved email, reset, update, admin and account endpoints remain unavailable", async () => {
-      const paths = ["/sign-in/email", "/change-email", "/request-password-reset", "/reset-password", "/forget-password", "/send-verification-email", "/verify-email", "/update-user", "/admin/create-user", "/change-password", "/delete-user", "/list-sessions", "/revoke-session", "/sign-in/social", "/get-access-token"];
+      const paths = ["/sign-in/email", "/change-email", "/request-password-reset", "/reset-password", "/forget-password", "/send-verification-email", "/verify-email", "/update-user", "/admin/create-user", "/change-password", "/delete-user", "/list-sessions", "/revoke-session", "/revoke-other-sessions", "/revoke-sessions", "/sign-in/social", "/get-access-token"];
       for (const path of paths) {
         const response = await request(path, { jar: primary?.jar, body: { email: `${randomUUID()}@example.invalid`, password, role: "admin" } });
         expect(response.status === 404, "Every unapproved authentication endpoint must return 404");

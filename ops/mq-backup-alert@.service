@@ -13,4 +13,4 @@ WorkingDirectory=/srv/mq/current
 # Preview still reports the current failure if the backup's env file was absent.
 # Explicit --send remains fail-closed when its webhook secret is unavailable.
 EnvironmentFile=-/etc/mq/backup/%i.env
-ExecStart=/usr/bin/node /srv/mq/current/scripts/production/alert-webhook.mjs --backup-failure=%i
+ExecStart=/opt/mq/node-v24.19.0/bin/node /srv/mq/current/scripts/production/alert-webhook.mjs --backup-failure=%i

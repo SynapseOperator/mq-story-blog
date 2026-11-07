@@ -199,7 +199,7 @@ export async function provisionDeploymentDatabase(pool, config) {
   });
 }
 
-async function auditPrivileges(connection, config) {
+export async function auditPrivileges(connection, config) {
   const policy = deploymentPrivilegePolicy(config);
   const migration = (await connection.query(`SELECT rolsuper,rolcreatedb,rolcreaterole,rolbypassrls,rolreplication,
     EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS membership

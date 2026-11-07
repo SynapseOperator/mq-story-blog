@@ -103,3 +103,18 @@ test("S3 JSON secrets produce only explicit child AWS credentials and reject pro
     await assert.rejects(requireBackupSpace(directory, Number.MAX_SAFE_INTEGER), { message: "BACKUP_DISK_SPACE_LOW" });
   } finally { await rm(directory, { recursive: true }); }
 });
+
+test("R2 uses account-scoped HTTPS, auto region and system trust without weakening generic S3 labs", () => {
+  const options = { backend: "s3", repository: `s3:https://${"a".repeat(32)}.r2.cloudflarestorage.com/mq-private-backup/production`,
+    expectedRepositoryId: "b".repeat(64), s3: { region: "auto", credentialsFile: join(tmpdir(), "synthetic-r2-file") } };
+  assert.equal(backupBackend(options), "s3");
+  assert.equal(backupBackend({ ...options, repository: options.repository.replace(".r2.", ".eu.r2.") }), "s3");
+  for (const replacement of [
+    { repository: options.repository.replace("a".repeat(32), "unknown-account") },
+    { repository: options.repository.replace(".com/", ".com:8443/") },
+    { s3: { ...options.s3, region: "us-east-1" } },
+    { s3: { ...options.s3, caCertificateFile: join(tmpdir(), "unapproved-ca") } },
+  ]) assert.throws(() => backupBackend({ ...options, ...replacement }), { message: "BACKUP_BACKEND_REJECTED" });
+  assert.equal(backupBackend({ ...options, repository: "s3:https://mq-backup.localhost/mq-lab/synthetic",
+    s3: { ...options.s3, region: "us-east-1", caCertificateFile: join(tmpdir(), "lab-ca") } }), "s3");
+});

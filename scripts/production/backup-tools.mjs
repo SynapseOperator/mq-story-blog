@@ -40,6 +40,13 @@ export function backupBackend({ backend = "local", repository, s3, expectedRepos
       assert.match(s3.region ?? "", /^[a-z0-9][a-z0-9-]{0,62}$/, "BACKUP_BACKEND_REJECTED");
       assert.ok(typeof s3.credentialsFile === "string" && isAbsolute(s3.credentialsFile));
       if (s3.caCertificateFile !== undefined) assert.ok(typeof s3.caCertificateFile === "string" && isAbsolute(s3.caCertificateFile));
+      if (url.hostname.endsWith(".r2.cloudflarestorage.com")) {
+        // R2 uses account/jurisdiction endpoints and region auto. Its public TLS
+        // must use system trust; a local lab CA is only for other S3 fixtures.
+        assert.match(url.hostname, /^[a-f0-9]{32}(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$/);
+        assert.equal(url.port, ""); assert.equal(s3.region, "auto");
+        assert.equal(s3.caCertificateFile, undefined);
+      }
     }
     return backend;
   } catch { throw new Error("BACKUP_BACKEND_REJECTED"); }
