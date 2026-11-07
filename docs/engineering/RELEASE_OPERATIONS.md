@@ -1,6 +1,6 @@
 # P4：发布候选与受控更新
 
-关联 Issue #53。本轮实现已审核 main 的手动候选构建、OCI 完整性验证和合成环境更新/回退演练。没有连接 VPS、配置域名、上传服务器凭据或执行生产部署。实际 VPS 的 CPU 架构尚未核验；首版产物只支持 **linux/amd64**，不能据此假定服务器兼容。
+关联 Issue #53。P4 实现已审核 main 的手动候选构建、OCI 完整性验证和合成环境更新/回退演练，未执行生产部署。后续已确认 VPS 为 x86_64，满足候选 **linux/amd64** 架构要求；首次真实主机隔离验收见 [P5-01](VPS_ISOLATED_DEPLOYMENT.md)。下文保留 P4 的测试和失败记录，不能据此推定生产已经开放。
 
 ## 候选从哪里来
 
@@ -77,7 +77,7 @@ node scripts/release/cli.mjs plan \
 - `node scripts/release/integration.mjs`：真实 BuildKit 导出约 1MiB 合成 Linux 镜像，完整校验后 Docker load，并按同一 digest 以 UID10001 执行。精确清理本次容器/builder/镜像，无全局 prune。
 - 实际 GitHub 只读门禁对 main `c9ddbf988151ea4587533b52d8a38477595dfe80` 通过：PR #48 Review `49a3e65`，Quality run `42241561387`。这不等于当前 P4 提交已获审批。
 - 完整应用/数据库/代理更新与故障回退证据由 P4 release lab 记录；最终以本 PR 最终 SHA 的 CI 为准，不把小镜像实验当作完整应用验收。
-- 新 workflow 尚未进入默认分支，**未实际执行手动候选 workflow 或验证 Artifact 上传**；GitHub 要求 workflow_dispatch 文件先进入默认分支。合并后还需负责人授权一次真实手动运行，核对配额、构建、下载和 run 摘要。[手动工作流前提](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+- 2026-11-07，#54/#56 合并后，已对 main `72e36cb82d2a5ea9191fec362dc4ab41a42655e1` 实际运行 [Release candidate #42348238944](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42348238944)。构建前后门禁、四类 OCI 校验和私有 Artifact 上传成功。下载 ZIP 1,148,728,381 bytes，其 SHA-256 与已认证 GitHub Artifact API 返回值一致：`38f983e4c1212ef4773232c800d98f7af18356b6d07ad7f28b84462aa5cef692`；再从已验证 ZIP 取得 release.json 摘要 `9cb5cd6908f450dc34c894646b917e9fe9995131f96629f7847e4faa8df1c6c5`，现有 CLI verify 退出0。这条信任链不依赖未知下载中的 checksum，也不等同于独立签名。首次整文件下载停滞，保留失败记录后按严格 Range 续传，最终全量摘要仍须通过。
 - 真实 VPS、真实域名、生产凭据、正式部署、独立产物签名和生产回退均未验证。不把合成环境通过称作上线完成。
 
 2026-11-06 本地联合验收：`npm run check`、`test:release`，以及 `test:db`、`test:production:db`、`test:auth:limiter`、`test:auth:transactions`、`test:auth:logs`、`test:auth`、`test:admin`、`test:admin-drafts`、`test:admin-editor`、`test:admin-preview`、`test:public`、`test:likes`、`test:comments`、`test:media`、`test:media:upload`、`test:media:stories`、`test:publishing`、`test:media:lifecycle`、`test:production:rotation`、`test:auth:session-spike` 均退出0。
