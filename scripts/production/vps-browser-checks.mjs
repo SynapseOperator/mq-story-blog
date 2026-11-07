@@ -114,6 +114,19 @@ async function browserChecks(fixture, state, evidenceDirectory, phase) {
       await page.waitForFunction(({ input, expected }) => input.value === expected,
         { input: await titleInput.elementHandle(), expected: draftTitle });
       assert.equal(await titleInput.inputValue(), draftTitle);
+      await page.locator('[data-testid="publication-status"][data-state="PUBLISHED"]').waitFor();
+      const publication = page.getByRole("region", { name: "发布管理", exact: true });
+      if (phase === "after-restore") {
+        await publication.locator(".publication-unavailable").waitFor();
+      } else {
+        // The title and publication controls load independently. Wait for the
+        // real slot response rather than capturing a transient loading panel.
+        const assignedSlot = publication.getByRole("radio", { name: "星位 1", exact: true });
+        await assignedSlot.waitFor({ timeout: 30000 });
+        await publication.locator('.publication-read-state[role="status"]').waitFor({ state: "hidden" });
+        assert.equal(await publication.locator('[role="alert"]').count(), 0);
+        assert.equal(await assignedSlot.isChecked(), true);
+      }
       await shot("editor");
       assert.deepEqual(errors, []);
       await context.close();
@@ -273,6 +286,9 @@ export async function runVpsBrowserChecks({ phase, fixturePath, statePath, evide
       await check("recreated containers preserve rows files and sessions", async () => {
         await assertPublic(); expect(await request("/api/admin/stories", { jar: state.adminJar }), 200);
         assert.equal(expect(await request(`/api/stories/${state.story.id}/likes`, { jar: state.readerJar }), 200).data.liked, true);
+      });
+      await check("recreated desktop mobile and narrow browser workflows", async () => {
+        screenshots = await browserChecks(fixture, state, evidenceDirectory, phase);
       });
       state.recreatePassed = true;
     } else {

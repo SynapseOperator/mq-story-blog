@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import https from "node:https";
-import { runVpsMaintenance } from "../scripts/production/vps-maintenance.mjs";
+import { promisify } from "node:util";
+import { runVpsMaintenance, waitForHttpsReady } from "../scripts/production/vps-maintenance.mjs";
 import { validateDeploymentConfig } from "../scripts/production/database-config.mjs";
 
 const id = "12345678-1234-4234-8234-123456789abc";
@@ -61,14 +63,94 @@ test("less than 8 GiB refuses maintenance before any volume or container change"
 
 test("a failed fault action closes app and proxy without disclosing the underlying error", async t => {
   const { ctx, calls } = await fixture(t);
+  const output = [];
+  t.mock.method(console, "error", value => output.push(value));
   ctx.compose = args => {
     calls.push(args);
-    if (args[0] === "kill") throw new Error("private database diagnostic must not escape");
+    if (args[0] === "kill") throw Object.assign(new Error("private database diagnostic must not escape"), {
+      code: "private-cookie-must-not-escape", stdout: "synthetic-password", stack: "private stack",
+    });
     return { status: 0 };
   };
   await assert.rejects(runVpsMaintenance(ctx, "faults"), { message: "VPS_ACCEPTANCE_FAILED_ENTRANCE_CLOSED" });
   assert.deepEqual(calls.at(-1), ["stop", "proxy", "app"]);
   assert.equal(calls.some(args => args.includes("down") || args.includes("prune")), false);
+  const names = (await fs.readdir(ctx.directory)).filter(name => /^faults-failure-[a-f0-9-]+\.json$/.test(name));
+  assert.equal(names.length, 1);
+  const text = await fs.readFile(join(ctx.directory, names[0]), "utf8");
+  assert.deepEqual(JSON.parse(text), { action: "faults", stage: "crash-kill", containment: "closed" });
+  assert.equal(output[0], `VPS_MAINTENANCE_FAILURE=${text}`);
+  assert.ok(!/private|synthetic-password/.test(text + output.join("")));
+});
+
+test("an unexpected HTTPS status immediately closes ingress and records its real status", async t => {
+  const { ctx, calls } = await fixture(t);
+  t.mock.method(console, "error", () => {});
+  t.mock.method(https, "get", (_url, _options, callback) => {
+    const request = new EventEmitter(); request.destroy = error => request.emit("error", error);
+    Promise.resolve().then(() => {
+      const response = new EventEmitter(); response.statusCode = 500; response.resume = () => {};
+      callback(response); response.emit("end");
+    });
+    return request;
+  });
+  await assert.rejects(runVpsMaintenance(ctx, "faults"), /VPS_ACCEPTANCE_FAILED_ENTRANCE_CLOSED/);
+  const name = (await fs.readdir(ctx.directory)).find(value => value.startsWith("faults-failure-"));
+  assert.deepEqual(JSON.parse(await fs.readFile(join(ctx.directory, name), "utf8")), {
+    action: "faults", stage: "crash-https", containment: "closed", httpStatus: 500, errorCode: "ERR_ASSERTION",
+    readiness: [{ attempt: 1, httpStatus: 500 }],
+  });
+  assert.deepEqual(calls.at(-1), ["stop", "proxy", "app"]);
+  assert.equal(calls.some(args => args[0] === "stop" && args[1] === "postgres"), false);
+});
+
+test("real HTTPS readiness waits for a delayed listener but rejects lasting errors and untrusted TLS", async t => {
+  const { ctx } = await fixture(t);
+  const executable = process.platform === "win32" ? "C:\\Program Files\\Git\\usr\\bin\\openssl.exe" : "openssl";
+  await promisify(execFile)(executable, ["req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", join(ctx.directory, "test-private.pem"), "-out", join(ctx.directory, "test-ca.pem"),
+    "-days", "1", "-subj", "/CN=mq.localhost", "-addext", "subjectAltName=DNS:mq.localhost"],
+  { windowsHide: true, timeout: 30000 });
+  const key = await fs.readFile(join(ctx.directory, "test-private.pem"));
+  const ca = await fs.readFile(join(ctx.directory, "test-ca.pem"));
+  let mode = "warming", responses = 0;
+  const seen = [];
+  const server = https.createServer({ key, cert: ca }, (request, response) => {
+    seen.push({ host: request.headers.host, servername: request.socket.servername, path: request.url });
+    const status = mode === "warming" ? [502, 503, 200][Math.min(responses, 2)] : Number(mode);
+    responses++; response.writeHead(status); response.end("synthetic response body is never logged");
+  });
+  const listen = port => new Promise((done, reject) => { server.once("error", reject); server.listen(port, "127.0.0.1", done); });
+  try {
+    await listen(0);
+    const port = server.address().port;
+    await new Promise(done => server.close(done));
+    const origin = `https://mq.localhost:${port}`, observations = [];
+    let opening;
+    const options = { maxAttempts: 20, totalMs: 3000, intervalMs: 10, requestTimeoutMs: 500 };
+    assert.equal(await waitForHttpsReady(origin, ca, { ...options, onFailure: value => {
+      observations.push(value);
+      if (value.errorCode === "ECONNREFUSED" && !opening) opening = listen(port);
+    } }), 200);
+    await opening;
+    assert.equal(observations[0].errorCode, "ECONNREFUSED");
+    assert.deepEqual(observations.filter(value => value.httpStatus).map(value => value.httpStatus), [502, 503]);
+    assert.ok(seen.every(value => value.host === `mq.localhost:${port}` && value.servername === "mq.localhost" && value.path === "/api/stories"));
+
+    mode = "503"; responses = 0;
+    const failed = [];
+    await assert.rejects(waitForHttpsReady(origin, ca, { ...options, maxAttempts: 3, onFailure: value => failed.push(value) }), /VPS_HTTPS_NOT_READY/);
+    assert.equal(responses, 3);
+    assert.deepEqual(failed, [1, 2, 3].map(attempt => ({ attempt, httpStatus: 503 })));
+
+    const untrusted = [];
+    await assert.rejects(waitForHttpsReady(origin, undefined, { ...options, onFailure: value => untrusted.push(value) }), { code: "DEPTH_ZERO_SELF_SIGNED_CERT" });
+    assert.deepEqual(untrusted, [{ attempt: 1, errorCode: "DEPTH_ZERO_SELF_SIGNED_CERT" }]);
+    assert.equal(responses, 3); // Failed TLS never reaches the HTTP handler.
+  } finally {
+    server.closeAllConnections();
+    await new Promise(done => server.close(done));
+  }
 });
 
 test("a failed stop is reported as unconfirmed containment", async t => {
@@ -107,6 +189,8 @@ test("restore permission verification failure never starts a restored applicatio
   assert.equal(calls.some(args => args.includes("up")), false);
   assert.deepEqual(calls.at(-1), ["stop", "proxy", "app"]);
   await assert.rejects(fs.access(join(ctx.directory, "restore-receipt.json")), { code: "ENOENT" });
+  const failure = (await fs.readdir(ctx.directory)).find(name => name.startsWith("restore-failure-"));
+  assert.equal(JSON.parse(await fs.readFile(join(ctx.directory, failure), "utf8")).stage, "restore-permission-audit");
 });
 
 test("successful restore records a distinct target and disables publication before serving", async t => {
