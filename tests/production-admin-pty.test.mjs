@@ -47,7 +47,17 @@ test("Linux PTY: production admin CLI confirms target, never echoes password and
           '../admin/maintenance-policy.mjs':'pty:policy','../../src/server/admin/maintenance.ts':'pty:domain' })[specifier];
         return key?{url:key,shortCircuit:true}:next(specifier,context);
       }, load(url,context,next) { return modules[url]?{format:'module',source:modules[url],shortCircuit:true}:next(url,context); }
-    });`, { mode: 0o600 });
+    });
+    // Widen the real terminal scheduling window after a visible prompt. A
+    // prompt must not become visible while the kernel can still echo input;
+    // the delayed write return makes this deterministic on fast machines too.
+    const write = process.stdout.write;
+    process.stdout.write = function(chunk, ...args) {
+      const result = write.call(this, chunk, ...args);
+      if (typeof chunk === 'string' && chunk.includes('password (hidden'))
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 80);
+      return result;
+    };`, { mode: 0o600 });
   const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
   const command = [process.execPath, "--import", loader, fileURLToPath(new globalThis.URL("../scripts/production/admin-cli.mjs", import.meta.url)),
     "--operation", "init", "--username", "synthetic_admin", `--confirm-production=${id}`].map(quote).join(" ");

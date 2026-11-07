@@ -60,7 +60,7 @@ async function privateDirectory(path) {
   if (process.platform !== "win32") assert.ok(info.uid === 0 && (info.mode & 0o7777) === 0o700, "PRODUCTION_PRIVATE_DIRECTORY_REQUIRED");
 }
 
-async function readSecrets(directory, config) {
+export async function readSecrets(directory, config) {
   await privateDirectory(directory);
   const values = {};
   for (const [name, uid] of Object.entries(secretOwners)) {
@@ -74,6 +74,7 @@ async function readSecrets(directory, config) {
   const passwords = JSON.parse(values.role_passwords);
   assert.deepEqual(Object.keys(passwords).sort(), [...LOGIN_IDENTITIES].sort());
   for (const password of Object.values(passwords)) assert.match(password, /^[A-Za-z0-9_-]{32,128}$/);
+  assert.match(values.postgres_password, /^[A-Za-z0-9_-]{32,128}$/, "PRODUCTION_BOOTSTRAP_PASSWORD_REJECTED");
   const bootstrap = new URL(values.bootstrap_database_url);
   assert.equal(decodeURIComponent(bootstrap.username), "mq_bootstrap");
   assert.equal(decodeURIComponent(bootstrap.password), values.postgres_password);

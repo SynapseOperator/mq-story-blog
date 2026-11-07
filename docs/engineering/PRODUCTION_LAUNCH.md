@@ -98,16 +98,18 @@ bootstrap 后管理员维护使用独立的交互命令：隐藏输入两次密�
 
 | 本地命令/环境 | 实际结果 |
 |---|---|
-| `npm run check` | 退出0：lint、Schema、typecheck、325项单测中319通过/6项Windows不适用、生产构建；POSIX/TTY项由Linux单独执行和最终CI覆盖 |
+| `npm run check` | 修复终端回显时序后重新退出0：lint、Schema、typecheck、327项单测中321通过/6项Windows不适用、生产构建；POSIX/TTY项由Linux单独执行和最终CI覆盖 |
 | `test:production:db`、`test:production:admin`、`test:production:rotation`、`test:auth:session-spike` | 均退出0；随机真实PG18库；管理员维护、密钥/会话轮换与15组Session对照 |
 | `test:db`、`test:auth`、`test:admin`、`test:admin-drafts`、`test:admin-editor`、`test:admin-preview`、`test:public`、`test:likes`、`test:comments` | 均退出0；实际数据库、HTTP/HTTPS及既有浏览器回归 |
 | `test:media`、`test:media:upload`、`test:media:stories`、`test:publishing`、`test:media:lifecycle` | 均退出0；图片/历史引用/公开隔离、发布与原备份恢复套件保留 |
-| `test:production:bootstrap` | 退出0；production合同空库、10项真实业务与浏览器、独立集群恢复、同镜像升级/回退及故障拒绝。一轮完整恢复35.183秒为本机实测，不是VPS RTO承诺 |
+| `test:production:bootstrap` | 退出0；production合同空库、10项真实业务与浏览器、独立集群恢复、同镜像升级/回退及故障拒绝。最终包装镜像一轮完整恢复30.331秒为本机实测，不是VPS RTO承诺 |
 | `test:production:operations`、`test:production:release` | 均退出0；前者本地Restic备份/恢复5.639/2.335秒；后者隔离模拟S3 HTTPS备份/恢复8.870/4.403秒，真实加密、错误凭据拒绝、保留策略仅dry-run |
 | `test:release` | 退出0；OCI archive/index/manifest/config分别核验，实际按digest加载执行 |
 | Linux root文件/锁/计划套件 | 39/39通过、退出0、0skip；真实临时文件权限，Docker命令边界为测试替身，不冒充实机CLI执行 |
 | 打包后的Linux主机/HTTPS/告警套件 | 39/39通过、退出0、0skip；模拟接收端，无真实通知 |
 
 本轮保留了失败记录：一次本地媒体TLS回归运行期间发生构建重叠，完成独立构建后串行完整重跑通过；新外部探针在隧道连接时未保留HTTP Host，真实容器回归捕获后补修并增加TLS用例；Linux镜像测试发现备份服务模板被构建白名单排除，现仅补入三个非秘密模板。原失败记录保存在Git外，不通过删测、放宽TLS或降低磁盘阈值消除失败。
+
+首轮 [CI 42361773174](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42361773174) 的真实 Linux PTY 测试捕获密码回显竞态：既有隐藏输入函数先显示提示，随后才关闭内核回显。修复后先关闭回显并准备读取，再显示提示。增加提示写出后的80ms调度窗口，旧版稳定失败，修复后连续30次真实PTY（60次密码提示）通过；没有打印合成密码或放宽原断言。另补引导 PostgreSQL 密码的32–128字符校验，与其他数据库密码一致；Linux root真实秘密文件/发布测试19项通过。两项修复不改变业务认证或数据库权限。
 
 截图、备份演练与扫描原始材料留在本机私有实验目录；备份、凭据和浏览器状态不上传CI Artifacts。最终Linux Quality/Database/Container必须对应本PR最终提交，结果见PR链接；这里的本地通过不能替代该门禁。

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { chmod, link, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, chown, link, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TARGETS } from "./bundle.mjs";
-import { applyProductionHost, assertProductionCompose, readProductionReceipt, validateCurrentReleaseGate,
+import { applyProductionHost, assertProductionCompose, readProductionReceipt, readSecrets, validateCurrentReleaseGate,
   validateHostSettings } from "./production-host.mjs";
+import { validateDeploymentConfig, LOGIN_IDENTITIES } from "../production/database-config.mjs";
 import { planProductionBootstrap, planProductionChange, planProductionActivation } from "./production-plan.mjs";
 import { claimProductionOperation, confirmInterruptedBackup } from "../production/operation-lock.mjs";
 import { backupWindowFixture } from "../../tests/production-backup-window.test.mjs";
@@ -91,6 +92,33 @@ test("fresh workstation review evidence must match the candidate and expires aft
   for (const changes of [{ sourceSha: "b".repeat(40) }, { reviewer: "owner" }, { qualityRunId: 0 },
     { checkedAt: new Date(now + 1).toISOString() }, { checkedAt: new Date(now - 3600001).toISOString() }])
     assert.throws(() => validateCurrentReleaseGate({ ...gate, ...changes }, sourceSha, now));
+});
+
+test("actual production secret files require a strong bootstrap password as well as role passwords", {
+  skip: process.platform !== "linux" || process.geteuid?.() !== 0,
+}, async t => {
+  const root = await testDirectory(t), config = validateDeploymentConfig(fixture().config);
+  const passwords = Object.fromEntries(LOGIN_IDENTITIES.map((name, index) => [name, String(index + 1).repeat(64)]));
+  const url = (role, password) => `postgresql://${role}:${encodeURIComponent(password)}@postgres:5432/mq_production`;
+  const files = {
+    database_url: url(config.roles.runtime, passwords.runtime), migration_database_url: url(config.roles.migration, passwords.migration),
+    role_passwords: JSON.stringify(passwords), auth_secret: "6".repeat(64), auth_proxy_secret: "7".repeat(64),
+    publish_signing_key: "8".repeat(64), comment_signing_key: "9".repeat(64),
+  };
+  for (const [name, value] of Object.entries(files)) {
+    await writeFile(join(root, name), value, { mode: 0o400 }); await chown(join(root, name), 10001, 10001);
+  }
+  const setBootstrap = async password => {
+    for (const [name, value, uid] of [["postgres_password", password, 999],
+      ["bootstrap_database_url", url("mq_bootstrap", password), 10001]]) {
+      await writeFile(join(root, name), value, { mode: 0o400 }); await chown(join(root, name), uid, uid);
+    }
+  };
+  for (const password of ["a".repeat(64), "_".repeat(32)]) { await setBootstrap(password); await readSecrets(root, config); }
+  for (const password of ["short", "a".repeat(129), `${"a".repeat(31)}!`]) {
+    await setBootstrap(password);
+    await assert.rejects(readSecrets(root, config), /PRODUCTION_BOOTSTRAP_PASSWORD_REJECTED/);
+  }
 });
 
 test("compose validation keeps private ports closed and requires explicit separate ingress activation", () => {
