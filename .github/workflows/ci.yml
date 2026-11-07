@@ -2,8 +2,7 @@ name: Quality
 
 on:
   pull_request:
-    # Temporary P4-02 stacked base; remove after #54 is merged and this PR retargeted.
-    branches: [main, feat/p4-01-release-operations]
+    branches: [main]
   push:
     branches: [main]
 

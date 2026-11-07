@@ -2,7 +2,7 @@
 
 MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
 
-Phase 2 核心业务及 P3-02/P3-03 的生产基础与运维工具已进入 main（[PR #50](https://github.com/SynapseOperator/mq-story-blog/pull/50)、[PR #52](https://github.com/SynapseOperator/mq-story-blog/pull/52)）。数据库身份、文件秘密、Compose、加密备份、隔离恢复和密钥轮换已在合成环境验证。P4-02 已经 SSH 完成真实 VPS 只读采集：Ubuntu24.04/amd64、4vCPU、3.82GiB内存；时间同步和主机安全配置仍待处理，未安装软件、部署或开放真实用户。结果及待授权操作见 [VPS验收](docs/engineering/VPS_READINESS.md)。历史部署审查见 [DEPLOYMENT_READINESS.md](docs/engineering/DEPLOYMENT_READINESS.md)，当前合同见 [生产基础](docs/engineering/PRODUCTION_FOUNDATION.md)、[备份恢复](docs/engineering/PRODUCTION_BACKUP.md)、[秘密轮换](docs/engineering/SECRET_ROTATION.md)和[主机运维](docs/engineering/OPERATIONS_RUNBOOK.md)。
+Phase 2、P3 及 P4 的部署基础已进入 main。VPS 为 Ubuntu24.04/amd64、4vCPU、3.82GiB内存，已完成 SSH/UFW/NTP 与 Docker 初始化。本轮 P5-01 验证真实主机上的单套合成 staging，入口仅通过 SSH tunnel，未开放正式用户。实际结果与操作边界见 [首次隔离部署](docs/engineering/VPS_ISOLATED_DEPLOYMENT.md)；[P4-02 只读报告](docs/engineering/VPS_READINESS.md)保留当时状态。当前合同见 [生产基础](docs/engineering/PRODUCTION_FOUNDATION.md)、[备份恢复](docs/engineering/PRODUCTION_BACKUP.md)、[秘密轮换](docs/engineering/SECRET_ROTATION.md)和[主机运维](docs/engineering/OPERATIONS_RUNBOOK.md)。
 
 星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
 
@@ -11,7 +11,7 @@ Phase 2 核心业务及 P3-02/P3-03 的生产基础与运维工具已进入 main
 仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
 
 
-本分支依赖尚未合并的 P4-01 / [PR #54](https://github.com/SynapseOperator/mq-story-blog/pull/54)，包含[只读主机预检与 SSH 准备](docs/engineering/HOST_PREPARATION.md)、[手动发布候选和应用回退](docs/engineering/RELEASE_OPERATIONS.md)、S3 备份接入及 HTTPS 告警。P4-02 增加无需远端 Node 的原生采集、本地脱敏评估和 Ubuntu OpenSSH 配置测试。[部署差距](docs/engineering/VPS_DEPLOYMENT_GAPS.md)与[域名/备份/告警选择](docs/engineering/VPS_EXTERNAL_SERVICES.md)列出实机验收、代码缺口和授权边界。生产 apply 继续拒绝；`npm run test:release`、`npm run test:production:release` 使用隔离容器，`npm run host:preflight` 只读当前主机，不能把 Windows/容器结果当作 VPS 验收。
+[PR #54](https://github.com/SynapseOperator/mq-story-blog/pull/54) 与 [PR #56](https://github.com/SynapseOperator/mq-story-blog/pull/56) 已按普通 merge 合并，包含[原生主机预检](docs/engineering/HOST_PREPARATION.md)、[手动发布候选和应用回退](docs/engineering/RELEASE_OPERATIONS.md)、S3 备份及 HTTPS 告警。首次空库部署复用已有身份/迁移顺序，不伪造更新工具的当前版本或备份回执。生产 apply 继续拒绝；`npm run test:release`、`npm run test:production:release` 使用隔离容器，`npm run host:preflight` 只读当前主机，不能把 Windows/容器结果当作 VPS 验收。
 
 ## 运行与检查
 

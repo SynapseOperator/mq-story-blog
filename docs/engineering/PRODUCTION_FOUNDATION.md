@@ -2,7 +2,7 @@
 
 P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)，本分支没有合并该 PR。这里交付生产候选配置和隔离演练工具；没有购买 VPS、生成正式凭据或部署网站。
 
-后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；P4-02 已完成真实 VPS 只读容量检查，见 [VPS_READINESS.md](VPS_READINESS.md)，尚未安装组件或部署。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。#50/#52 已进入 main，不代表正式生产开放获授权。
+后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；P4-02 的[只读容量报告](VPS_READINESS.md)之后，VPS 已完成 SSH/UFW/NTP 和 Docker 初始化，最新隔离部署边界与结果见 [P5-01](VPS_ISOLATED_DEPLOYMENT.md)。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。代码合并及合成验收不代表正式生产开放获授权。
 
 ## 运行结构
 
