@@ -54,7 +54,7 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
   for (const [key, value] of Object.entries({ MQ_SYNTHETIC_LAB: "true", MQ_SYNTHETIC_DEPLOYMENT_ID: id, MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
     BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
     RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_BACKUP_SNAPSHOT_ID: fixture.backupReceipt.snapshotId })) restoreArgs.push("-e", `${key}=${value}`);
-  let succeeded = false, stage = "target-database-start";
+  let succeeded = false, stage = "target-database-start", browserObservation;
   compose(["stop", "postgres"]); // Keep one database/app pair active on small hosts.
   try {
     targetCompose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
@@ -103,8 +103,21 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {} };
+      page.on("domcontentloaded", () => { browserObservation.domReady = true; });
+      page.on("load", () => { browserObservation.loadComplete = true; });
+      page.on("response", response => {
+        if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) browserObservation.documentStatus = response.status();
+      });
+      page.on("requestfailed", request => {
+        const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
+          ? request.resourceType() : "other";
+        browserObservation.failedResources[type] = (browserObservation.failedResources[type] ?? 0) + 1;
+      });
       stage = "restored-browser-navigation";
-      assert.equal((await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`)).status(), 200);
+      // A recovery check waits for the application and decoded story image
+      // below, not the load event of every background scene resource.
+      assert.equal((await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`, { waitUntil: "domcontentloaded" })).status(), 200);
       stage = "restored-browser-reader";
       await page.locator('dialog[data-phase="reading"]').waitFor();
       stage = "restored-browser-image-load";
@@ -120,10 +133,11 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     } finally { await browser.close(); }
     const result = { restored: true, sourceDatabase: "mq_production", targetDatabase: "mq_production", distinctClusters: true,
       distinctDeploymentIds: true, sessionsCleared: true, businessKeysCleared: true, publicAndPrivateMediaVerified: true,
-      elapsedMs: Date.now() - started, productionDeployed: false };
+      elapsedMs: Date.now() - started, productionDeployed: false, browser: browserObservation };
     await writeFile(join(evidence, "production-recovery.json"), JSON.stringify(result, null, 2));
     succeeded = true; return result;
   } catch (error) {
+    if (browserObservation) console.error(`PRODUCTION_RECOVERY_BROWSER=${JSON.stringify(browserObservation)}`);
     const known = ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ERR_TLS_CERT_ALTNAME_INVALID", "CERT_HAS_EXPIRED",
       "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR", "ERR_ASSERTION"];
     console.error(`PRODUCTION_RECOVERY_FAILED stage=${stage};code=${known.includes(error?.code) ? error.code

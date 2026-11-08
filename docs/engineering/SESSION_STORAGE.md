@@ -74,4 +74,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 首轮远端 [42496876770](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42496876770) 在恢复后的浏览器阶段失败；数据库、HTTPS权限、文件哈希与旧Session拒绝此前已通过。原错误仅为 `restored-browser/REJECTED`，不能据此确定唯一根因。复核发现恢复套件等待阅读动画却未等待lazy图片加载：补入滚入视口、20秒内complete/naturalWidth检查，再保留真实decode；并细分固定失败阶段。未改变应用UI、权限、写请求或降低断言，保留原失败运行。
 
+第二轮 [42498347596](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42498347596) 定位为 `restored-browser-navigation/BROWSER_TIMEOUT`，尚未到图片步骤。恢复导航改为等待DOMContentLoaded，再明确验证HTTP200、阅读器、真实图片解码及截图；不把所有背景资源的load事件当作业务就绪。补充仅含状态码/布尔值/资源类型计数的诊断，不记录URL、响应正文或原始错误。不能据此宣称已证明某一个背景资源是根因；本地完整重跑通过，远端以最终提交CI为准。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。
