@@ -97,15 +97,24 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     assert.equal((await request(`/api/admin/media/${fixture.privateAssetId}/content`, { jar: adminJar })).status, 200);
     assert.equal((await request(`/api/admin/stories/${fixture.storyId}/withdraw`, { method: "POST", jar: adminJar,
       body: { expectedVersion: detail.data.story.version ?? 0 } })).status, 503);
-    stage = "restored-browser";
+    stage = "restored-browser-launch";
     const browser = await chromium.launch();
     try {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
+      stage = "restored-browser-navigation";
       assert.equal((await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`)).status(), 200);
+      stage = "restored-browser-reader";
       await page.locator('dialog[data-phase="reading"]').waitFor();
-      await page.getByRole("img", { name: "合成蓝灰色图片", exact: true }).evaluate(image => image.decode());
+      stage = "restored-browser-image-load";
+      const image = page.getByRole("img", { name: "合成蓝灰色图片", exact: true });
+      await image.scrollIntoViewIfNeeded();
+      await page.waitForFunction(element => element.complete && element.naturalWidth > 0,
+        await image.elementHandle(), { timeout: 20000 });
+      stage = "restored-browser-image-decode";
+      await image.evaluate(element => element.decode());
+      stage = "restored-browser-screenshot";
       await page.screenshot({ path: join(evidence, "production-restored-mobile.png"), scale: "device" });
       await context.close();
     } finally { await browser.close(); }
@@ -117,7 +126,8 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
   } catch (error) {
     const known = ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ERR_TLS_CERT_ALTNAME_INVALID", "CERT_HAS_EXPIRED",
       "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR", "ERR_ASSERTION"];
-    console.error(`PRODUCTION_RECOVERY_FAILED stage=${stage};code=${known.includes(error?.code) ? error.code : "REJECTED"}`);
+    console.error(`PRODUCTION_RECOVERY_FAILED stage=${stage};code=${known.includes(error?.code) ? error.code
+      : error?.name === "TimeoutError" ? "BROWSER_TIMEOUT" : "REJECTED"}`);
     throw error;
   } finally {
     targetCompose(["down", "--remove-orphans"], { fail: false });

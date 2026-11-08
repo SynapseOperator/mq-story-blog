@@ -174,7 +174,11 @@ volumes:
       assert.equal((await page.goto(`${origin}/stories/${story.slug}`)).status(), 200);
       await page.locator('dialog[data-phase="reading"]').waitFor();
       await page.getByRole("heading", { name: story.draftTitle, exact: true }).waitFor();
-      await page.getByRole("img", { name: "合成蓝灰色图片", exact: true }).evaluate(image => image.decode());
+      const image = page.getByRole("img", { name: "合成蓝灰色图片", exact: true });
+      await image.scrollIntoViewIfNeeded();
+      await page.waitForFunction(element => element.complete && element.naturalWidth > 0,
+        await image.elementHandle(), { timeout: 20000 });
+      await image.evaluate(element => element.decode());
       assert.equal(await page.locator("nextjs-portal").count(), 0);
       await page.screenshot({ path: join(evidence, `restored-${name}.png`), scale: "device" });
       assert.deepEqual(errors, []); await context.close();
