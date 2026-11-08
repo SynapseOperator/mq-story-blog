@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL, URL } from "node:url";
 
 const codes = new Set([
+  "ALERT_DELIVERY_TEST",
   "DISK_RESERVE_LOW", "INODES_LOW", "HOST_MEMORY_LOW", "HOST_LOAD_HIGH", "TLS_EXPIRY_OR_VERIFICATION_FAILED",
   "BACKUP_MISSING_OR_STALE", "MQ_OPERATIONS_CHECK_FAILED", "OPERATIONS_CHECK_FAILED", "HTTPS_UNAVAILABLE", "BACKUP_FAILED", "RESTORE_FAILED", "RELEASE_FAILED",
   ...["APP", "POSTGRES", "PROXY"].flatMap(name => [`${name}_UNHEALTHY`, `${name}_PORT_EXPOSED`, `${name}_MEMORY_HIGH`]),
@@ -88,13 +89,16 @@ export async function sendOperationsAlert({ report, webhookUrlFile, channel = "g
     // `${timestamp}\n${secret}` as the key. No @ mentions or arbitrary text.
     const timestamp = String(Math.floor(Date.now() / 1000));
     payload = { timestamp, sign: createHmac("sha256", `${timestamp}\n${signingSecret}`).update("").digest("base64"),
-      msg_type: "text", content: { text: `MQ 运维告警\n${alert.checkedAt}\n部署 ${alert.deploymentId}\n事件 ${alert.eventId}\n${alert.failures.join("\n")}` } };
+      msg_type: "text", content: { text: `MQ 运维告警${alert.failures.length === 1 && alert.failures[0] === "ALERT_DELIVERY_TEST" ? " · 送达测试（非故障）" : ""}\n${alert.checkedAt}\n部署 ${alert.deploymentId}\n事件 ${alert.eventId}\n${alert.failures.join("\n")}` } };
   }
   payload = JSON.stringify(payload);
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  // Owner-approved delivery acceptance sends one request only. A lost response
+  // remains unknown and needs human confirmation, rather than a duplicate test.
+  const attempts = alert.failures.length === 1 && alert.failures[0] === "ALERT_DELIVERY_TEST" ? 1 : 2;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const result = await postAlert(target, payload, { ca, timeoutMs, channel, connectHost });
     if (result.delivered) return { delivered: true, attempts: attempt, eventId: alert.eventId };
-    if (!result.retryable || attempt === 2) return { delivered: false, attempts: attempt, eventId: alert.eventId, errorCode: result.errorCode };
+    if (!result.retryable || attempt === attempts) return { delivered: false, attempts: attempt, eventId: alert.eventId, errorCode: result.errorCode };
     await delay(250);
   }
 }

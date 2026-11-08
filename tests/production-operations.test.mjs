@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { assessOperations } from "../scripts/production/operations-check.mjs";
+import { assessOperations, collectOperations, readBackupAge } from "../scripts/production/operations-check.mjs";
 
 const execute = promisify(execFile);
 
@@ -31,6 +31,41 @@ test("duplicate or missing service, future or stale backup timestamps fail", () 
   const sample = healthy(); sample.services.pop(); sample.services.push(sample.services[0]); sample.backupAgeHours = -2;
   assert.deepEqual(assessOperations(sample).failures, ["BACKUP_MISSING_OR_STALE", "APP_UNHEALTHY", "PROXY_UNHEALTHY"]);
   assert.ok(assessOperations({ ...healthy(), backupAgeHours: 27 }).failures.includes("BACKUP_MISSING_OR_STALE"));
+});
+
+test("offsite freshness requires the exact backend and repository, not another recent receipt", async () => {
+  const parent = resolve(tmpdir()), directory = await mkdtemp(join(parent, "mq-monitor-receipt-"));
+  const receiptPath = join(directory, "receipt.json"), deploymentId = randomUUID(), now = Date.now();
+  const target = { receiptPath, deploymentId, expectedBackend: "s3", expectedRepositoryId: "a".repeat(64) };
+  const receipt = { verified: true, deploymentId, backend: "s3", repositoryId: target.expectedRepositoryId,
+    snapshotId: "b".repeat(64), completedAt: new Date(now - 3600000).toISOString() };
+  try {
+    await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o600 });
+    assert.equal(await readBackupAge(target, now), 1);
+    for (const replacement of [{ backend: "local" }, { repositoryId: "c".repeat(64) },
+      { repositoryId: undefined }, { verified: false }, { deploymentId: randomUUID() }, { snapshotId: "latest" }]) {
+      await writeFile(receiptPath, JSON.stringify({ ...receipt, ...replacement }));
+      const age = await readBackupAge(target, now);
+      assert.ok(Number.isNaN(age));
+      assert.ok(assessOperations({ ...healthy(), backupAgeHours: age }).failures.includes("BACKUP_MISSING_OR_STALE"));
+    }
+    await writeFile(receiptPath, "not JSON");
+    assert.ok(Number.isNaN(await readBackupAge(target, now)));
+    assert.ok(Number.isNaN(await readBackupAge({ ...target, receiptPath: join(directory, "absent.json") }, now)));
+    await assert.rejects(readBackupAge({ ...target, expectedRepositoryId: undefined }), { message: "OPS_BACKUP_TARGET_REJECTED" });
+    await assert.rejects(readBackupAge({ ...target, expectedBackend: "local" }), { message: "OPS_BACKUP_TARGET_REJECTED" });
+  } finally {
+    assert.equal(dirname(resolve(directory)), parent); assert.match(basename(directory), /^mq-monitor-receipt-/);
+    await rm(directory, { recursive: true });
+  }
+});
+
+test("production monitoring refuses missing offsite identity before invoking Docker or HTTPS", async () => {
+  const options = { project: "mq-production", deploymentId: randomUUID(), diskPath: tmpdir(), origin: "https://never-contact.invalid" };
+  for (const expectedBackend of [undefined, "local"]) {
+    await assert.rejects(collectOperations({ ...options, expectedBackend }), { message: "OPS_OFFSITE_BACKUP_TARGET_REQUIRED" });
+  }
+  await assert.rejects(collectOperations({ ...options, expectedBackend: "s3" }), { message: "OPS_BACKUP_TARGET_REJECTED" });
 });
 
 test("CLI probe failure for a valid deployment emits a fresh report accepted by the alert CLI", async () => {

@@ -1,4 +1,89 @@
-# P5-02：生产候选安全审查
+# 生产候选安全审查
+
+## P5-03：本轮结论（2026-11-08）
+
+PR #60 的精确HEAD独立审批与三项CI复核后，以普通merge合并为 `2dc86a9039a364e9348277a8b8a5196a3b35c6dd`；合并后的 [Quality 42479369327](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42479369327) quality/database/container全部成功。本轮P5-03是其后的独立增量，没有生产部署授权。
+
+已采用官方Node 24.22.2固定镜像与npm11.21.2，保持Node24/npm11、Next16、Prisma7及001–008不变。Node更新包含24.22.1的安全维护；npm更新替换内置旧tar/undici依赖，没有手改npm内部文件或强制覆盖应用锁文件。VPS主机运维Node仍为24.19.0，未作远端升级。[Node维护记录](https://nodejs.org/en/blog/release/v24.22.1)、[24.22.2](https://nodejs.org/en/blog/release/v24.22.2)、[npm版本](https://github.com/npm/cli/releases/tag/v11.21.2)
+
+Session Token仍原值存库。新增真实PostgreSQL/HTTP反例表明：任意运行身份SQL写能力可以重绑自己已有的签名Cookie，摘要存储也不能保护该身份映射；没有发现SQL注入或因此放宽权限。原有摘要候选仍不能正确单个/其他设备撤销，不能接入实际认证。登录、多个设备、列表、撤销、退出、过期、密钥轮换等16组测试通过；测试风险反例的PASS不是修复。完整威胁及补偿措施见 [Session报告](SESSION_TOKEN_SPIKE.md)。
+
+备份新增生产/合成写前缀隔离，生产监控必须匹配S3仓库ID，拒绝把本地或其他仓库的新鲜回执当作异地成功。全量check、snapshot验证和保留dry-run不变。飞书一次送达测试经负责人单独批准，接口成功且负责人确认收件；没有启用真实timer或把凭据传到VPS。详见 [备份与告警](OFFSITE_BACKUP_AND_ALERTS.md)。
+
+### 入口与权限定向复核
+
+| 边界 | 本轮复核与已有强制规则 | 不能推出的结论 |
+| --- | --- | --- |
+| 管理权限 | `withAdmin`在同一锁定事务内重新读取数据库Session、用户与AdminGrant；撤权/过期/故障拒绝 | 不能抵御整个运行数据库写身份或主机被控制 |
+| 认证与Cookie | 四条公开认证路径白名单、服务端身份、HTTPS/Secure/HttpOnly/SameSite、Origin/CSRF和共享原子限流；不扩大框架原生端点 | 不承诺被盗有效Cookie不可重放，也没有生产DDoS容量结论 |
+| 图片与正文 | 解码/尺寸/字节限制、私有存储、读前后鉴权、当前公开Revision与READY关系、GET/HEAD/no-store；文件I/O不占用授权事务 | 不把READY或随机路径当公开授权，不宣称历史图片自动可见 |
+| 发布与审核 | 独立HMAC、会话/授权再校验、CAS和数据库函数限制；留言先PENDING，只有审核后公开 | 应用运行账号没有直接更新发布字段/授权/历史引用的权力 |
+| 日志和秘密 | 既有固定错误码、PostgreSQL DETAIL限制、文件秘密、恢复清Session/业务密钥；代理覆盖伪造头 | root/应用身份仍能读取其必要秘密；备份内容仍敏感 |
+| 容器和入口 | 非root app/proxy、PG与app不发布端口、分网络、默认业务关闭；真实VPS只读仍为回环HTTPS | 没有实际公网证书、正式Origin或生产容量验收 |
+
+独立Agent上下文复核由`p503_session_audit`检查认证/权限和整体增量，`p503_ops_audit`检查备份/告警与扫描证据；未发现新增代码级阻塞。它们运行了真实定向测试、读取代码，但不是另一位GitHub开发者的APPROVED，也不代表生产独立安全放行。最终镜像和完整CI仍须按以下实际证据判断。
+
+### 最终本地候选扫描
+
+五类镜像均完成完整扫描，命令各退出 **1（发现漏洞）**，并非退出0。官方Trivy0.76.2固定digest，漏洞库更新时间2026-11-08T06:39:21Z；没有忽略文件、`ignore-unfixed`或严重性过滤。先单独下载数据库，再对本轮固定导出归档断网扫描，分析过程没有源码/秘密/Docker socket挂载。构建和容器功能检查退出0与漏洞扫描退出1分别记录。
+
+| 镜像 | Critical / High | Medium / Low / Unknown | 有修复版本的C/H匹配 | 实际config digest前缀 |
+| --- | ---: | ---: | ---: | --- |
+| app | 1 / 34 | 95 / 85 / 0 | 0 | `e5f21eb98895` |
+| proxy | 0 / 2 | 3 / 0 / 1 | 1 | `aa05941e9d1f` |
+| tools | 4 / 75 | 207 / 174 / 1 | 26 | `171a743cac4f` |
+| operations | 4 / 98 | 225 / 176 / 2 | 49 | `2314cd13feb0` |
+| PostgreSQL | 4 / 75 | 204 / 174 / 1 | 26 | `107127087bab` |
+
+全部C/H的包、CVE、安装/修复版本、原始标题/描述、URL及供应商补充说明在 [P503_IMAGE_SCAN.json](security/P503_IMAGE_SCAN.json)，包括五类完整index/manifest/config/archive摘要、原始JSON/构建日志摘要和修复前后差异。tools/operations各减少1个Critical及13个High，14项消失匹配都来自npm目录；实际镜像npm11.21.2、tar7.5.22。剩余可修匹配中，tools/PG的26项属于gosu携带的旧Go版本，operations另有Restic静态依赖；并不意味着当前官方成品已有可直接替换的兼容修复版。
+
+app的Debian zlib Critical CVE-2023-45853有供应商“不构建受影响minizip”的依据；**不扩展到其他zlib CVE**。CVE-2026-76844原始Title误指webpack，Debian记录实际为gz_write失败后的内存错误，Bookworm仍未修复；同类CVE-2026-85091也保留。实测Node/Sharp/libvips不动态链接该Debian库，Node没有暴露gzwrite文件API，但Node内置源仍含相关旧分支，不能按内置版本较新就宣称已修复。[Debian gzwrite记录](https://security-tracker.debian.org/tracker/CVE-2026-76844)
+
+app的35条C/H匹配对应11个不同CVE，不是35个独立缺陷。独立复核按触发条件分组：util-linux的24个High匹配中16个涉及本地受限挂载/特权路径，8个涉及libblkid解析恶意DOS分区镜像；systemd的2个匹配要求homed服务；ncurses3项、gzip1项、Perl1项分别涉及infocmp、多文件LZW→LZH、Archive::Tar特定输入；libacl1项要求高权限调用者处理可被攻击者替换的路径；另有上述zlib2项。常驻容器非root、只读、无capabilities及SYS_ADMIN、no-new-privileges、不运行homed，减少这些触发面；图片上传解码也不同于分区镜像解析。这些配置与输入条件不是对全部本地/native路径不可达的证明。
+
+PG的libxml2仍可能通过恶意XML输入触及，SQLite依赖也未被本轮删除；不以“业务不是SQLite”代替路径审查。Caddy、gosu、Restic的进一步证据见下节。当前官方PG18.6、Caddy2.11.9、Restic0.19.1未提供本轮可直接替换的维护成品，未采用自编译镜像或删除功能包压低数字。
+
+完整构建前/后输入指纹均为 `7dfebd22b258aae92f6d08e5a636506e1ca640a2bec453c3300b9a510042fa36`；每类构建日志、metadata、导出归档和原始报告保存在Git外 `mq-p503-final-4ef689b422ad40dbb2cc4fe394c1def3`。源码标签记录的是构建时base与dirty状态，**不能单凭标签称其已是受审main**；输入清单覆盖实际Docker上下文，并与本PR最终文件核对。扫描ImageID匹配实际config digest，不混用Docker29可能返回的index ID或归档SHA。未来从获审main重新生成正式候选时，若digest变化，必须对新候选重扫，不能沿用本地标签结论。
+
+复跑入口为 `node scripts/production/image-security-scan.mjs --output=<新的Git外绝对目录> --app=<固定镜像> --proxy=<固定镜像> --tools=<固定镜像> --operations=<固定镜像>`；PG默认使用Compose锁定的官方镜像。工具拒绝覆盖旧报告、缺少任一镜像、摘要错配或扫描中源码变化；失败退出2并保留阶段。已知漏洞退出1不会改写为成功，也未被接入功能CI冒充“扫描全绿”。
+
+### Go静态二进制的补充证据
+
+官方govulncheck1.9.0、Go1.27.3、2026-11-05漏洞库，对实际gosu/Caddy/Restic二进制进行分析。文本扫描均退出3（发现漏洞）；JSON模式退出0只表示生成机器结果，不是无漏洞。完整JSON、文本、二进制SHA及退出记录保存在Git外 `mq-p503-callpaths-15b1bd80bc454621843ce6caf164cc95`。
+
+- gosu1.19：26项旧Go High版本匹配没有找到受影响调用符号，但找到`moby/sys/user`的本地passwd/group无界解析（GO-2026-6686 / CVE-2026-61801）。容器不挂入外部passwd/group，非root运行和只读根减少攻击面；这不是整个gosu无漏洞证明。官方PG尚未更新该二进制，不擅自替换。
+- Caddy2.11.9：4项symbol-level，包括HTML解析/渲染、压缩帧和openpgp通配符。项目没有ACME server或templates处理器，已补配置断言，admin API关闭；这些限制不能替代全部调用可达性证明。`apk upgrade`不能更新静态Go依赖，不改用自编译二进制来掩盖问题。
+- Restic0.19.1：38项symbol-level，包含HTTP/TLS/XML等实际S3读写相关包；不能因它按需运行就宣称不可利用。仅连接批准的TLS后端、隔离备份身份与密码、拒绝任意仓库URL是缓解，仍等待维护版或单独验证的升级路径。
+
+上述数字与Trivy包/CVE匹配口径不同。govulncheck二进制模式不能提供运行时可达性的完整证明；最终Trivy结果继续保留所有匹配，不据此添加忽略表。[gosu上游安全说明](https://github.com/tianon/gosu/blob/1.20/SECURITY.md)、[Go分析工具](https://go.dev/doc/tutorial/govulncheck)
+
+### P5-03本地回归
+
+| 命令/检查 | 实际结果 |
+| --- | --- |
+| `npm run check` | 最后修复后退出0；343项，337通过/6项既有Linux专属用例在Windows跳过，lint/Schema/typecheck/build均通过 |
+| `test:production:db` / `test:production:rotation` | 均退出0；PG18.6、001–008、五类身份、11个owner、权限漂移拒绝，6组真实SCRAM/会话/签名轮换 |
+| `test:auth:session-spike` | 16组真实PG/HTTP对照，退出0；含风险仍存在的负面反例 |
+| `test:auth` / `test:admin` | 均退出0；认证35 HTTP+8 HTTPS，管理员18 DB+20 HTTP+4 HTTPS |
+| `test:media:upload` / `test:public` | 均退出0；媒体权限6+恢复竞争2+组合权限3+HTTP17+HTTPS5；公开15+分享10 |
+| `test:production:release` | 修正receipt DTO后完整退出0；新镜像下真实S3模拟、备份8.991秒/恢复3.843秒、轮换、图片/故事权限、桌面手机浏览器、失败闭入口和兼容回退；错误仓库回执负控通过 |
+| `test:production:bootstrap` | 新镜像下退出0；独立production合同空库及真实业务/HTTPS/浏览器，另一集群恢复29.262秒，旧Session/业务密钥失效，同镜像升级/回退及8GiB拒写 |
+| `test:backup:oss` | 退出0；Restic0.19.1、虚拟主机/TLS/香港签名scope、96次本地请求，真实加密check/restore；未访问真实OSS |
+| 告警HTTPS测试 | 24/24退出0；测试消息503/响应丢失仅一次请求；另外一条经授权真实消息已由负责人确认收到 |
+| npm审计 | `--omit=dev`退出0、0告警；完整审计退出1、10个开发链Moderate，源于minimatch，未强制override或隐藏 |
+
+Windows宿主仍为Node24.19.0/npm11.17.0；新候选镜像使用Node24.22.2/npm11.21.2。上述容器恢复时长是本机小型合成样本，不是VPS RTO保证。短时测试CA确实触发证书临期告警，监控保留`ok=false`，没有修改生产阈值。完整Linux最终提交CI另外记录于PR，不能拿main上一轮的绿色结果代替本轮。
+
+### 生产决定尚未作出
+
+1. Session存储：负责人须在独立安全审查后明确接受有期限的现状风险，或先另行实施完整会话存储/句柄整改。本轮没有作出接受决定。
+2. 镜像：可修复项优先使用官方兼容更新；没有官方修复或仍有可达疑问的Critical/High，不由Agent自动接受。维护容器的高权限和TLS客户端路径同样纳入审查。
+3. 运维：正式OSS前缀与锁限定RAM策略尚未应用，原凭据仍较宽；保留策略仅dry-run，VPS外部探针和生产timer未配置。单条飞书送达不代表真实故障自动发现与告警闭环。
+4. 部署：本轮只读VPS，不改现有合成服务。正式密钥、独立空库、管理员初始化、主机Node更新、峰值容量、公共TLS及80/443均需后续精确批准与验收。详见 [上线顺序](PRODUCTION_LAUNCH.md)。
+
+本轮保留三类失败记录：官方Debian仓库返回HTTP502使首次构建退出1，原输入重试通过；公开接口测试短暂创建合成图片，构建来源指纹变化时主动停止，改为测试结束后串行冻结构建；新异地回执负控在真实release演练中发现测试DTO漏掉backend/repositoryId，补齐真实回执的两个非秘密字段并提前断言。没有关闭APT签名、来源指纹或仓库身份检查。中间构建/扫描不作为最终候选，失败实验目录和日志均留在Git外。
+
+## P5-02历史扫描（下列digest不代表P5-03候选）
 
 2026-11-07。本轮修复了应用镜像中可更新的系统包，并移除运行时不需要的包管理器；**没有完成生产安全放行**。下列扫描和本地测试不能替代独立 Review、真实部署验收或对剩余风险的明确处置。没有修改 VPS 镜像、开放公网端口或生成正式凭据。
 

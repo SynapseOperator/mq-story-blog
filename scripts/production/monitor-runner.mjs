@@ -14,7 +14,8 @@ try {
     result = args.includes("--external")
       ? await collectExternalAvailability({ origin: process.env.MQ_OPS_ORIGIN })
       : await collectOperations({ project: process.env.MQ_OPS_PROJECT, deploymentId, diskPath: process.env.MQ_OPS_DISK_PATH,
-        origin: process.env.MQ_OPS_ORIGIN, receiptPath: process.env.MQ_OPS_BACKUP_RECEIPT });
+        origin: process.env.MQ_OPS_ORIGIN, receiptPath: process.env.MQ_OPS_BACKUP_RECEIPT,
+        expectedBackend: process.env.MQ_OPS_BACKUP_BACKEND, expectedRepositoryId: process.env.MQ_OPS_BACKUP_REPOSITORY_ID });
   } catch { result = { ok: false, failures: ["OPERATIONS_CHECK_FAILED"] }; }
   const report = { deploymentId, checkedAt: new Date().toISOString(), failures: result.failures };
   console.log(JSON.stringify({ check: args.includes("--external") ? "mq-external" : "mq-operations", ...report, ok: result.ok }));

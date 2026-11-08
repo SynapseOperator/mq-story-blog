@@ -128,6 +128,24 @@ test("external availability and signed Feishu adapter use a real isolated HTTPS 
       }
     });
 
+    await t.test("owner delivery test is clearly marked and never automatically retried", async () => {
+      const testOptions = { ...options, report: { ...report, failures: ["ALERT_DELIVERY_TEST"] } };
+      mode = "ok";
+      const success = await sendOperationsAlert(testOptions);
+      assert.equal(success.delivered, true);
+      assert.match(received.at(-1).content.text, /送达测试（非故障）/);
+      assert.doesNotMatch(received.at(-1).content.text, /HTTPS_UNAVAILABLE|private-data|<at|@/);
+      for (const value of ["transient", "timeout"]) {
+        mode = value;
+        const start = received.length;
+        const failure = await sendOperationsAlert({ ...testOptions, timeoutMs: 100 });
+        assert.equal(failure.delivered, false);
+        assert.equal(failure.attempts, 1);
+        assert.equal(failure.errorCode, value === "timeout" ? "ALERT_TRANSPORT_FAILED" : "ALERT_HTTP_REJECTED");
+        assert.equal(received.length - start, 1, "An accepted request with no response must not cause a duplicate test notification");
+      }
+    });
+
     await t.test("transient retry preserves identity and signature, while redirects are rejected", async () => {
       mode = "transient";
       const result = await sendOperationsAlert(options);

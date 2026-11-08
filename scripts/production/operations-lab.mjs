@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { URL } from "node:url";
 import { chromium } from "playwright";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
-import { assessOperations, collectOperations } from "./operations-check.mjs";
+import { assessOperations, collectOperations, readBackupAge } from "./operations-check.mjs";
 import { startS3Lab } from "./s3-lab.mjs";
 import { runReleaseLab } from "./release-lab.mjs";
 import { inspectRealOss, startRealOssLab } from "./oss-real-lab.mjs";
@@ -82,6 +82,9 @@ async function runOperationsLabImpl(ctx, fixture) {
   if (ctx.oss) result.payload = { databaseDumpBytes: backup.databaseDumpBytes, mediaBytes: backup.mediaBytes };
   result.backupMs = Date.now() - backupStarted;
   const receipt = data(op("receipt")); assert.equal(receipt.verified, true); assert.equal(receipt.deploymentId, config.deploymentId);
+  assert.equal(receipt.backend, remote ? "s3" : "local");
+  if (remote) assert.match(receipt.repositoryId, /^[a-f0-9]{64}$/);
+  else assert.equal(receipt.repositoryId, undefined);
   pass("read-only backup identity, encrypted Restic snapshot and independent full verification");
   // A second identical receipt/initialization is refused; no implicit overwrite.
   assert.equal(op("backup", { fail: false }).status, 1);
@@ -219,8 +222,14 @@ volumes:
         script: "scripts/production/database-cli.mjs" });
     } });
   }
-  const receiptPath = join(evidence, "backup-receipt.json"); await writeFile(receiptPath, JSON.stringify(receipt));
-  const monitoring = await collectOperations({ project, deploymentId: config.deploymentId, diskPath: directory, origin, receiptPath, ca, connectHost: "127.0.0.1" });
+  const receiptPath = join(evidence, "backup-receipt.json"); await writeFile(receiptPath, JSON.stringify(receipt), { mode: 0o600 });
+  const backupTarget = { receiptPath, deploymentId: config.deploymentId, expectedBackend: receipt.backend,
+    expectedRepositoryId: receipt.repositoryId };
+  const monitoring = await collectOperations({ project, ...backupTarget, diskPath: directory, origin, ca, connectHost: "127.0.0.1" });
+  if (remote) {
+    assert.ok(Number.isNaN(await readBackupAge({ ...backupTarget, expectedRepositoryId: "0".repeat(64) })));
+    pass("offsite monitoring rejects a recent receipt from the wrong repository");
+  }
   console.log(`OPERATIONS_MONITOR ${JSON.stringify(monitoring)}`);
   // Caddy's disposable local certificate is deliberately short lived. Production
   // expiry thresholds remain unchanged and must alert, not be waived globally.

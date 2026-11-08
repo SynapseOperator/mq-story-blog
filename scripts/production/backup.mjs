@@ -9,7 +9,7 @@ import { fileDigest, mediaInventorySql, verifyMediaBackup } from "../media/backu
 import { assertDatabaseUrl, deploymentDatabaseTag } from "./database-config.mjs";
 import { verifyDeploymentMigrations } from "./database.mjs";
 import { assertMaintenanceControl, assertWritersPaused, MAINTENANCE_LOCK } from "./rotation.mjs";
-import { assertBackupPaths, backupBackend, containsPath, requireBackupSpace, runBackupTool, pgToolEnvironment, restic } from "./backup-tools.mjs";
+import { assertBackupPaths, assertBackupWriteTarget, backupBackend, containsPath, requireBackupSpace, runBackupTool, pgToolEnvironment, restic } from "./backup-tools.mjs";
 
 export { initializeBackupRepository } from "./backup-tools.mjs";
 
@@ -53,6 +53,7 @@ export async function backupDeployment({ controlPool, backupUrl, config, workspa
   backend = "local", s3, expectedRepositoryId }) {
   const options = { workspace, repository, passwordFile, backend, s3, expectedRepositoryId };
   backupBackend(options);
+  assertBackupWriteTarget(config.environment, options);
   const target = assertDatabaseUrl(backupUrl, config, "backup");
   assert.match(sourceRevision ?? "", /^[a-f0-9]{40}$/);
   await assertBackupPaths(options);

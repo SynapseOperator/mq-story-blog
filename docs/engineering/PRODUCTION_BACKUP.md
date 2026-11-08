@@ -1,10 +1,10 @@
 # 加密备份与隔离恢复
 
-P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；仍无正式备份密码或异地仓库。P5-02 的 OSS 香港与告警接入见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
+P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；P5-02 又完成真实 OSS 合成备份及隔离恢复，但尚无正式生产仓库、密码或已启用的定时任务。详见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
 
 ## 选择与一致性边界
 
-采用 **Restic 0.19.1 + PostgreSQL 18 原生 custom-format pg_dump**。Restic 提供加密、认证、内容去重与仓库校验；不自行设计密码格式。操作员必须显式选择 `local` 或 `s3`：本地仓库仍须为 Git 外的 0700 目录；S3 只连接预先初始化、具有固定仓库 ID 的 HTTPS 地址。当前没有连接真实云存储或证明真实异地恢复。[Restic 备份](https://restic.readthedocs.io/en/stable/040_backup.html)、[仓库检查](https://restic.readthedocs.io/en/stable/045_working_with_repos.html)。
+采用 **Restic 0.19.1 + PostgreSQL 18 原生 custom-format pg_dump**。Restic 提供加密、认证、内容去重与仓库校验；不自行设计密码格式。操作员必须显式选择 `local` 或 `s3`：本地仓库仍须为 Git 外的 0700 目录；S3 只连接预先初始化、具有固定仓库 ID 的 HTTPS 地址。真实 OSS 合成恢复已验证，不代表生产备份已配置。[Restic 备份](https://restic.readthedocs.io/en/stable/040_backup.html)、[仓库检查](https://restic.readthedocs.io/en/stable/045_working_with_repos.html)。
 
 采用维护窗口：停止 app 与所有维护写进程，执行受控 `pause`，四个写身份变为 NOLOGIN 并确认没有活动连接；backup 身份仍只能读取。备份持有与轮换/恢复共享的 `mq-production-maintenance-v1` advisory lock，阻止受控 resume 或轮换插入窗口。备份查询与原生 pg_dump 使用同一个导出 snapshot；PENDING/DELETING 素材导致失败，须先走既有恢复流程，不能猜测或改成 READY。当前停写覆盖远端传输、完整仓库检查和恢复校验；不能将小型本地演练时间当作真实 S3 停机时长。
 
@@ -29,6 +29,10 @@ S3 使用 `s3:https://<endpoint>/<bucket>/<专用非空prefix>`，通用S3固定
 凭据文件为 Git 外的 0400/0600 JSON，仅接受 `accessKeyId`、`secretAccessKey` 和可选 `sessionToken`。每个字段必须为非空无空白 ASCII 字符串，文件最多 4096 bytes；不支持 INI、`credential_process`、角色跳转或默认 AWS/MinIO 凭据。内容只装入对应 Restic 子进程的 AWS 环境变量，不进入 Compose 环境、镜像、argv 或日志。同 UID/主机 root 仍可能读取进程环境；这不抵御主机失陷。
 
 S3 `init` 在生产 wrapper 中明确拒绝。负责人需另行批准供应商、预建 bucket/prefix、最小权限与初始化，并记录 Restic 仓库完整 64 位 ID。正常备份、核验、恢复和保留策略预览均先解密 `cat config` 并匹配该 ID；错密码、错 prefix、错仓库不会触发初始化。对象读取/写入与锁管理权限应限定到专用 prefix，不授予应用账号、bucket 创建或管理权限。真实供应商 IAM、流量费及配额仍需实测，协议模拟不证明这些条件。
+
+P5-03 将 S3 **写入**环境与前缀绑定：production 只能写入精确的 `BUCKET/production` 仓库；staging 不能写入 `production` 或其子路径。写入口会拒绝混用，备份窗口也在停止 app 前检查。仓库 ID 仍单独固定，不能靠相同前缀冒充同一仓库。`verify`、`restore` 读取的是显式确认的旧源，不能用新目标的环境或部署 ID 改写源地址；恢复后的新备份重新遵循写入合同。本地仓库合同保持不变。
+
+生产监控必须配置 `MQ_OPS_BACKUP_BACKEND=s3` 和精确的 `MQ_OPS_BACKUP_REPOSITORY_ID`。只有同一 deployment、该 backend/repositoryId、verified=true、完整 snapshot ID 的私有回执才能更新备份新鲜度；本地成功回执或另一个仓库的新回执不代表异地备份正常。监控只读不含秘密的回执，不需要 AccessKey；凭据失效由下一次真实备份的非零退出和失败通知检测，不能声称仅查回执就完成了云端探活。
 
 备份 API 继续支持原有内部本地调用，但 CLI 不接受缺失的后端选择，也不会因看到 URL 就自动切换到 S3。
 

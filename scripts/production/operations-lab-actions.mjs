@@ -171,7 +171,8 @@ try {
     ...(action === "oss-snapshots" ? { snapshots: result.snapshots, repositoryId: result.repositoryId } : {}),
     ...(oss && action === "backup" ? { databaseDumpBytes: result.manifest.database.byteLength,
       mediaBytes: result.manifest.inventory.filter(row => row.state === "READY").reduce((sum, row) => sum + row.display_bytes + row.thumbnail_bytes, 0) } : {}),
-    ...(action === "receipt" ? { verified: result.verified, deploymentId: result.deploymentId, completedAt: result.completedAt } : {}) }));
+    ...(action === "receipt" ? { verified: result.verified, deploymentId: result.deploymentId, completedAt: result.completedAt,
+      backend: result.backend, ...(result.repositoryId ? { repositoryId: result.repositoryId } : {}) } : {}) }));
 } catch (error) {
   const phase = /^[a-z-]{1,48}$/.test(error.phase ?? "") ? ` phase=${error.phase}` : "";
   console.error(`OPERATIONS_LAB_ACTION_FAILED${phase}`); process.exitCode = 1;

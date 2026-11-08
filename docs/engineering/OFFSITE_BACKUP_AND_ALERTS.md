@@ -11,7 +11,7 @@
 - Bucket lookup：固定 `dns`，实际请求由 Restic 使用 `BUCKET.oss-cn-hongkong.aliyuncs.com`。
 - 标准 HTTPS/系统 CA；拒绝自定义 CA、非标准端口、内部/其他地域 Endpoint、重复 Bucket 子域名和带点 Bucket 名。
 
-阿里云当前 AWS SDK 指南另有 `s3.oss-{region}.aliyuncs.com` 与 `cn-hongkong` 的组合。本工具不混配这两套配置，也不在签名失败时自动换 Endpoint/region。真实 OSS 签名、RAM 和读写兼容性仍须在 Bucket 创建后验证。[锁定 Restic 文档](https://github.com/restic/restic/blob/v0.19.1/doc/030_preparing_a_new_repo.rst#alibaba-cloud-aliyun-object-storage-system-oss)、[OSS virtual-hosted 要求](https://www.alibabacloud.com/help/en/oss/developer-reference/compatibility-with-amazon-s3)、[当前 AWS SDK 接入指南](https://www.alibabacloud.com/help/en/oss/developer-reference/use-aws-sdks-to-access-oss)
+阿里云当前 AWS SDK 指南另有 `s3.oss-{region}.aliyuncs.com` 与 `cn-hongkong` 的组合。本工具不混配这两套配置，也不在签名失败时自动换 Endpoint/region。真实 OSS 签名与小对象读写已完成合成验收；更严格生产 RAM 策略和 multipart 故障清理仍待单独验证。[锁定 Restic 文档](https://github.com/restic/restic/blob/v0.19.1/doc/030_preparing_a_new_repo.rst#alibaba-cloud-aliyun-object-storage-system-oss)、[OSS virtual-hosted 要求](https://www.alibabacloud.com/help/en/oss/developer-reference/compatibility-with-amazon-s3)、[当前 AWS SDK 接入指南](https://www.alibabacloud.com/help/en/oss/developer-reference/use-aws-sdks-to-access-oss)
 
 小鸡云 VPS 并非阿里云同地域 ECS，不能因为同在香港就使用 OSS internal Endpoint。保留公网 HTTPS 存储连接；这不需要开放网站端口，也不需要更改 `mq-story.xyz` 解析。[地域与 Endpoint](https://www.alibabacloud.com/help/en/oss/user-guide/regions-and-endpoints)
 
@@ -36,7 +36,7 @@
 - 2026-11-08 核对中国站香港价格：Standard ZRS ¥0.156/GB/月，公网流出5GB–10TB档¥0.75/GB；Standard PUT类每月前500万、GET类前2000万次免费，超出均¥0.01/万次。香港每月5GB公网流出额度的当前剩余量未知，ZRS不适用LRS免费存储，预算先不抵扣。保守两个月公式为 `0.312 × 平均仓库GiB + 0.75 × 累计下载GiB + 超额请求费`；1GiB平均库存加2GiB下载约¥1.81，5GiB加10GiB约¥9.06，不是费用上限。[香港价格表](https://www.aliyun.com/price/detail/oss)、[免费额度规则](https://help.aliyun.com/zh/oss/free-quota-for-new-users)
 - 当前完整校验会下载全部仓库内容。若仓库平均20GB，每天一次完整读取、60天约产生1200GB读取，另加备份校验提取、恢复演练和请求；这是仅全库检查部分的流量估算，不是账单。不能只按当前照片容量预算，也不为省费用静默减少校验。
 - 备份前后检查非零退出、成功 receipt、仓库 ID 和26小时新鲜度；OSS 控制台监测容量、请求、出网及账单。没有通用S3剩余额度API，不能用VPS `statfs` 代替云配额。
-- 真正异地验收：合成数据备份至实际私有OSS → 从云端恢复至不同的空数据库/媒体目录 → 对比dump/清单/文件SHA-256 → 验证旧Session失效、权限、HTTPS、公开与私有媒体。记录停写窗口、传输量和恢复时长。当前本地模拟不能替代此项。
+- 真正异地验收：合成数据备份至实际私有OSS → 从云端恢复至不同的空数据库/媒体目录 → 对比dump/清单/文件SHA-256 → 验证旧Session失效、权限、HTTPS、公开与私有媒体。记录停写窗口、传输量和恢复时长。P5-02 已实际完成该合成演练，数据见文末；正式目标仍需重新验收。
 - RAM AccessKey 轮换：同一受限身份新key → 安全文件 → 同仓库ID核验/合成恢复 → 原子切换 → 撤销旧key并验证拒绝。Restic解密密码轮换是另一流程，需验证历史恢复；不能自动删旧key。泄露后的旧副本无法被换密码追回。
 
 ## 告警通道与探针
@@ -63,7 +63,48 @@ node scripts/production/monitor-runner.mjs --external
 
 未来真实验收需要负责人本人建立专用运维群/机器人，开启签名校验（可加关键词 `MQ 运维告警` 和实测出站 IP 白名单），安全保存 webhook 与签名文件，并明确允许一条测试通知。随后执行实际探针故障通知，负责人确认收到、固定事件 ID 和恢复后的健康检查；非零退出必须另有可见记录。不能把模拟接收端 code=0 当作飞书本人已收到。
 
-当前没有配置真实 webhook、邮箱或接收人。邮箱方案需负责人已有的受控 SMTP/邮件 API，不能擅自以个人 Gmail 发通知或新建账号。本轮按最新选择 **只执行本地 HTTPS 模拟接收**。
+P5-03 负责人已确认飞书机器人配置完成；Webhook及签名已通过本机隐藏输入安全交接，存于项目外且ACL仅允许当前Windows用户与SYSTEM，未传至VPS。随后负责人单独批准一条真实送达测试：2026-11-08T12:37:35.893Z，接口返回成功、attempts=1，负责人也确认群里收到“MQ 运维告警 · 送达测试（非故障）”。没有附带日志、个人资料或@提及，没有启用自动发送。没有配置真实邮箱；邮箱方案需负责人已有的受控 SMTP/邮件 API，不能擅自以个人 Gmail 发通知或新建账号。
+
+## P5-03：生产备份与告警收口
+
+本轮没有连接真实 OSS、修改 RAM、删除快照、传送生产凭据或启用 timer。保留既有合成仓库；正式仓库只使用 `mq-story-backups/production`，另行初始化、另存 Restic 密码并记录新 repository ID。代码现在拒绝跨 production/staging 前缀写入，监控也必须匹配 S3 backend 和 repository ID，不能用同部署的本地备份回执代替异地成功。
+
+### RAM 调整建议与验收
+
+负责人批准后，把日常身份收敛为现有模板的范围：Bucket 级 `ListObjects` 仅列 `production/*`；对象级 `GetObject`、`PutObject`、`AbortMultipartUpload` 仅限该前缀；`DeleteObject` 仅限 `production/locks/*`。恢复使用读权限和锁权限，保留预览不需要删除数据；真正 forget/prune 另用获批的临时维护权限。不要给 Bucket、ACL、账号管理权限，也不增加 FullAccess。
+
+当前真实身份仍有较宽的目标 Bucket DeleteObject；这里是建议，未替负责人修改。正式收紧后在另行批准的合成前缀重复备份、列举、check、恢复、锁释放；再用专门的合成探针验证数据删除与其他前缀被拒绝。不要以真实快照做删除负控。现有 OSS 协议 fixture 已证明 Restic 正常路径不依赖非锁 Delete，但不能证明阿里 RAM 真实执行结果。
+
+Restic 0.19.1 S3 实现使用200MiB分片阈值，本项目约16MiB pack 的实际小规模演练没有触发它。传输中断时已知 uploadId 的中止仅需对象前缀内 `oss:AbortMultipartUpload`；它不删除已经完成的对象，仍在上传的分片可能要再次核对。进程完全丢失 uploadId 后，枚举残留任务另需 Bucket 级 `oss:ListMultipartUploads`，逐项检查可需 `oss:ListParts`。不默认授予日常身份这些维护权限，也不假定 ListObjects 的 `oss:Prefix` 条件同样约束 ListMultipartUploads；负责人可在控制台列出残留任务，再批准精确 key/uploadId 的清理。禁止无目标的全桶 abort 或生命周期自动删除。[Restic 锁定实现](https://github.com/restic/restic/blob/v0.19.1/internal/backend/s3/s3.go)、[AbortMultipartUpload](https://www.alibabacloud.com/help/en/oss/developer-reference/abortmultipartupload)、[ListParts](https://www.alibabacloud.com/help/en/oss/developer-reference/listparts)、[权限元素](https://help.aliyun.com/zh/oss/user-guide/authorization-syntax-and-elements)
+
+锁限定 Delete 仍不是不可篡改备份：被盗的 PutObject 凭据可覆盖已知对象；Restic 会发现认证/完整性错误，但不能恢复已被覆盖的唯一副本。ZRS 解决机房故障，不解决凭据被盗。建议另保留一份由负责人离线持有的加密副本和独立 Restic 密码；不可把 AccessKey、密码和唯一备份全部留在 VPS。版本控制或对象锁涉及保留/费用及锁语义，应另行评估，不在本轮擅自开启。
+
+### 日程与两个月费用
+
+保持当前强校验：每日03:30备份，上传后全仓 `check --read-data`，再提取精确 snapshot 并验证清单/图片，最后才写成功回执。每日任务仍会在整个传输与校验期间停写；必须实测正式数据量的维护窗口。每五分钟检查服务及26小时备份新鲜度；每周人工看容量、费用和7日/8周保留 dry-run；正式开放前、每月及重要恢复变更后执行隔离恢复。所有这些是待批准的运行安排，不是已经启用的任务。
+
+2026-11-08 官方香港价格仍为 Standard ZRS ¥0.156/GB/月，公网下载5GB–10TB档¥0.75/GB。免费额度按账号剩余量结算，预算不预扣；ZRS不享受LRS免费存储。本项目香港VPS不是阿里云同地域ECS，下载不能按免费内网计价。[价格表](https://www.aliyun.com/price/detail/oss)、[流量规则](https://help.aliyun.com/zh/oss/traffic-fees)、[免费额度适用范围](https://help.aliyun.com/zh/oss/free-quota-for-new-users)
+
+令 R 为平均加密仓库GB，S为一次完整snapshot读取GB。60次日备份的下载预算至少按 `60×(R+S)` 估算，另加元数据、重试和恢复演练；两个月费用约 `0.312R + 0.75×总下载GB + 超额请求费`。以下仅为不同数据规模的假设，不是实测未来增长或费用上限：
+
+| R / S（均取相同大小） | 两个月日常校验下载估算 | 存储+下载估算，未抵免费额度 |
+| --- | --- | --- |
+| 0.1GB | 12GB | ¥9.03 |
+| 1GB | 120GB | ¥90.31 |
+| 5GB | 600GB | ¥451.56 |
+
+不要把前文“存1GB、只下载2GB”的示例当成每日强校验账单。备份的去重会节省上传和库存，但 `--no-cache`、全仓校验和全snapshot恢复仍消耗下载。每日看账户账单，首周按真实增长修订预算；达到负责人预算时告警并讨论调整，不自动停掉备份或降低验证。
+
+若费用不合适，可另行批准实现“每日结构check+当前snapshot验证、每周全仓check”的不同回执合同；它仍要每天读取当前snapshot。更大数据量才考虑确定性的 `--read-data-subset=n/t` 周期，并记录每组成功时间；随机百分比不能保证覆盖全仓。**当前代码仍要求全仓读取，没有实现或启用这些降频选项。** [Restic 校验与下载成本](https://restic.readthedocs.io/en/stable/045_working_with_repos.html#checking-integrity-and-consistency)
+
+### 飞书最小交接
+
+1. 负责人建立只通知本人的运维群，添加自定义机器人，开启签名校验；可加关键词 `MQ 运维告警`。若用出站IP白名单，分别核对VPS和外部探针，不能凭域名推断。
+2. Webhook和签名通过本机安全文件交接，Linux父目录0700、文件0400/0600；不粘贴聊天，不放环境值、Git或命令参数。现有模板只保存文件路径。
+3. 负责人明确授权“一条送达测试”后，才对新生成的 `ALERT_DELIVERY_TEST` 报告调用既有发送入口。标题明确标为“送达测试（非故障）”，只尝试一次HTTP请求，响应丢失或503不自动重试；先由负责人核对是否已收到，再决定后续操作。核对程序的 `delivered=true`、事件ID、时间及实际收件，程序返回成功不能代替人工确认。本轮真实测试已按该流程通过，事件 `3cd739a9-c199-441b-8379-4224abe0bfbc`；本地HTTPS测试另覆盖拒绝、超时及不重复发送。该授权仅用于这一条消息。
+4. 确认送达后另行批准运行频率。普通故障告警单次调用最多尝试两次，重试使用相同事件ID；飞书响应丢失仍可能重复收到。没有跨周期抑制状态，直接给现有5分钟timer加 `--send` 会持续重复通知；建议主机每5分钟只读检查，发送按负责人选定的15或30分钟周期安排，不能称为已实现告警去重。
+
+外部可用性探针应放在负责人另一台持续在线的主机或后续获批的低成本服务，只需正式origin、部署ID和该通道的秘密，不给数据库/OSS凭据。它验证HTTPS、证书期限和真实公开查询；VPS内部探针负责磁盘、内存、数据库/容器和备份。当前只验证本机到飞书群的真实送达；外部运行位置、VPS定时任务及真实故障链尚未配置，不能覆盖整台VPS失联时的自动通知。
 
 ## 原 P5-02 验证记录（2026-11-07）
 
