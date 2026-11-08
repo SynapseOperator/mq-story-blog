@@ -86,4 +86,8 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第七轮 [42505885253](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42505885253) 在reader阶段超时，尚未发出正文请求。复核发现此前资源失败统计在关闭浏览器之后输出，可能混入清理取消；不能由script/image计数推定原始根因。现将固定资源类型/网络码/HTTP状态在关闭前记录，且将空闲浏览器初始化移到目标Docker网络变更前。这个顺序调整不关闭网络检测或TLS，不改变任何验收断言；是否解决CI差异仍以最终运行实测为准，不预称根因已证实。
 
+第八轮 [42507587528](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42507587528) 在清理前明确记录7个script和7个image均`ERR_NETWORK_CHANGED`，主文档200/DOM完成，无HTTP错误、无OOM，正文请求尚未发出。提前初始化浏览器没有消除此问题，已撤回该时序试验。现在统一为最多3次匿名公开页完整读取，取代文档/正文两层重试；只有本次主文档、Next脚本、正文或目标受管图片的明确网络变更中断才允许重读，其他网络/HTTP/页面错误或任何写请求均拒绝。每次Request集合、正文结果和诊断独立，迟到回调不污染下一次；最终仍须完整通过阅读器、正文200及接收完成、图片解码和截图，不修改应用与写入合同。
+
+候选`1f6bec5`五类镜像完整扫描退出1：app 1 Critical/34 High、proxy 0/2、tools 4/75、operations 4/98、PostgreSQL 4/75。完整原始报告及归档/config摘要保存在项目外`D:\Bread_coding\mq-security-evidence\p504-1f6bec5`，未隐藏告警。后续恢复浏览器测试调整不更新依赖；该记录准确对应被扫描候选，不冒充之后提交的镜像摘要。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。

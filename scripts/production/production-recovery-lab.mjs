@@ -55,16 +55,8 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
   for (const [key, value] of Object.entries({ MQ_SYNTHETIC_LAB: "true", MQ_SYNTHETIC_DEPLOYMENT_ID: id, MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
     BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
     RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_BACKUP_SNAPSHOT_ID: fixture.backupReceipt.snapshotId })) restoreArgs.push("-e", `${key}=${value}`);
-  let succeeded = false, stage = "restored-browser-prepare", browserObservation, browser;
+  let succeeded = false, stage = "target-database-start", browserObservation, browser;
   try {
-    // Initialize the empty browser before changing Docker interfaces, rather
-    // than interleaving Chromium's initial network observation with navigation.
-    browser = await chromium.launch({ args: ["--host-resolver-rules=MAP mq.localhost 127.0.0.1"] });
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
-      isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
-    const page = await context.newPage();
-    await page.goto("about:blank");
-    stage = "target-database-start";
     compose(["stop", "postgres"]); // Keep one database/app pair active on small hosts.
     targetCompose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
     stage = "target-restore-and-permission-audit";
@@ -115,102 +107,83 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     const bySlug = await request(storyPath);
     assert.equal(bySlug.status, 200);
     assert.equal(bySlug.data.story.id, fixture.storyId);
-    {
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, resourceFailures: [], httpErrors: [], documentFailures: [], navigationAttempts: [], storyRequests: [], storyState: "loading" };
-      let navigationRequest, navigationFailure, storyRequest, storyObservation;
-      page.on("request", request => {
-        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigationRequest = request;
-        const url = new URL(request.url());
-        if (request.method() === "GET" && url.origin === manifest.origin && url.pathname === storyPath) {
-          storyRequest = request; storyObservation = { status: null, code: null, finished: false };
-          browserObservation.storyRequests.push(storyObservation);
-        }
-      });
-      page.on("domcontentloaded", () => { browserObservation.domReady = true; });
-      page.on("load", () => { browserObservation.loadComplete = true; });
-      page.on("response", response => {
-        if (response.request() === navigationRequest) browserObservation.documentStatus = response.status();
-        if (response.request() === storyRequest) storyObservation.status = response.status();
-        if (response.status() >= 400) browserObservation.httpErrors.push({ type: response.request().resourceType(), status: response.status() });
-      });
-      page.on("requestfinished", request => { if (request === storyRequest) storyObservation.finished = true; });
-      page.on("requestfailed", request => {
-        const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
-          ? request.resourceType() : "other";
-        browserObservation.failedResources[type] = (browserObservation.failedResources[type] ?? 0) + 1;
-        const reported = request.failure()?.errorText;
-        const code = /^net::ERR_[A-Z0-9_]+$/.test(reported ?? "") ? reported : "UNCLASSIFIED_NETWORK_FAILURE";
-        browserObservation.resourceFailures.push({ type, code });
-        if (request === navigationRequest) {
-          navigationFailure = code;
-          browserObservation.documentFailures.push(navigationFailure);
-        }
-        if (request === storyRequest) storyObservation.code = code;
-      });
-      stage = "restored-browser-navigation";
-      // A recovery check waits for the application and decoded story image
-      // below, not the load event of every background scene resource.
-      let response;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        navigationRequest = undefined; navigationFailure = undefined;
-        browserObservation.documentStatus = null; browserObservation.domReady = false; browserObservation.loadComplete = false;
-        try {
-          response = await page.goto(`${manifest.origin}${sharePath}`, { waitUntil: "domcontentloaded" });
-          browserObservation.navigationAttempts.push({ attempt, status: response.status(), domReady: browserObservation.domReady, code: navigationFailure ?? null });
-          break;
-        } catch (error) {
-          // Linux Chromium may observe delayed Docker interface changes after
-          // the restored stack becomes healthy. A header is not a complete
-          // document: retry this public GET only after its own network failure,
-          // never an ordinary timeout/HTTP error, completed DOM or any write.
-          browserObservation.navigationAttempts.push({ attempt, status: browserObservation.documentStatus,
-            domReady: browserObservation.domReady, code: navigationFailure ?? null });
-          if (attempt === 3 || browserObservation.domReady || navigationFailure !== "net::ERR_NETWORK_CHANGED"
-            || ![null, 200].includes(browserObservation.documentStatus)) throw error;
-          console.log(`PRODUCTION_RECOVERY_NETWORK_CHANGED retry=${attempt}`);
-          await delay(500);
-        }
-      }
-      assert.equal(response.status(), 200);
-      assert.equal(browserObservation.domReady, true);
-      stage = "restored-browser-reader";
-      await page.locator('dialog[data-phase="reading"]').waitFor();
-      stage = "restored-browser-story-content";
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        await page.waitForFunction(() => globalThis.document.querySelector('dialog .letter-prose')
-          || globalThis.document.querySelector('dialog .letter-load-state[data-state="error"], dialog .letter-load-state[data-state="not-found"]'));
-        const state = page.locator("dialog .letter-load-state");
-        browserObservation.storyState = await state.count() ? await state.getAttribute("data-state") : "ready";
-        if (browserObservation.storyState === "ready") break;
-        // Exercise the reader's real retry UI only for this public GET's
-        // confirmed network interruption. HTTP/schema/auth failures stay red.
-        assert.equal(browserObservation.storyState, "error");
-        assert.equal(storyObservation?.code, "net::ERR_NETWORK_CHANGED");
-        assert.ok([null, 200].includes(storyObservation.status) && attempt < 3);
-        console.log(`PRODUCTION_RECOVERY_STORY_NETWORK_CHANGED retry=${attempt}`);
+    stage = "restored-browser-launch";
+    browser = await chromium.launch({ args: ["--host-resolver-rules=MAP mq.localhost 127.0.0.1"] });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
+      isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    const imagePath = `/api/stories/${fixture.storyId}/media/${fixture.assetId}`;
+    browserObservation = { attempts: [] };
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) await page.goto("about:blank");
+      const requests = new Map();
+      const observation = { attempt, documentStatus: null, domReady: false, story: null, imageDecoded: false,
+        failures: [], httpErrors: [], pageErrors: 0, writes: 0 };
+      const handlers = {
+        request(request) {
+          const url = new URL(request.url()), main = request.isNavigationRequest() && request.frame() === page.mainFrame();
+          const story = url.origin === manifest.origin && url.pathname === storyPath;
+          const critical = main || url.origin === manifest.origin && (story || url.pathname === imagePath
+            || url.pathname.startsWith("/_next/static/") && url.pathname.endsWith(".js"));
+          const result = story ? { status: null, finished: false } : null;
+          requests.set(request, { main, critical, result });
+          if (!["GET", "HEAD"].includes(request.method())) observation.writes++;
+          if (story) observation.story = result;
+        },
+        response(response) {
+          const entry = requests.get(response.request());
+          if (!entry) return;
+          if (entry.main) observation.documentStatus = response.status();
+          if (entry.result) entry.result.status = response.status();
+          if (response.status() >= 400) observation.httpErrors.push({ type: response.request().resourceType(), status: response.status() });
+        },
+        requestfinished(request) { const result = requests.get(request)?.result; if (result) result.finished = true; },
+        requestfailed(request) {
+          const entry = requests.get(request);
+          if (!entry) return;
+          const code = request.failure()?.errorText;
+          observation.failures.push({ type: request.resourceType(), critical: entry.critical,
+            code: /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE" });
+        },
+        pageerror() { observation.pageErrors++; },
+      };
+      for (const [event, handler] of Object.entries(handlers)) page.on(event, handler);
+      try {
+        stage = "restored-browser-navigation";
+        const response = await page.goto(`${manifest.origin}${sharePath}`, { waitUntil: "domcontentloaded" });
+        assert.equal(response.status(), 200); observation.domReady = true;
+        stage = "restored-browser-reader";
+        await page.locator('dialog[data-phase="reading"]').waitFor();
+        stage = "restored-browser-story-content";
+        await page.locator("dialog .letter-prose").waitFor();
+        assert.equal(observation.story?.status, 200);
+        assert.equal(observation.story?.finished, true);
+        stage = "restored-browser-image-load";
+        const image = page.getByRole("img", { name: "合成蓝灰色图片", exact: true });
+        await image.scrollIntoViewIfNeeded();
+        await page.waitForFunction(element => element.complete && element.naturalWidth > 0,
+          await image.elementHandle(), { timeout: 20000 });
+        stage = "restored-browser-image-decode";
+        await image.evaluate(element => element.decode()); observation.imageDecoded = true;
+        assert.equal(observation.writes, 0);
+        assert.equal(observation.pageErrors, 0);
+        assert.deepEqual(observation.httpErrors, []);
+        stage = "restored-browser-screenshot";
+        await page.screenshot({ path: join(evidence, "production-restored-mobile.png"), scale: "device" });
+        break;
+      } catch (error) {
+        // Linux Docker interface changes can interrupt the document's JS before
+        // hydration. Re-read this anonymous page only on observed interruption
+        // of a required resource; never retry writes, HTTP or application errors.
         await delay(500);
-        const previousRequest = storyRequest;
-        const [nextRequest] = await Promise.all([
-          page.waitForRequest(request => {
-            const url = new URL(request.url());
-            return request !== previousRequest && request.method() === "GET" && url.origin === manifest.origin && url.pathname === storyPath;
-          }),
-          page.getByRole("button", { name: "重试加载故事", exact: true }).click(),
-        ]);
-        assert.equal(nextRequest, storyRequest);
+        if (attempt === 3 || observation.writes || observation.pageErrors || observation.httpErrors.length
+          || !observation.failures.some(failure => failure.critical && failure.code === "net::ERR_NETWORK_CHANGED")
+          || observation.failures.some(failure => failure.code !== "net::ERR_NETWORK_CHANGED")) throw error;
+        console.log(`PRODUCTION_RECOVERY_NETWORK_CHANGED retry=${attempt};stage=${stage}`);
+      } finally {
+        for (const [event, handler] of Object.entries(handlers)) page.off(event, handler);
+        browserObservation.attempts.push(globalThis.structuredClone(observation));
       }
-      assert.equal(browserObservation.storyState, "ready");
-      assert.equal(storyObservation?.status, 200);
-      assert.equal(storyObservation?.finished, true);
-      stage = "restored-browser-image-load";
-      const image = page.getByRole("img", { name: "合成蓝灰色图片", exact: true });
-      await image.scrollIntoViewIfNeeded();
-      await page.waitForFunction(element => element.complete && element.naturalWidth > 0,
-        await image.elementHandle(), { timeout: 20000 });
-      stage = "restored-browser-image-decode";
-      await image.evaluate(element => element.decode());
-      stage = "restored-browser-screenshot";
-      await page.screenshot({ path: join(evidence, "production-restored-mobile.png"), scale: "device" });
     }
     const result = { restored: true, sourceDatabase: "mq_production", targetDatabase: "mq_production", distinctClusters: true,
       distinctDeploymentIds: true, sessionsCleared: true, businessKeysCleared: true, publicAndPrivateMediaVerified: true,
