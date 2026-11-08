@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
@@ -102,6 +103,10 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     const share = await request(sharePath);
     assert.equal(share.status, 200);
     assert.ok(share.text.includes(detail.data.story.title) && share.text.includes("</html>"));
+    const storyPath = `/api/stories/by-slug/${encodeURIComponent(detail.data.story.slug)}`;
+    const bySlug = await request(storyPath);
+    assert.equal(bySlug.status, 200);
+    assert.equal(bySlug.data.story.id, fixture.storyId);
     stage = "restored-browser-launch";
     // Match laboratoryTransport and the explicitly IPv4-only Docker binding;
     // keep the HTTPS hostname/SNI and certificate behavior unchanged.
@@ -110,16 +115,23 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: [] };
-      let navigationRequest, navigationFailure;
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: [], storyRequests: [], storyState: "loading" };
+      let navigationRequest, navigationFailure, storyRequest, storyObservation;
       page.on("request", request => {
         if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigationRequest = request;
+        const url = new URL(request.url());
+        if (request.method() === "GET" && url.origin === manifest.origin && url.pathname === storyPath) {
+          storyRequest = request; storyObservation = { status: null, code: null, finished: false };
+          browserObservation.storyRequests.push(storyObservation);
+        }
       });
       page.on("domcontentloaded", () => { browserObservation.domReady = true; });
       page.on("load", () => { browserObservation.loadComplete = true; });
       page.on("response", response => {
         if (response.request() === navigationRequest) browserObservation.documentStatus = response.status();
+        if (response.request() === storyRequest) storyObservation.status = response.status();
       });
+      page.on("requestfinished", request => { if (request === storyRequest) storyObservation.finished = true; });
       page.on("requestfailed", request => {
         const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
           ? request.resourceType() : "other";
@@ -128,6 +140,10 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
           const code = request.failure()?.errorText;
           navigationFailure = /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE";
           browserObservation.documentFailures.push(navigationFailure);
+        }
+        if (request === storyRequest) {
+          const code = request.failure()?.errorText;
+          storyObservation.code = /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE";
         }
       });
       stage = "restored-browser-navigation";
@@ -158,6 +174,33 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       assert.equal(browserObservation.domReady, true);
       stage = "restored-browser-reader";
       await page.locator('dialog[data-phase="reading"]').waitFor();
+      stage = "restored-browser-story-content";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await page.waitForFunction(() => globalThis.document.querySelector('dialog .letter-prose')
+          || globalThis.document.querySelector('dialog .letter-load-state[data-state="error"], dialog .letter-load-state[data-state="not-found"]'));
+        const state = page.locator("dialog .letter-load-state");
+        browserObservation.storyState = await state.count() ? await state.getAttribute("data-state") : "ready";
+        if (browserObservation.storyState === "ready") break;
+        // Exercise the reader's real retry UI only for this public GET's
+        // confirmed network interruption. HTTP/schema/auth failures stay red.
+        assert.equal(browserObservation.storyState, "error");
+        assert.equal(storyObservation?.code, "net::ERR_NETWORK_CHANGED");
+        assert.ok([null, 200].includes(storyObservation.status) && attempt < 3);
+        console.log(`PRODUCTION_RECOVERY_STORY_NETWORK_CHANGED retry=${attempt}`);
+        await delay(500);
+        const previousRequest = storyRequest;
+        const [nextRequest] = await Promise.all([
+          page.waitForRequest(request => {
+            const url = new URL(request.url());
+            return request !== previousRequest && request.method() === "GET" && url.origin === manifest.origin && url.pathname === storyPath;
+          }),
+          page.getByRole("button", { name: "重试加载故事", exact: true }).click(),
+        ]);
+        assert.equal(nextRequest, storyRequest);
+      }
+      assert.equal(browserObservation.storyState, "ready");
+      assert.equal(storyObservation?.status, 200);
+      assert.equal(storyObservation?.finished, true);
       stage = "restored-browser-image-load";
       const image = page.getByRole("img", { name: "合成蓝灰色图片", exact: true });
       await image.scrollIntoViewIfNeeded();

@@ -82,4 +82,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第五轮 [42502889687](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42502889687) 收到200响应头后，同一主文档请求以`ERR_NETWORK_CHANGED`失败，DOM未完成，最终导航超时；上一版保护拒绝重试，原失败保留。现先用验证CA的Node请求确认完整分享HTML、200和公开标题，再在浏览器内将失败事件关联到本次主框架Request。仅当它精确报告网络变更且DOM未完成时，才允许有界重新读取公开GET（包括响应头后断流），记录每次状态/错误/DOM；没有该失败记录的普通超时仍直接失败。最终HTTP200、DOMContentLoaded、阅读器和图片解码全部必须通过，不重试任何写操作。
 
+第六轮 [42504484226](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42504484226) 导航一次成功、DOM/load完成，但有fetch失败，图片等待超时；不能将其写成图片解码失败。现在单独验证完整by-slug HTTPS响应，记录浏览器该GET的状态/固定网络码/完成事件，先等待真实正文ready或错误UI。仅当该正文请求精确报`ERR_NETWORK_CHANGED`时点击原有“重试加载故事”（最多3次总尝试）；HTTP、鉴权、Schema错误和普通超时仍失败。正文必须实际ready、HTTP200且完整接收，然后继续原图片解码断言；不修改阅读器或隐藏失败。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。
