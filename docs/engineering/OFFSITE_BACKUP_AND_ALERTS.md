@@ -92,6 +92,28 @@ Windows 需使用经过 `realpath` 核验的实际路径；Codex/MSIX 可能将 
 
 首次真实预检的预算为27,374,607 bytes（数据库10,589,887、媒体7,504及16MiB余量）。ListObjectsV2 返回 AccessDenied，流程在 init 和上传之前停止，退出1；已定点清理临时凭据卷，保留合成诊断数据。需要核对 Bucket 级 ListObjects 的 Resource、测试前缀条件及 RAM 身份绑定；不得自动扩权。后续真实云端执行结果以 PR #60 的最新验收记录为准，不能用上述模拟测试代替。
 
+负责人随后确认策略未绑定到 RAM 用户；完成绑定后，完全相同的 ListObjectsV2 和 config HEAD 预检通过，未修改或扩大权限。第二次演练发现 operations 镜像没有系统 CA 包：Node 内置根证书可用，但 Go/Restic 的 HTTPS 校验失败，测试前缀仍为空。现已在 tools/operations 安装发行版官方 `ca-certificates`，构建时检查证书包；OSS 协议测试也在注入本地测试 CA 之前验证镜像原生证书包。未关闭 TLS、改为 HTTP 或接受自签名云证书。
+
+第三次真实演练 `node scripts/production/lab.mjs --oss` 退出0。使用本机 Docker 的随机合成数据库/媒体卷，备份到真实 OSS，再恢复到另一个空目标；未从 VPS 提取真实数据。原始失败和成功证据保留在开发机 Git 外。
+
+| 实际结果 | 数值 / 验证 |
+| --- | --- |
+| 测试前缀 | `p502-synthetic/0e44e847-d771-4358-909c-7a15ea4e24d6` |
+| 仓库 ID | `086abc4e54b8b02fe25d5959c59fd41c79d792eaf0f55dd7ab7c0c032b1e2a3a` |
+| 快照 ID | `1f30ec6da9a2446d7f24a3a2d77c56d655b1277bcb6c45eea0741c9351bfd347` |
+| 输入数据 | PostgreSQL dump 91,095 bytes；媒体7,504 bytes |
+| 云端加密对象 | 6个，共26,682 bytes；最大对象22,924 bytes；匿名 config HEAD被拒 |
+| 备份及全量校验 | 44.150秒 |
+| 恢复数据库和媒体 | 27.431秒；至HTTPS/桌面手机渲染验收共43.692秒 |
+| 恢复权限 | 约束、五类身份和11个函数owner核验；旧Session失效，业务签名清除；重新登录后管理员私有图片可读，游客私有GET/HEAD拒绝 |
+| 失败与保留 | 错误密码/凭据/仓库ID拒绝；失败CLI退出1且无成功回执，产生BACKUP_MISSING_OR_STALE；7日/8周只做dry-run，未删除快照或数据 |
+
+本次小对象真实路径通过现有权限，没有请求额外RAM权限。没有触发 multipart，因此未证明大对象中断清理；未来需要该路径时，应补充仅目标前缀的 `oss:AbortMultipartUpload`，不能授予FullAccess。当前Bucket范围DeleteObject比日常锁释放所需更宽，正式配置可按上方模板收窄；本轮未改用户策略，也未尝试访问其他Bucket来推断权限范围。
+
+上述字节数是输入/云端对象大小，不是TLS重传或账户账单计量。按当前价格，本次小型演练预估不足¥0.01；实际免费额度、请求和出网账单以控制台为准。云端仓库和本机独立Restic密码均保留，临时容器凭据副本已清理。尚未把正式备份密钥放到VPS，也未安装自动任务或执行生产备份。
+
 VPS 本轮仅只读核验：应用/数据库健康，回环 HTTPS 200，无公网80/443/3000/5432/Docker API；现有本地加密仓库6个文件、28,250 bytes及2026-11-07成功回执仍在。没有传送云密钥、停止服务、改动原卷、备份或定时器。新增云端测试在本机Docker执行，不是VPS自动异地备份已安装。
 
 本地最终验证：`npm run check` 退出0（335项，329通过，6项原有Linux专属用例在Windows跳过，后续Linux CI执行）；定向备份/OSS合同14项通过、ESLint退出0。`npm run test:backup:oss` 与 `npm run test:production:release` 均退出0，后者实际执行通用S3、PostgreSQL、媒体、HTTPS、浏览器、权限/Session失效、密钥轮换和发布回退。新增真实OSS模式没有默认接入CI，以免CI持有云密钥；本地OSS协议模拟与其安全合同已接入完整CI。
+
+CI [42474418048](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42474418048) 的 Container 首轮在恢复后应用验收失败，原日志没有具体TLS错误码，不能断言根因。检查发现恢复脚本只等CA文件出现，没有等待HTTPS就绪；已复用现有严格证书校验的就绪探针，只重试只读启动探针，不重试写入或忽略权限断言，并新增固定阶段/白名单错误诊断。本地修改后 `npm run test:production:bootstrap` 退出0，独立集群恢复耗时29.244秒，原会话/业务签名失效、权限和浏览器通过；9项已有HTTPS/保护用例及再次 `npm run check` 均通过。最终远端结果以修复后提交的完整CI为准，保留上述失败记录。

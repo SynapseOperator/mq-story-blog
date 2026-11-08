@@ -21,6 +21,8 @@ FROM postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf
 WORKDIR /app
 # Apply signed same-release distribution fixes in the candidate, never on the VPS.
 RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && test -s /etc/ssl/certs/ca-certificates.crt \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
 COPY --from=dependencies /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm

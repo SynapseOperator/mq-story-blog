@@ -38,6 +38,14 @@ async function volume(name, entries) {
 try {
   assert.equal(process.argv.length, 2);
   for (const image of [...Object.values(images), MOTO_IMAGE]) docker(["image", "inspect", image, "--format", "{{.Id}}"]);
+  // A test CA must not hide a missing public CA bundle in the actual Restic
+  // image. Node's embedded roots do not supply Go/Restic's system trust store.
+  docker(["run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges:true", images.operations, "--input-type=module", "--eval",
+    "import {readFileSync} from 'node:fs'; import {X509Certificate} from 'node:crypto'; " +
+    "const pem=readFileSync('/etc/ssl/certs/ca-certificates.crt','utf8'); " +
+    "const roots=pem.match(/-----BEGIN CERTIFICATE-----[\\s\\S]*?-----END CERTIFICATE-----/g); " +
+    "if(!roots?.length||roots.some(root=>!new X509Certificate(root).ca))throw Error('SYSTEM_CA_BUNDLE_MISSING');"]);
   assert.notEqual(docker(["network", "inspect", network], { fail: false }).status, 0);
   docker(["network", "create", "--internal", "--label", `mq.oss-lab=${id}`, network]); networkCreated = true;
   assert.equal(docker(["network", "inspect", network, "--format", "{{.Internal}}"] ).stdout.trim(), "true");

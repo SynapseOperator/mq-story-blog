@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
 import { laboratoryTransport } from "./http-tests.mjs";
+import { waitForHttpsReady } from "./vps-maintenance.mjs";
 
 /** Real disaster-recovery fixture: another PostgreSQL cluster may legitimately
  * use the same mq_production name, but never the source deployment/volume. */
@@ -53,15 +54,17 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
   for (const [key, value] of Object.entries({ MQ_SYNTHETIC_LAB: "true", MQ_SYNTHETIC_DEPLOYMENT_ID: id, MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
     BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
     RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_BACKUP_SNAPSHOT_ID: fixture.backupReceipt.snapshotId })) restoreArgs.push("-e", `${key}=${value}`);
-  let succeeded = false;
+  let succeeded = false, stage = "target-database-start";
   compose(["stop", "postgres"]); // Keep one database/app pair active on small hosts.
   try {
     targetCompose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
+    stage = "target-restore-and-permission-audit";
     operation("bootstrap"); targetCompose(["run", "--rm", "--no-deps", "volumes-init"]);
     const restore = action => [...restoreArgs, images.operations, "tests/fixtures/production-bootstrap-actions.mjs", action];
     docker(restore("restore"));
     assert.equal(docker(restore("restore"), { fail: false }).status, 1);
     operation("provision"); operation("audit"); docker(restore("restored"));
+    stage = "restored-app-and-proxy-start";
     transport(["up", "-d", "--wait", "--wait-timeout", "180", "app", "proxy"]);
     let ca;
     for (let i = 0; i < 60; i++) {
@@ -70,6 +73,13 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       await delay(500);
     }
     assert.ok(ca);
+    // The root CA exists before Caddy necessarily accepts TLS connections.
+    // Wait for a verified public read, without retrying any mutation below.
+    stage = "restored-https-readiness";
+    await waitForHttpsReady(manifest.origin, ca, { onFailure: observation => {
+      console.log(`PRODUCTION_RECOVERY_NOT_READY=${JSON.stringify(observation)}`);
+    } });
+    stage = "restored-https-permissions";
     const request = laboratoryTransport(manifest.origin, ca, secrets);
     assert.equal((await request("/api/admin/stories", { jar: fixture.oldJar })).status, 401);
     assert.equal((await request(`/api/stories/${fixture.privateStoryId}`)).status, 404);
@@ -87,6 +97,7 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     assert.equal((await request(`/api/admin/media/${fixture.privateAssetId}/content`, { jar: adminJar })).status, 200);
     assert.equal((await request(`/api/admin/stories/${fixture.storyId}/withdraw`, { method: "POST", jar: adminJar,
       body: { expectedVersion: detail.data.story.version ?? 0 } })).status, 503);
+    stage = "restored-browser";
     const browser = await chromium.launch();
     try {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
@@ -103,6 +114,11 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       elapsedMs: Date.now() - started, productionDeployed: false };
     await writeFile(join(evidence, "production-recovery.json"), JSON.stringify(result, null, 2));
     succeeded = true; return result;
+  } catch (error) {
+    const known = ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ERR_TLS_CERT_ALTNAME_INVALID", "CERT_HAS_EXPIRED",
+      "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR", "ERR_ASSERTION"];
+    console.error(`PRODUCTION_RECOVERY_FAILED stage=${stage};code=${known.includes(error?.code) ? error.code : "REJECTED"}`);
+    throw error;
   } finally {
     targetCompose(["down", "--remove-orphans"], { fail: false });
     if (succeeded) for (const name of docker(["volume", "ls", "--filter", `name=${targetProject}`, "--format", "{{.Name}}"] ).stdout.trim().split(/\r?\n/).filter(Boolean)) {
