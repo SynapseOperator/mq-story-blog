@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, mkdir, open, rename, rmdir, unlink } from "node:fs/promises";
+import { lstat, mkdir, rename, rmdir, unlink } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { TextDecoder } from "node:util";
 import { pathToFileURL } from "node:url";
 import { privatePath, writePrivate } from "../media/backup-files.mjs";
 import { readDeploymentFile, readDeploymentManifest } from "./runtime-config.mjs";
-import { runBackupTool } from "./backup-tools.mjs";
+import { assertBackupWriteTarget, runBackupTool } from "./backup-tools.mjs";
+import { readBackupReceipt } from "./backup-receipt.mjs";
 import { claimProductionOperation, confirmInterruptedBackup } from "./operation-lock.mjs";
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -16,27 +15,7 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const digestImage = /^(?:[^\s]+@)?sha256:[a-f0-9]{64}$/;
 const runDocker = args => runBackupTool("docker", args, { timeoutMs: 900_000 });
 
-/** Only nonsecret backup receipt metadata crosses from tools UID10001 to the
- * root host coordinator. Secret-file ownership rules remain unchanged. */
-export async function readBackupReceipt(path) {
-  try {
-    await privatePath(path, { directory: false });
-    const handle = await open(path, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW));
-    try {
-      const info = await handle.stat();
-      assert.ok(info.isFile() && info.nlink === 1 && info.size > 0 && info.size <= 4096);
-      if (process.platform !== "win32") assert.ok([0, 10001, process.geteuid()].includes(info.uid) && (info.mode & 0o7777) === 0o600);
-      const bytes = Buffer.alloc(info.size + 1); let count = 0;
-      while (count < bytes.length) {
-        const part = await handle.read(bytes, count, bytes.length - count, count);
-        if (!part.bytesRead) break;
-        count += part.bytesRead;
-      }
-      assert.equal(count, info.size);
-      return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, count)));
-    } finally { await handle.close(); }
-  } catch { throw new Error("BACKUP_WINDOW_RECEIPT_REJECTED"); }
-}
+export { readBackupReceipt } from "./backup-receipt.mjs";
 
 export async function readBackupWindowConfiguration(file, confirmation) {
   try {
@@ -101,6 +80,9 @@ export async function runBackupWindow(config, { run = runDocker, interrupted = (
       "BOOTSTRAP_DATABASE_URL_FILE", "BACKUP_DATABASE_URL_FILE"]);
     assert.ok(Object.keys(tools.environment).every(name => allowed.has(name)));
     assert.equal(tools.environment.MQ_DEPLOYMENT_ENV, config.deployment.environment);
+    if (!closeOnly) assertBackupWriteTarget(config.deployment.environment, {
+      backend: tools.environment.MQ_BACKUP_BACKEND, repository: tools.environment.MQ_BACKUP_REPOSITORY,
+    });
     assert.equal(tools.environment.MQ_DEPLOYMENT_CONFIG, "/etc/mq/deployment.json");
     assert.ok(tools.configs?.some(item => item.source === "deployment" && item.target === "/etc/mq/deployment.json"));
     assert.match(tools.environment.MQ_BACKUP_SOURCE_REVISION ?? "", /^[a-f0-9]{40}$/);

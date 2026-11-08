@@ -64,7 +64,7 @@ export function runImageConfigurationChecks({ appImage, toolsImage, proxyImage }
     import { logPrivacySettings } from './scripts/db/log-privacy.mjs';
     import { auditRuntimeDatabase } from './scripts/production/database.mjs';
     assert.equal(process.getuid(), 10001);
-    assert.equal(process.versions.node, '24.19.0');
+    assert.equal(process.versions.node, '24.22.2');
     assert.equal(typeof pg.Pool, 'function');
     assert.equal(typeof auditRuntimeDatabase, 'function');
     assert.equal((await logPrivacySettings()).length, 11);
@@ -78,7 +78,7 @@ export function runImageConfigurationChecks({ appImage, toolsImage, proxyImage }
   `;
   assert.equal(docker([...isolated, "--entrypoint", "node", appImage,
     "--input-type=module", "--eval", imageCode]).stdout.trim(), "STANDALONE_NATIVE_MODULES_OK");
-  assert.equal(docker([...isolated, "--entrypoint", "npm", toolsImage, "--version"]).stdout.trim(), "11.17.0");
+  assert.equal(docker([...isolated, "--entrypoint", "npm", toolsImage, "--version"]).stdout.trim(), "11.21.2");
 
   const caddy = [...isolated,
     "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001,mode=0700",
@@ -95,6 +95,9 @@ export function runImageConfigurationChecks({ appImage, toolsImage, proxyImage }
     assert.deepEqual(server.protocols, ["h1", "h2"]);
     const routes = server.routes[0].handle[0].routes;
     const handlers = routes.flatMap(route => route.handle);
+    // The official binary bundles these modules, but MQ must not expose their
+    // untrusted JWK/HTML inputs while upstream static-dependency advisories remain.
+    assert.ok(!JSON.stringify(config.apps.http).match(/"handler":"(?:acme_server|templates)"/));
     const proxyIndex = handlers.findIndex(handler => handler.handler === "reverse_proxy");
     const stripIndex = handlers.findIndex(handler => handler.handler === "headers" && handler.request?.delete?.includes("X-Mq-*"));
     assert.ok(stripIndex >= 0 && stripIndex < proxyIndex);

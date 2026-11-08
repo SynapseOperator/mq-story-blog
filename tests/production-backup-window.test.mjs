@@ -116,6 +116,21 @@ test("wrong deployment confirmation, container labels or config mount refuse bef
   assert.deepEqual(f.events, []);
 });
 
+test("a cross-environment backup prefix fails before stopping the app or claiming a production lock", async t => {
+  for (const [environment, prefix] of [["production", "p502-synthetic/test"], ["staging", "production"]]) {
+    const f = await backupWindowFixture(t);
+    f.config.deployment.environment = environment;
+    Object.assign(f.spec.services.tools.environment, { MQ_DEPLOYMENT_ENV: environment,
+      MQ_BACKUP_BACKEND: "s3", MQ_BACKUP_REPOSITORY: `s3:https://oss-cn-hongkong.aliyuncs.com/mq-backups/${prefix}` });
+    let claimed = false;
+    await assert.rejects(runBackupWindow(f.config, { run: f.run, claimOperation: () => { claimed = true; } }),
+      error => error.phase === "preflight" && error.manualRecoveryRequired === false);
+    assert.equal(claimed, false);
+    assert.deepEqual(f.events, []);
+    assert.deepEqual(f.state(), { entryOpen: true, writersPaused: false });
+  }
+});
+
 test("systemd failure cleanup can close an interrupted window without automatically resuming", async t => {
   const f = await backupWindowFixture(t);
   f.containers[0].State.Running = false;

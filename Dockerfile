@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 # Tags describe the reviewed versions; digests bind the actual image inputs.
-FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS dependencies
+FROM node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS dependencies
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN apt-get -o Acquire::Retries=0 update && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install --global npm@11.17.0 && test "$(npm --version)" = "11.17.0"
+RUN npm install --global npm@11.21.2 && test "$(npm --version)" = "11.21.2"
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 
@@ -31,7 +31,7 @@ RUN groupadd --gid 10001 mq && useradd --uid 10001 --gid 10001 --no-create-home 
     && ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && mkdir -p /var/lib/mq/media && chown 10001:10001 /var/lib/mq/media \
-    && chmod 0700 /var/lib/mq/media && node --version && test "$(npm --version)" = "11.17.0" && pg_dump --version
+    && chmod 0700 /var/lib/mq/media && node --version && test "$(npm --version)" = "11.21.2" && pg_dump --version
 USER 10001:10001
 ENV NODE_ENV=production
 ENTRYPOINT ["node"]
@@ -54,7 +54,7 @@ RUN chmod 0555 /usr/local/bin/mq-caddy-entrypoint \
 USER 10001:10001
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/mq-caddy-entrypoint"]
 
-FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS app
+FROM node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS app
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 # The runtime starts Node directly. Package managers belong only in build/tools.

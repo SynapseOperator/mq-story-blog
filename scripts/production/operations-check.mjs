@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { statfs, readFile, realpath, lstat } from "node:fs/promises";
+import { statfs, realpath, lstat } from "node:fs/promises";
 import { availableParallelism, freemem, totalmem, loadavg } from "node:os";
 import { isAbsolute } from "node:path";
 import tls from "node:tls";
 import https from "node:https";
 import { setTimeout, clearTimeout } from "node:timers";
 import { pathToFileURL, URL } from "node:url";
+import { readBackupReceipt } from "./backup-receipt.mjs";
 
 // Read-only host probe. It never prints inspect Env, container logs, URLs,
 // certificate subject names, credentials, or response bodies.
@@ -85,9 +86,31 @@ export async function collectExternalAvailability({ origin, ca, connectHost, tim
   return { ok: failures.length === 0, failures, sample };
 }
 
-export async function collectOperations({ project, deploymentId, diskPath, origin, receiptPath, reserveBytes = 8 * 1024 ** 3, ca, connectHost }) {
+// A fresh local receipt must never stand in for the configured offsite copy.
+// Read only the bounded, private metadata file; no repository credentials here.
+export async function readBackupAge({ receiptPath, deploymentId, expectedBackend, expectedRepositoryId }, now = Date.now()) {
+  assert.ok(expectedBackend === undefined || ["local", "s3"].includes(expectedBackend), "OPS_BACKUP_TARGET_REJECTED");
+  assert.ok(expectedBackend === "s3" ? /^[a-f0-9]{64}$/.test(expectedRepositoryId ?? "")
+    : expectedRepositoryId === undefined, "OPS_BACKUP_TARGET_REJECTED");
+  if (!receiptPath) return NaN;
+  try {
+    const receipt = await readBackupReceipt(receiptPath);
+    if (receipt.verified === true && receipt.deploymentId === deploymentId
+      && /^[a-f0-9]{64}$/.test(receipt.snapshotId ?? "")
+      && (expectedBackend === undefined || receipt.backend === expectedBackend)
+      && (expectedRepositoryId === undefined || receipt.repositoryId === expectedRepositoryId)) {
+      return (now - Date.parse(receipt.completedAt)) / 3600000;
+    }
+  } catch { /* Missing/unsafe metadata is an unavailable backup, never success. */ }
+  return NaN;
+}
+
+export async function collectOperations({ project, deploymentId, diskPath, origin, receiptPath, expectedBackend,
+  expectedRepositoryId, reserveBytes = 8 * 1024 ** 3, ca, connectHost }) {
   assert.match(project ?? "", /^mq-[a-z0-9][a-z0-9-]{1,80}$/);
   assert.match(deploymentId ?? "", /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+  if (project === "mq-production") assert.ok(expectedBackend === "s3", "OPS_OFFSITE_BACKUP_TARGET_REQUIRED");
+  const backupAgeHours = await readBackupAge({ receiptPath, deploymentId, expectedBackend, expectedRepositoryId });
   assert.ok(isAbsolute(diskPath));
   assert.ok(!(await lstat(diskPath)).isSymbolicLink());
   const disk = await statfs(await realpath(diskPath));
@@ -107,13 +130,6 @@ export async function collectOperations({ project, deploymentId, diskPath, origi
     services.push({ name: info.name, running: info.state.Running, health: info.state.Health?.Status,
       oom: info.state.OOMKilled, exposed: Object.values(info.ports ?? {}).some(bindings => bindings?.length), memoryPercent: parseFloat(usage) });
   }
-  let backupAgeHours = NaN;
-  if (receiptPath) {
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
-    // A receipt is emitted only after backup integrity verification, never after
-    // merely starting a job. It is operational evidence, not an offsite copy.
-    if (receipt.verified === true && receipt.deploymentId === deploymentId && /^[a-f0-9]{64}$/.test(receipt.snapshotId ?? "")) backupAgeHours = (Date.now() - Date.parse(receipt.completedAt)) / 3600000;
-  }
   const availability = await collectExternalAvailability({ origin, ca, connectHost });
   const sample = { freeBytes: disk.bavail * disk.bsize, reserveBytes, inodes: disk.files, freeInodes: disk.ffree,
     freeMemoryBytes: freemem(), totalMemoryBytes: totalmem(), loadPerCpu: loadavg()[0] / availableParallelism(),
@@ -129,7 +145,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     assert.match(deploymentId ?? "", /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
     const result = external ? await collectExternalAvailability({ origin: process.env.MQ_OPS_ORIGIN })
       : await collectOperations({ project: process.env.MQ_OPS_PROJECT, deploymentId, diskPath: process.env.MQ_OPS_DISK_PATH,
-        origin: process.env.MQ_OPS_ORIGIN, receiptPath: process.env.MQ_OPS_BACKUP_RECEIPT });
+        origin: process.env.MQ_OPS_ORIGIN, receiptPath: process.env.MQ_OPS_BACKUP_RECEIPT,
+        expectedBackend: process.env.MQ_OPS_BACKUP_BACKEND, expectedRepositoryId: process.env.MQ_OPS_BACKUP_REPOSITORY_ID });
     console.log(JSON.stringify({ check: external ? "mq-external" : "mq-operations", deploymentId, checkedAt: new Date().toISOString(), ...result }));
     if (!result.ok) process.exitCode = 1;
   } catch {

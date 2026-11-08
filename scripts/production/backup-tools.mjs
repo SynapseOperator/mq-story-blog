@@ -60,6 +60,15 @@ export function backupBackend({ backend = "local", repository, s3, expectedRepos
   } catch { throw new Error("BACKUP_BACKEND_REJECTED"); }
 }
 
+// The production repository has one explicit namespace. Read/restore operations
+// deliberately do not call this: a new recovery target must read its old source.
+export function assertBackupWriteTarget(environment, { backend = "local", repository }) {
+  if (backend !== "s3") return;
+  const prefix = new URL(repository.slice(3)).pathname.split("/").slice(2).join("/");
+  assert.ok(environment === "production" ? prefix === "production"
+    : prefix !== "production" && !prefix.startsWith("production/"), "BACKUP_ENVIRONMENT_PREFIX_REJECTED");
+}
+
 export async function assertBackupPaths(options) {
   const { repository, passwordFile, workspace, s3 } = options;
   const backend = backupBackend(options);

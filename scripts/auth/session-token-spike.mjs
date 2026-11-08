@@ -341,6 +341,44 @@ async function main() {
     assert.equal((await inspection.query('SELECT count(*)::int n FROM "Session" WHERE id=$1', [plainRow.id])).rows[0].n, 1);
     passed("old raw sessions are rejected by candidate without rewriting or deleting history");
 
+    stage = "database write compromise is outside signed-cookie and hash-at-rest protection";
+    for (const [label, instance, transform] of [["plain", baseline, value => value], ["hashed", candidate, digest]]) {
+      const attacker = await signup(instance, `writer_${label}`, password);
+      const victim = await signup(instance, `target_${label}`, password);
+      const writer = `mq_spike_writer_${randomBytes(12).toString("hex")}`;
+      const knownToken = transform(tokenOf(attacker.cookie));
+      // Simulate a compromised SQL writer, not an HTTP exploit. These are the
+      // Session rights required by MQ's runtime. No AUTH_SECRET, victim cookie,
+      // UPDATE, superuser privilege or access to AdminGrant is used by the role.
+      await inspection.query("BEGIN");
+      try {
+        await inspection.query(`CREATE ROLE "${writer}" NOLOGIN NOINHERIT`);
+        await inspection.query(`GRANT USAGE ON SCHEMA public TO "${writer}"`);
+        await inspection.query(`GRANT SELECT, INSERT, DELETE ON public."Session" TO "${writer}"`);
+        await inspection.query(`SET LOCAL ROLE "${writer}"`);
+        const rights = (await inspection.query(`SELECT
+          has_table_privilege(current_user, 'public."Session"', 'INSERT') AS can_insert,
+          has_table_privilege(current_user, 'public."Session"', 'DELETE') AS can_delete,
+          has_table_privilege(current_user, 'public."Session"', 'UPDATE') AS can_update,
+          has_table_privilege(current_user, 'public."AdminGrant"', 'UPDATE') AS can_grant`)).rows[0];
+        assert.deepEqual(rights, { can_insert: true, can_delete: true, can_update: false, can_grant: false });
+        assert.equal((await inspection.query('DELETE FROM "Session" WHERE token=$1', [knownToken])).rowCount, 1);
+        await inspection.query(`INSERT INTO "Session" (id,"userId",token,"expiresAt","updatedAt")
+          VALUES ($1,$2,$3,now()+interval '24 hours',now())`, [randomUUID(), victim.body.user.id, knownToken]);
+        // Remove the temporary role in the same transaction; any failure also
+        // rolls back its creation. Only this random database is affected.
+        await inspection.query("RESET ROLE");
+        await inspection.query(`REVOKE SELECT, INSERT, DELETE ON public."Session" FROM "${writer}"`);
+        await inspection.query(`REVOKE USAGE ON SCHEMA public FROM "${writer}"`);
+        await inspection.query(`DROP ROLE "${writer}"`);
+        await inspection.query("COMMIT");
+      } catch (error) { await inspection.query("ROLLBACK"); throw error; }
+      const changed = await instance.request("/get-session", { cookie: attacker.cookie });
+      assert.equal(changed.body?.user.id, victim.body.user.id,
+        "Neither a signed token nor its digest protects the user mapping against arbitrary database writes");
+    }
+    passed("counterexample: database INSERT/DELETE can rebind a signed cookie with either raw or hashed storage");
+
     stage = "auth secret rotation and revocation prevent old-cookie resurrection";
     const rotated = await server("baseline", randomBytes(32).toString("hex"));
     stage = "new secret rejects old cookie";

@@ -1,11 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { backupBackend, initializeBackupRepository, readS3CredentialsEnvironment, requireBackupSpace, runBackupTool, restic } from "../scripts/production/backup-tools.mjs";
+import { assertBackupWriteTarget, backupBackend, initializeBackupRepository, readS3CredentialsEnvironment, requireBackupSpace, runBackupTool, restic } from "../scripts/production/backup-tools.mjs";
+
+test("production and synthetic backup writes cannot cross the production repository namespace", () => {
+  const target = prefix => ({ backend: "s3", repository: `s3:https://oss-cn-hongkong.aliyuncs.com/mq-backups/${prefix}` });
+  assertBackupWriteTarget("production", target("production"));
+  assertBackupWriteTarget("staging", target(`p503-synthetic/${randomUUID()}`));
+  for (const prefix of ["p502-synthetic", "production/other", "Production", "staging"]) {
+    assert.throws(() => assertBackupWriteTarget("production", target(prefix)), { message: "BACKUP_ENVIRONMENT_PREFIX_REJECTED" });
+  }
+  for (const prefix of ["production", "production/other"]) {
+    assert.throws(() => assertBackupWriteTarget("staging", target(prefix)), { message: "BACKUP_ENVIRONMENT_PREFIX_REJECTED" });
+  }
+  assertBackupWriteTarget("production", { backend: "local", repository: join(tmpdir(), "isolated-repository") });
+});
 
 test("backup child failures and output overflow never expose child diagnostics", async () => {
   const secret = "synthetic-diagnostic-must-not-escape";
