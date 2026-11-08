@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { backupBackend, initializeBackupRepository, readS3CredentialsEnvironment, requireBackupSpace, runBackupTool, restic } from "../scripts/production/backup-tools.mjs";
 
@@ -117,4 +118,41 @@ test("R2 uses account-scoped HTTPS, auto region and system trust without weakeni
   ]) assert.throws(() => backupBackend({ ...options, ...replacement }), { message: "BACKUP_BACKEND_REJECTED" });
   assert.equal(backupBackend({ ...options, repository: "s3:https://mq-backup.localhost/mq-lab/synthetic",
     s3: { ...options.s3, region: "us-east-1", caCertificateFile: join(tmpdir(), "lab-ca") } }), "s3");
+});
+
+test("OSS Hong Kong pins the Restic endpoint/region pair and system TLS without accepting alternate cloud targets", async () => {
+  const options = { backend: "s3", repository: "s3:https://oss-cn-hongkong.aliyuncs.com/mq-private-backup/production",
+    expectedRepositoryId: "b".repeat(64), s3: { region: "oss-cn-hongkong", credentialsFile: join(tmpdir(), "synthetic-oss-file") } };
+  assert.equal(backupBackend(options), "s3");
+  for (const replacement of [
+    { repository: options.repository.replace("oss-cn-hongkong.", "s3.oss-cn-hongkong.") },
+    { repository: options.repository.replace("oss-cn-hongkong.", "oss-cn-hongkong-internal.") },
+    { repository: options.repository.replace("oss-cn-hongkong.", "mq-private-backup.oss-cn-hongkong.") },
+    { repository: options.repository.replace("hongkong", "hangzhou") },
+    { repository: options.repository.replace(".com/", ".com:8443/") },
+    { repository: options.repository.replace("mq-private-backup", "mq.private.backup") },
+    { s3: { ...options.s3, region: "cn-hongkong" } },
+    { s3: { ...options.s3, region: "auto" } },
+    { s3: { ...options.s3, caCertificateFile: join(tmpdir(), "unapproved-ca") } },
+    { s3: { ...options.s3, bucketLookup: "path" } },
+  ]) assert.throws(() => backupBackend({ ...options, ...replacement }), { message: "BACKUP_BACKEND_REJECTED" });
+  await assert.rejects(initializeBackupRepository(options), { message: "BACKUP_S3_INIT_REQUIRES_SEPARATE_PROVISIONING" });
+});
+
+test("OSS daily RAM template cannot manage buckets, ACLs or delete backup data", async () => {
+  const policy = JSON.parse(await readFile(new URL("../ops/oss-restic-ram-policy.example.json", import.meta.url), "utf8"));
+  assert.equal(policy.Version, "1");
+  assert.equal(policy.Statement.length, 3);
+  const granted = [];
+  for (const rule of policy.Statement) {
+    assert.equal(rule.Effect, "Allow");
+    assert.deepEqual(rule.Condition.Bool, { "acs:SecureTransport": "true" });
+    granted.push(...rule.Action);
+    if (rule.Action.includes("oss:ListObjects")) {
+      assert.deepEqual(rule.Resource, ["acs:oss:*:ACCOUNT_UID:BUCKET"]);
+      assert.deepEqual(rule.Condition.StringLike, { "oss:Prefix": ["production/*"] });
+    } else assert.deepEqual(rule.Resource, [rule.Action.includes("oss:DeleteObject")
+      ? "acs:oss:*:ACCOUNT_UID:BUCKET/production/locks/*" : "acs:oss:*:ACCOUNT_UID:BUCKET/production/*"]);
+  }
+  assert.deepEqual(granted.sort(), ["oss:AbortMultipartUpload", "oss:DeleteObject", "oss:GetObject", "oss:ListObjects", "oss:PutObject"]);
 });

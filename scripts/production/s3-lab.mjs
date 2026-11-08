@@ -6,9 +6,11 @@ import { URL } from "node:url";
 // Fixed official test image, isolated network only. It is never part of a release.
 export const MOTO_IMAGE = "ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a";
 
-export async function startS3Lab({ docker, project, volume, volumeNames, images, temporaryContainers }) {
+export async function startS3Lab({ docker, project, volume, volumeNames, images, temporaryContainers }, { oss = false } = {}) {
+  const endpoint = oss ? "oss-cn-hongkong.aliyuncs.com" : "mq-backup.localhost";
+  const hosts = oss ? `${endpoint}, mq-lab.${endpoint}` : endpoint;
   await volume("remote-credentials", {});
-  await volume("remote-config", { Caddyfile: "{\n admin off\n}\nhttps://mq-backup.localhost {\n tls internal\n reverse_proxy mq-s3:5000\n}\n" });
+  await volume("remote-config", { Caddyfile: `{\n admin off\n}\n${hosts} {\n tls internal\n reverse_proxy mq-s3:5000\n}\n` });
   const name = `${project}-s3`, tlsName = `${project}-s3-tls`;
   temporaryContainers.add(name); temporaryContainers.add(tlsName);
   const script = await readFile(new URL("./s3-fixture.py", import.meta.url), "utf8");
@@ -16,7 +18,8 @@ export async function startS3Lab({ docker, project, volume, volumeNames, images,
     "--user", "10001:10001", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
     "--memory", "384m", "--cpus", "1", "--pids-limit", "128", "--tmpfs", "/tmp:rw,nosuid,size=32m,uid=10001,gid=10001,mode=0700",
     "--mount", `type=volume,source=${volumeNames["remote-credentials"]},target=/credentials`,
-    "-e", "PYTHONDONTWRITEBYTECODE=1", "--entrypoint", "python", MOTO_IMAGE, "-c", script]);
+    "-e", "PYTHONDONTWRITEBYTECODE=1", ...(oss ? ["-e", "MQ_LAB_OSS=true", "-e", `MQ_LAB_OSS_PREFIX=${project}`] : []),
+    "--entrypoint", "python", MOTO_IMAGE, "-c", script]);
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt++) {
     const logs = docker(["logs", name]).stdout;
@@ -25,7 +28,8 @@ export async function startS3Lab({ docker, project, volume, volumeNames, images,
   }
   assert.ok(ready, "S3_FIXTURE_NOT_READY");
   console.log("PASS release: isolated S3 fixture rejects incorrect access key and signing secret");
-  docker(["run", "-d", "--name", tlsName, "--network", `${project}_database`, "--network-alias", "mq-backup.localhost",
+  docker(["run", "-d", "--name", tlsName, "--network", `${project}_database`, "--network-alias", endpoint,
+    ...(oss ? ["--network-alias", `mq-lab.${endpoint}`] : []),
     "--read-only", "--cap-drop", "ALL", "--cap-add", "NET_BIND_SERVICE", "--security-opt", "no-new-privileges:true", "--memory", "96m", "--pids-limit", "128",
     "--tmpfs", "/data:rw,nosuid,size=8m,uid=10001,gid=10001,mode=0700",
     "--tmpfs", "/config:rw,nosuid,size=8m,uid=10001,gid=10001,mode=0700",
@@ -44,5 +48,5 @@ export async function startS3Lab({ docker, project, volume, volumeNames, images,
     const ports = JSON.parse(docker(["inspect", container, "--format", "{{json .HostConfig.PortBindings}}"] ).stdout);
     assert.ok(!ports || Object.keys(ports).length === 0);
   }
-  return { backend: "s3", repository: `s3:https://mq-backup.localhost/mq-lab/${project}` };
+  return { backend: "s3", repository: `s3:https://${endpoint}/mq-lab/${project}` };
 }

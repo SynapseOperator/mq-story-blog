@@ -1,6 +1,6 @@
 # 加密备份与隔离恢复
 
-P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；仍无正式备份密码或异地仓库。P5-02 的 R2 与告警接入见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
+P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；仍无正式备份密码或异地仓库。P5-02 的 OSS 香港与告警接入见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
 
 ## 选择与一致性边界
 
@@ -24,7 +24,7 @@ P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合
 
 ## S3 文件秘密与仓库合同
 
-S3 使用 `s3:https://<endpoint>/<bucket>/<专用非空prefix>`，首版固定 path-style、显式 region、最多 2 个连接及有界重试。拒绝 HTTP、URL 账号密码、查询参数、编码/相对路径和任意 Restic 选项。正式端点使用系统可信 CA；隔离实验可显式提供只读 CA 文件，不存在跳过 TLS 校验开关。[官方 S3 合同](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#s3-compatible-storage)。
+S3 使用 `s3:https://<endpoint>/<bucket>/<专用非空prefix>`，通用S3固定path-style；OSS香港自动使用dns虚拟主机与Restic文档的oss-cn-hongkong region，其他阿里Endpoint拒绝。所有S3均显式region、最多 2 个连接及有界重试。拒绝 HTTP、URL 账号密码、查询参数、编码/相对路径和任意 Restic 选项。正式端点使用系统可信 CA；隔离实验可显式提供只读 CA 文件，不存在跳过 TLS 校验开关。[官方 S3 合同](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#s3-compatible-storage)。
 
 凭据文件为 Git 外的 0400/0600 JSON，仅接受 `accessKeyId`、`secretAccessKey` 和可选 `sessionToken`。每个字段必须为非空无空白 ASCII 字符串，文件最多 4096 bytes；不支持 INI、`credential_process`、角色跳转或默认 AWS/MinIO 凭据。内容只装入对应 Restic 子进程的 AWS 环境变量，不进入 Compose 环境、镜像、argv 或日志。同 UID/主机 root 仍可能读取进程环境；这不抵御主机失陷。
 

@@ -54,6 +54,7 @@
     "test:production:container": "node scripts/production/lab.mjs",
     "test:production:operations": "node scripts/production/lab.mjs --operations",
     "test:production:release": "node scripts/production/lab.mjs --release",
+    "test:backup:oss": "node scripts/production/oss-transport-tests.mjs",
     "test:release": "node scripts/release/integration.mjs",
     "host:preflight": "node scripts/production/host-preflight.mjs",
     "test:production:rotation": "npm run db:generate && node scripts/production/rotation-tests.mjs",

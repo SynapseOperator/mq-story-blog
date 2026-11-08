@@ -288,6 +288,9 @@ jobs:
           docker pull ghcr.io/getmoto/motoserver:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
           df -h .
           npm run test:production:release
+      - name: OSS virtual-hosted TLS and real Restic backup recovery
+        # Uses the existing images and a Docker-only DNS fixture; no cloud account.
+        run: npm run test:backup:oss
       - name: Ubuntu OpenSSH include and connection-specific authentication policy
         # Synthetic keys/configuration inside one disposable container only.
         run: node scripts/production/ssh-hardening-tests.mjs

@@ -1,0 +1,26 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["oss:ListObjects"],
+      "Resource": ["acs:oss:*:ACCOUNT_UID:BUCKET"],
+      "Condition": {
+        "Bool": {"acs:SecureTransport": "true"},
+        "StringLike": {"oss:Prefix": ["production/*"]}
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["oss:GetObject", "oss:PutObject", "oss:AbortMultipartUpload"],
+      "Resource": ["acs:oss:*:ACCOUNT_UID:BUCKET/production/*"],
+      "Condition": {"Bool": {"acs:SecureTransport": "true"}}
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["oss:DeleteObject"],
+      "Resource": ["acs:oss:*:ACCOUNT_UID:BUCKET/production/locks/*"],
+      "Condition": {"Bool": {"acs:SecureTransport": "true"}}
+    }
+  ]
+}

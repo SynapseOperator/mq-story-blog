@@ -79,7 +79,7 @@ bootstrap 后管理员维护使用独立的交互命令：隐藏输入两次密�
 
 所有升级默认关闭入口。失败后先确定数据库迁移、身份暂停/恢复及媒体状态；应用镜像回退只在合同兼容且备份已验证时执行。数据灾难恢复必须到新隔离目标，拒绝覆盖原库、恢复旧 Session 或旧业务签名。完整操作仍以 [SECRET_ROTATION.md](SECRET_ROTATION.md) 与 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md) 为准。
 
-真实 R2 尚未开通。专用 Bucket/Object Read & Write、Restic 密码、配额及7日/8周 dry-run 保留策略见 [OFFSITE_BACKUP_AND_ALERTS.md](OFFSITE_BACKUP_AND_ALERTS.md)。模拟 S3 恢复不能替代实际 R2 副本恢复。告警本轮仅向隔离模拟接收端发送，未配置真实收件人。
+异地目标已改为OSS香港私有Standard/ZRS，Bucket已由负责人创建。专用Bucket/RAM最小权限、Restic 密码、配额及7日/8周 dry-run 保留策略见 [OFFSITE_BACKUP_AND_ALERTS.md](OFFSITE_BACKUP_AND_ALERTS.md)。模拟 S3 恢复不能替代实际OSS副本恢复。告警本轮仅向隔离模拟接收端发送，未配置真实收件人。
 
 ## 验证边界与正式开放前事项
 
@@ -92,7 +92,7 @@ bootstrap 后管理员维护使用独立的交互命令：隐藏输入两次密�
 - 正式用户开放前，负责人须处理 Session 数据泄露残余风险：限制 runtime/backup/root访问、加密异地备份、日志隔离、泄露时撤销全部会话并轮换认证秘密。仍需独立安全 Review 和明确风险决定；测试通过不等于审查完成。
 - 依赖与镜像实测见 [PRODUCTION_SECURITY_REVIEW.md](PRODUCTION_SECURITY_REVIEW.md)，最终CI结果记录在本次PR；运行时无已知 npm 告警不能推定系统镜像、离线工具和未来漏洞均安全。
 
-下一轮顺序：完成本PR独立审查与授权合并 → 生成新main候选 → 用户完成R2和真实告警选择/送达测试 → 批准正式目标及秘密托管 → 保留当前合成卷并定点停止实验服务以控制资源峰值 → 空库bootstrap及管理员交互初始化 → 受控验收和真实异地恢复 → 另行批准公网80/443、DNS/TLS与业务开关 → activate和外部验收。此处是待执行清单，不是生产上线记录。
+下一轮顺序：完成本PR独立审查与授权合并 → 生成新main候选 → 用户完成OSS和真实告警选择/送达测试 → 批准正式目标及秘密托管 → 保留当前合成卷并定点停止实验服务以控制资源峰值 → 空库bootstrap及管理员交互初始化 → 受控验收和真实异地恢复 → 另行批准公网80/443、DNS/TLS与业务开关 → activate和外部验收。此处是待执行清单，不是生产上线记录。
 
 ## 本轮执行证据（2026-11-07）
 

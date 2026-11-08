@@ -68,6 +68,6 @@ app 剩余 34 个 High 在本次数据库中没有可用修复版本，涉及 ut
 
 - Better Auth Session Token 仍原值存库。官方扩展点和哈希实验结果见 [Session Spike](SESSION_TOKEN_SPIKE.md)；不因镜像漏洞减少而接受数据库/备份泄露风险。
 - 管理员维护、发布签名和留言审核仍必须满足数据库权限、有效 Session、事务和独立密钥约束。恢复后失效旧会话/秘密的流程不能省略。
-- 同机加密备份不是异地副本；R2 尚未开通，真实云端恢复及告警送达未验证。见 [异地备份与告警](OFFSITE_BACKUP_AND_ALERTS.md)。
+- 同机加密备份不是异地副本；目标已改为OSS香港私有Standard/ZRS，Bucket及RAM已由负责人配置，真实云端恢复及告警送达未验证。见 [异地备份与告警](OFFSITE_BACKUP_AND_ALERTS.md)。
 - 公网 TLS/代理、实际生产配置、正式密钥保管、入口限流及真实磁盘容量仍需单独验收。不得把合成环境写成已经正式上线。
 - 本轮最终提交的 Quality、Database、Container CI 和独立 Review 状态以 PR 的实时记录为准；通过功能 CI 不代表上述镜像扫描退出 0，也不代表独立安全审查完成。
