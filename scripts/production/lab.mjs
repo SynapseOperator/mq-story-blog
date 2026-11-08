@@ -12,6 +12,7 @@ import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mj
 import { runProductionHttpChecks, laboratoryTransport } from "./http-tests.mjs";
 import { runImageConfigurationChecks } from "./container-checks.mjs";
 import { runOperationsLab } from "./operations-lab.mjs";
+import { readRealOssLab, removeRealOssSecret } from "./oss-real-lab.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 let stage = "prepare isolated container laboratory";
@@ -34,10 +35,12 @@ async function unusedPort() {
 }
 
 async function main() {
-  assert.ok(process.argv.length === 2 || (process.argv.length === 3 && ["--operations", "--release"].includes(process.argv[2])));
+  assert.ok(process.argv.length === 2 || (process.argv.length === 3 && ["--operations", "--release", "--oss"].includes(process.argv[2])));
   const release = process.argv[2] === "--release";
-  const operations = process.argv[2] === "--operations" || release;
+  const oss = process.argv[2] === "--oss";
+  const operations = process.argv[2] === "--operations" || release || oss;
   const id = randomUUID(), suffix = id.replaceAll("-", ""), project = `mq-p302-${suffix}`;
+  const ossOptions = oss ? await readRealOssLab(id, secretValues) : null;
   const directory = await mkdtemp(join(tmpdir(), "mq-p302-lab-"));
   const evidence = process.env.PRODUCTION_EVIDENCE_DIR || join(directory, "evidence");
   await mkdir(evidence, { recursive: true });
@@ -204,7 +207,7 @@ ${external}
       revoke: async () => { operation("admin-revoke", "maintenance-secrets", { MAINTENANCE_DATABASE_URL_FILE: "/run/secrets/maintenance_database_url" }, "scripts/production/lab-actions.mjs"); },
       ...(operations ? { operations: async fixture => runOperationsLab({ docker, compose, composeBase, project, config, manifest,
         files, passwords, bootstrapUrl, directory, evidence, images, volume, volumeNames, secret, origin, ca, accounts,
-        release, temporaryContainers,
+        release, temporaryContainers, oss: ossOptions,
         revision: spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim(),
         readVolumeSecret: async (name, file) => volumeEntries[name][file],
       }, fixture) } : {}),
@@ -240,6 +243,14 @@ ${external}
     // never prune, delete unknown files, or run compose down -v.
     if (await readFile(overridePath).then(() => true, () => false)) compose(["down", "--remove-orphans"], { fail: false });
     for (const container of temporaryContainers) docker(["rm", "-f", container], { fail: false });
+    if (ossOptions) {
+      try { removeRealOssSecret({ docker, project, volumeNames }, ossOptions); }
+      catch {
+        console.error("OSS_TEMP_SECRET_CLEANUP_FAILED; inspect this run's labelled secret volume");
+        process.exitCode = 1; succeeded = false;
+      }
+    }
+    if (ossOptions?.network) docker(["network", "rm", ossOptions.network], { fail: false });
     if (succeeded) {
       const volumes = docker(["volume", "ls", "--filter", `name=${project}`, "--format", "{{.Name}}" ]).stdout.trim().split(/\r?\n/).filter(Boolean);
       for (const name of volumes) {

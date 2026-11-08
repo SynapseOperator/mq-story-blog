@@ -40,6 +40,21 @@ export function backupBackend({ backend = "local", repository, s3, expectedRepos
       assert.match(s3.region ?? "", /^[a-z0-9][a-z0-9-]{0,62}$/, "BACKUP_BACKEND_REJECTED");
       assert.ok(typeof s3.credentialsFile === "string" && isAbsolute(s3.credentialsFile));
       if (s3.caCertificateFile !== undefined) assert.ok(typeof s3.caCertificateFile === "string" && isAbsolute(s3.caCertificateFile));
+      if (url.hostname.endsWith(".r2.cloudflarestorage.com")) {
+        // R2 uses account/jurisdiction endpoints and region auto. Its public TLS
+        // must use system trust; a local lab CA is only for other S3 fixtures.
+        assert.match(url.hostname, /^[a-f0-9]{32}(?:\.(?:eu|us|fedramp))?\.r2\.cloudflarestorage\.com$/);
+        assert.equal(url.port, ""); assert.equal(s3.region, "auto");
+        assert.equal(s3.caCertificateFile, undefined);
+      }
+      if (url.hostname.endsWith(".aliyuncs.com")) {
+        // Restic 0.19.1's documented OSS endpoint/region pair. Do not mix it
+        // with AWS SDK examples for the newer s3.oss-* endpoint family.
+        assert.equal(url.hostname, "oss-cn-hongkong.aliyuncs.com");
+        assert.equal(url.port, ""); assert.equal(s3.region, "oss-cn-hongkong");
+        assert.match(bucket, /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/);
+        assert.equal(s3.caCertificateFile, undefined);
+      }
     }
     return backend;
   } catch { throw new Error("BACKUP_BACKEND_REJECTED"); }
@@ -158,7 +173,8 @@ export async function restic(args, options = {}) {
     const env = { GOMAXPROCS: "2" };
     if (backend === "s3") {
       Object.assign(env, await readS3CredentialsEnvironment(s3.credentialsFile));
-      common.push("-o", `s3.region=${s3.region}`, "-o", "s3.bucket-lookup=path", "-o", "s3.connections=2", "-o", "s3.retries=2");
+      const lookup = new URL(repository.slice(3)).hostname === "oss-cn-hongkong.aliyuncs.com" ? "dns" : "path";
+      common.push("-o", `s3.region=${s3.region}`, "-o", `s3.bucket-lookup=${lookup}`, "-o", "s3.connections=2", "-o", "s3.retries=2");
       if (s3.caCertificateFile) {
         await readDeploymentFile(s3.caCertificateFile);
         common.push("--cacert", s3.caCertificateFile);

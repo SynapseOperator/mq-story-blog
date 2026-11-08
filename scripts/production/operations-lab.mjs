@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { URL } from "node:url";
 import { chromium } from "playwright";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
-import { collectOperations } from "./operations-check.mjs";
+import { assessOperations, collectOperations } from "./operations-check.mjs";
 import { startS3Lab } from "./s3-lab.mjs";
 import { runReleaseLab } from "./release-lab.mjs";
+import { inspectRealOss, startRealOssLab } from "./oss-real-lab.mjs";
 
 /** Reuse the real deployment lab, including Caddy/HTTP, without introducing a
  * second application/bootstrap harness. Every name and secret is synthetic. */
@@ -16,7 +17,7 @@ async function runOperationsLabImpl(ctx, fixture) {
     directory, evidence, images, volume, volumeNames, secret, origin, ca, accounts, revision } = ctx;
   const { request, story, asset, adminJar, readerJar } = fixture;
   const result = { synthetic: true, productionDeployed: false, checks: [] };
-  const remote = ctx.release ? await startS3Lab(ctx) : null;
+  const remote = ctx.oss ? await startRealOssLab(ctx, ctx.oss) : ctx.release ? await startS3Lab(ctx) : null;
   const pass = name => { result.checks.push(name); console.log(`PASS operations: ${name}`); };
   const newImage = await request(`/api/admin/media/${asset.id}/content`, { jar: adminJar }); assert.equal(newImage.status, 200);
   const privateUpload = await request("/api/admin/media", { method: "POST", jar: adminJar, bytes: newImage.bytes,
@@ -30,7 +31,8 @@ async function runOperationsLabImpl(ctx, fixture) {
 
   const backupUrl = new URL(bootstrapUrl); backupUrl.username = config.roles.backup; backupUrl.password = passwords.backup;
   await volume("operations", {});
-  await volume("backup-secrets", { bootstrap_database_url: bootstrapUrl, backup_database_url: backupUrl.href, restic_password: secret() });
+  await volume("backup-secrets", { bootstrap_database_url: bootstrapUrl, backup_database_url: backupUrl.href,
+    ...(!ctx.oss ? { restic_password: secret() } : {}) });
   const targetId = randomUUID();
   const targetManifest = { ...manifest, deploymentId: targetId,
     database: { ...manifest.database, name: `mq_staging_${targetId.replaceAll("-", "")}` } };
@@ -41,7 +43,8 @@ async function runOperationsLabImpl(ctx, fixture) {
   await volume("restore-manifest", { "deployment.json": JSON.stringify(targetManifest) });
   await volume("restore-media", {});
   await volume("restore-secrets", { bootstrap_database_url: targetBootstrap.href, role_passwords: JSON.stringify(targetPasswords),
-    migration_database_url: targetUrl("migration"), database_url: targetUrl("runtime"), restic_password: await ctx.readVolumeSecret("backup-secrets", "restic_password"),
+    migration_database_url: targetUrl("migration"), database_url: targetUrl("runtime"),
+    ...(!ctx.oss ? { restic_password: await ctx.readVolumeSecret("backup-secrets", "restic_password") } : {}),
     auth_secret: secret(), auth_proxy_secret: files.auth_proxy_secret, publish_signing_key: secret(), comment_signing_key: secret() });
 
   const op = (action, { target = false, group = target ? "restore-secrets" : "backup-secrets", env = {}, script = "scripts/production/operations-lab-actions.mjs", extra = [], fail = true } = {}) => {
@@ -53,21 +56,30 @@ async function runOperationsLabImpl(ctx, fixture) {
       "--mount", `type=volume,source=${target ? volumeNames["restore-media"] : `${project}_media`},target=/var/lib/mq/media`,
       "--mount", `type=volume,source=${volumeNames.operations},target=/var/lib/mq/operations`,
       "--mount", `type=volume,source=${volumeNames[group]},target=/run/secrets,readonly`];
-    if (remote) args.push("--mount", `type=volume,source=${volumeNames["remote-credentials"]},target=/run/s3,readonly`,
+    if (ctx.oss) args.push("--network", remote.network, "--mount", `type=volume,source=${remote.volume},target=/run/s3,readonly`);
+    else if (remote) args.push("--mount", `type=volume,source=${volumeNames["remote-credentials"]},target=/run/s3,readonly`,
       "--mount", `type=volume,source=${volumeNames["remote-ca"]},target=/etc/mq-s3,readonly`);
     const environment = { MQ_SYNTHETIC_LAB: "true", MQ_DEPLOYMENT_ENV: "staging", MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
       MQ_RESTORE_CONFIG: "/etc/mq-restore/deployment.json", BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url",
       BACKUP_DATABASE_URL_FILE: "/run/secrets/backup_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
       RUNTIME_DATABASE_URL_FILE: "/run/secrets/database_url", MQ_ROLE_PASSWORDS_FILE: "/run/secrets/role_passwords",
-      RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_LAB_REVISION: revision,
+      RESTIC_PASSWORD_FILE: ctx.oss ? "/run/s3/restic_password" : "/run/secrets/restic_password", MQ_LAB_REVISION: revision,
+      ...(ctx.oss ? { MQ_LAB_REAL_OSS: "synthetic-cloud-under-1gib", MQ_LAB_OSS_SOURCE_ID: config.deploymentId } : {}),
       ...(remote ? { MQ_LAB_S3_REPOSITORY: remote.repository } : {}), ...env };
     for (const [name, value] of Object.entries(environment)) args.push("-e", `${name}=${value}`);
     return docker([...args, images.operations, script, action, ...extra], { fail, timeout: 600000 });
   };
   const data = output => JSON.parse(output.stdout.trim().split("\n").at(-1));
+  if (ctx.oss) {
+    result.uploadBudget = data(op("oss-budget")).budget;
+    console.log(`OSS_SYNTHETIC_UPLOAD_BUDGET=${JSON.stringify(result.uploadBudget)}`);
+    assert.equal((await inspectRealOss(ctx, remote, "empty")).empty, true);
+    pass("real OSS test prefix is empty and config is absent before explicit initialization");
+  }
   compose(["stop", "app"]);
   const backupStarted = Date.now();
   const backup = data(op("backup")); result.snapshotId = backup.snapshotId;
+  if (ctx.oss) result.payload = { databaseDumpBytes: backup.databaseDumpBytes, mediaBytes: backup.mediaBytes };
   result.backupMs = Date.now() - backupStarted;
   const receipt = data(op("receipt")); assert.equal(receipt.verified, true); assert.equal(receipt.deploymentId, config.deploymentId);
   pass("read-only backup identity, encrypted Restic snapshot and independent full verification");
@@ -76,8 +88,26 @@ async function runOperationsLabImpl(ctx, fixture) {
   pass("duplicate backup invocation cannot overwrite a verified receipt");
   if (remote) {
     op("remote-negative"); op("retention");
-    result.backupBackend = "s3-https-moto";
+    result.backupBackend = ctx.oss ? "alibaba-oss-hongkong" : "s3-https-moto";
     pass("S3 HTTPS repository identity, wrong password/credentials/CA, no receipt on failure and retention dry-run");
+    if (ctx.oss) {
+      const failed = op("backup", { fail: false, script: "scripts/production/backup-cli.mjs",
+        extra: [`--confirm-deployment=${config.deploymentId}`], env: {
+          MQ_BACKUP_BACKEND: "s3", MQ_BACKUP_REPOSITORY: remote.repository, MQ_BACKUP_REPOSITORY_ID: "0".repeat(64),
+          MQ_BACKUP_S3_REGION: "oss-cn-hongkong", MQ_BACKUP_S3_CREDENTIALS_FILE: "/run/s3/s3_credentials",
+          MQ_BACKUP_PASSWORD_FILE: "/run/s3/restic_password", MQ_BACKUP_WORKSPACE: "/var/lib/mq/operations/work",
+          MQ_BACKUP_RECEIPT: "/var/lib/mq/operations/failed-cli.json", MQ_BACKUP_SOURCE_REVISION: revision,
+        } });
+      assert.equal(failed.status, 1); assert.match(failed.stderr, /DEPLOYMENT_BACKUP_OPERATION_REJECTED/);
+      op("oss-failure-receipt"); result.failureExitCode = failed.status;
+      const listing = data(op("oss-snapshots")); result.snapshots = listing.snapshots; result.repositoryId = listing.repositoryId;
+      result.remote = await inspectRealOss(ctx, remote, "measure");
+      result.repository = remote.repository;
+      await writeFile(join(remote.recordDirectory, `oss-repository-${remote.id}.json`), JSON.stringify({ repository: remote.repository,
+        repositoryId: result.repositoryId, snapshotId: backup.snapshotId, verified: true,
+        storedBytes: result.remote.storedBytes, completedAt: new Date().toISOString() }), { flag: "wx", mode: 0o600 });
+      pass("real OSS snapshot listed and cloud byte count measured; no cloud data deletion");
+    }
   }
 
   op("create-target");
@@ -202,8 +232,16 @@ volumes:
   assert.equal(monitoring.failures.includes("HOST_LOAD_HIGH"), monitoring.sample.loadPerCpu > 1.5);
   assert.ok(monitoring.sample.certificateDays > 0);
   result.monitoring = monitoring;
+  if (ctx.oss) {
+    // The actual failed CLI above created no receipt. Feed that absent success
+    // time to the existing classifier; this is not a real notification test.
+    result.failureMonitoring = assessOperations({ ...monitoring.sample, backupAgeHours: NaN });
+    assert.ok(result.failureMonitoring.failures.includes("BACKUP_MISSING_OR_STALE"));
+    pass("failed backup CLI exits nonzero, leaves no success receipt and triggers backup monitoring classification");
+  }
   pass("read-only host/container/backup/TLS monitoring; local short-lived certificate alert retained");
   await writeFile(join(evidence, "operations-result.json"), JSON.stringify(result, null, 2));
+  if (ctx.oss) await writeFile(join(remote.recordDirectory, `oss-result-${remote.id}.json`), JSON.stringify(result, null, 2), { flag: "wx", mode: 0o600 });
   return result;
 }
 

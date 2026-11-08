@@ -26,6 +26,10 @@ let stage = "validate isolated target";
 
 function experimentalAdapter(db, mode, observations) {
   const factory = prismaAdapter(db, { provider: "postgresql", transaction: true });
+  const storesDigest = mode === "adapter" || mode === "unsafe-prefix-adapter";
+  // Deliberately unsafe counterexample, confined to this isolated Spike: a
+  // prefix shortcut restores list lookups by making the stored digest a bearer.
+  const queryToken = value => mode === "unsafe-prefix-adapter" && value.startsWith("sha256:") ? value : digest(value);
   return options => {
     function wrap(base) {
       const result = { ...base };
@@ -35,12 +39,12 @@ function experimentalAdapter(db, mode, observations) {
           report.adapterCalls[operation] = (report.adapterCalls[operation] ?? 0) + 1;
           const original = input.data?.token ?? input.update?.token
             ?? input.where?.find(item => item.field === "token" && (!item.operator || item.operator === "eq"))?.value;
-          const query = mode === "adapter" ? {
+          const query = storesDigest ? {
             ...input,
             ...(input.data?.token ? { data: { ...input.data, token: digest(input.data.token) } } : {}),
             ...(input.update?.token ? { update: { ...input.update, token: digest(input.update.token) } } : {}),
             ...(input.where ? { where: input.where.map(item => item.field === "token"
-              ? { ...item, value: Array.isArray(item.value) ? item.value.map(digest) : digest(item.value) } : item) } : {}),
+              ? { ...item, value: Array.isArray(item.value) ? item.value.map(queryToken) : queryToken(item.value) } : item) } : {}),
           } : input;
           const row = await base[operation](query);
           if (operation === "create" && observations.rejectNextSession) {
@@ -50,7 +54,7 @@ function experimentalAdapter(db, mode, observations) {
           // Only an exact-token query/create has the original token available.
           // A user-ID list has no reversible mapping; leave it visible to the
           // test so the framework's list/revoke incompatibility is not hidden.
-          return mode === "adapter" && row && !Array.isArray(row) && typeof original === "string" && "token" in row
+          return storesDigest && row && !Array.isArray(row) && typeof original === "string" && "token" in row
             ? { ...row, token: original } : row;
         };
       }
@@ -185,6 +189,50 @@ async function main() {
       "Database token alone is not an accepted signed cookie");
     passed("baseline raw DB token, signed cookie and real joined session read");
 
+    stage = "baseline active-session list and cross-account revocation isolation";
+    const devices = await signup(baseline, "devices", password);
+    const deviceTwo = await baseline.request("/sign-in/username", { method: "POST", body: { username: devices.username, password } });
+    const deviceThree = await baseline.request("/sign-in/username", { method: "POST", body: { username: devices.username, password } });
+    const expiredDevice = await baseline.request("/sign-in/username", { method: "POST", body: { username: devices.username, password } });
+    for (const device of [deviceTwo, deviceThree, expiredDevice]) {
+      assert.equal(device.status, 200); assert.ok(device.cookie);
+    }
+    await inspection.query('UPDATE "Session" SET "expiresAt"=now()-interval \'1 second\' WHERE token=$1', [tokenOf(expiredDevice.cookie)]);
+    const deviceList = await baseline.request("/list-sessions", { cookie: devices.cookie });
+    assert.equal(deviceList.status, 200); assert.equal(deviceList.body.length, 3);
+    assert.deepEqual(new Set(deviceList.body.map(item => item.token)),
+      new Set([devices.cookie, deviceTwo.cookie, deviceThree.cookie].map(tokenOf)));
+    assert.equal((await baseline.request("/list-sessions")).status, 401);
+    assert.equal((await baseline.request("/revoke-session", { method: "POST", body: { token: tokenOf(plain.cookie) } })).status, 401);
+    const foreignRevocation = await baseline.request("/revoke-session", {
+      method: "POST", cookie: devices.cookie, body: { token: tokenOf(plain.cookie) },
+    });
+    assert.equal(foreignRevocation.status, 200);
+    assert.ok((await baseline.request("/get-session", { cookie: plain.cookie })).body,
+      "A successful revoke response must not be mistaken for permission to revoke another account");
+    passed("baseline list excludes expired devices and cannot revoke another account");
+
+    stage = "baseline single-session and other-device revocation";
+    const selectedDevice = deviceList.body.find(item => item.token === tokenOf(deviceTwo.cookie));
+    assert.equal((await baseline.request("/revoke-session", {
+      method: "POST", cookie: devices.cookie, body: { token: selectedDevice.token },
+    })).status, 200);
+    assert.equal((await baseline.request("/get-session", { cookie: deviceTwo.cookie })).body, null);
+    assert.ok((await baseline.request("/get-session", { cookie: devices.cookie })).body);
+    assert.ok((await baseline.request("/get-session", { cookie: deviceThree.cookie })).body);
+    assert.equal((await baseline.request("/revoke-other-sessions", { method: "POST", cookie: devices.cookie, body: {} })).status, 200);
+    assert.equal((await baseline.request("/get-session", { cookie: deviceThree.cookie })).body, null);
+    assert.ok((await baseline.request("/get-session", { cookie: devices.cookie })).body,
+      "Revoke-other-sessions retains the calling device");
+    passed("baseline list-derived single revoke and other-device revoke change actual session validity");
+
+    stage = "baseline account-wide revocation includes the calling device";
+    assert.equal((await baseline.request("/revoke-sessions", { method: "POST", cookie: devices.cookie, body: {} })).status, 200);
+    assert.equal((await baseline.request("/get-session", { cookie: devices.cookie })).body, null);
+    assert.ok((await baseline.request("/get-session", { cookie: plain.cookie })).body,
+      "Account-wide revocation leaves unrelated accounts intact");
+    passed("baseline revoke-sessions invalidates the caller and preserves unrelated accounts");
+
     stage = "create-hook hashing is bearer substitution, not hash-at-rest";
     const hook = await server("create-hook");
     const hooked = await signup(hook, "hook", password);
@@ -205,6 +253,17 @@ async function main() {
     assert.equal((await candidate.request("/get-session", { cookie: signedCookie(hashedRow.token, secret) })).body, null,
       "Do not treat an already-hashed DB value as an accepted bearer");
     passed("adapter candidate keeps raw token out of DB and refuses digest-as-bearer");
+
+    stage = "unsafe digest-prefix shortcut reintroduces a database bearer";
+    const unsafe = await server("unsafe-prefix-adapter");
+    const unsafeUser = await signup(unsafe, "unsafe", password);
+    const unsafeSession = await unsafe.request("/get-session", { cookie: unsafeUser.cookie });
+    const unsafeRow = await stored(unsafeSession.body.session.id);
+    assert.equal(unsafeRow.token, digest(tokenOf(unsafeUser.cookie)));
+    const unsafeAccepted = await unsafe.request("/get-session", { cookie: signedCookie(unsafeRow.token, secret) });
+    assert.equal(unsafeAccepted.body?.user.id, unsafeRow.userId,
+      "Unsafe prefix recognition makes the database digest usable when signed; never deploy this workaround");
+    passed("counterexample: accepting a digest prefix loses at-rest bearer separation");
 
     stage = "refresh uses update by token without replacing cookie with digest";
     await inspection.query('UPDATE "Session" SET "expiresAt"=now()+interval \'2 hour\' WHERE id=$1', [hashedRow.id]);
@@ -240,6 +299,9 @@ async function main() {
     assert.equal(revokedOthers.status, 200);
     assert.ok((await candidate.request("/get-session", { cookie: second.cookie })).body,
       "Known incompatibility: framework's bulk per-token revoke has the same mismatch");
+    assert.ok((await candidate.request("/get-session", { cookie: hashed.cookie })).body);
+    assert.equal((await inspection.query('SELECT count(*)::int n FROM "Session" WHERE "userId"=$1', [hashedRow.userId])).rows[0].n, 2,
+      "HTTP 200 did not revoke either candidate session; the current raw token cannot match its listed digest");
     passed("reproduced list-sessions / revoke-session / revoke-other-sessions incompatibility");
 
     stage = "logout, expiry and ID-based server revocation";

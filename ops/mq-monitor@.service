@@ -1,0 +1,19 @@
+# Template only. Installation/enablement requires host approval.
+# Notifications remain dry-run until the receiver has passed owner acceptance.
+[Unit]
+Description=MQ read-only host and service checks for %i
+After=docker.service network-online.target
+ConditionPathExists=/etc/mq/monitor/%i.enabled
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+WorkingDirectory=/srv/mq/current
+EnvironmentFile=/etc/mq/monitor/%i.env
+ExecStart=/opt/mq/node-v24.19.0/bin/node /srv/mq/current/scripts/production/monitor-runner.mjs
+TimeoutStartSec=90s

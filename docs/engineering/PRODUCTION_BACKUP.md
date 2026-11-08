@@ -1,6 +1,6 @@
 # 加密备份与隔离恢复
 
-P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。VPS 已购买，但尚未连接或部署；以下演练使用合成数据，没有正式备份密码。
+P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；仍无正式备份密码或异地仓库。P5-02 的 OSS 香港与告警接入见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
 
 ## 选择与一致性边界
 
@@ -24,7 +24,7 @@ P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合
 
 ## S3 文件秘密与仓库合同
 
-S3 使用 `s3:https://<endpoint>/<bucket>/<专用非空prefix>`，首版固定 path-style、显式 region、最多 2 个连接及有界重试。拒绝 HTTP、URL 账号密码、查询参数、编码/相对路径和任意 Restic 选项。正式端点使用系统可信 CA；隔离实验可显式提供只读 CA 文件，不存在跳过 TLS 校验开关。[官方 S3 合同](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#s3-compatible-storage)。
+S3 使用 `s3:https://<endpoint>/<bucket>/<专用非空prefix>`，通用S3固定path-style；OSS香港自动使用dns虚拟主机与Restic文档的oss-cn-hongkong region，其他阿里Endpoint拒绝。所有S3均显式region、最多 2 个连接及有界重试。拒绝 HTTP、URL 账号密码、查询参数、编码/相对路径和任意 Restic 选项。正式端点使用系统可信 CA；隔离实验可显式提供只读 CA 文件，不存在跳过 TLS 校验开关。[官方 S3 合同](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#s3-compatible-storage)。
 
 凭据文件为 Git 外的 0400/0600 JSON，仅接受 `accessKeyId`、`secretAccessKey` 和可选 `sessionToken`。每个字段必须为非空无空白 ASCII 字符串，文件最多 4096 bytes；不支持 INI、`credential_process`、角色跳转或默认 AWS/MinIO 凭据。内容只装入对应 Restic 子进程的 AWS 环境变量，不进入 Compose 环境、镜像、argv 或日志。同 UID/主机 root 仍可能读取进程环境；这不抵御主机失陷。
 
@@ -83,7 +83,7 @@ node scripts/production/backup-cli.mjs retention-plan --confirm-deployment=<源�
 `scripts/production/backup-window.mjs` 提供固定维护顺序，`ops/mq-backup@.service` / `.timer` 是尚未安装的模板。它不是直接对运行中数据库执行 backup 的 cron：
 
 1. 从 Git 外的只读窗口配置、部署 manifest 和私有 Compose env 文件读取目标。确认 UUID、`mq-staging|mq-production` 项目、配置挂载、现有 app/proxy/postgres 容器标签及镜像 digest；未知、已停止或不健康的初始目标拒绝。
-2. 创建本部署的 `backup-window.lock`；已有锁拒绝新的调度。先停止 proxy/app，再调用已有 rotation CLI `pause`，由数据库核验写身份排空。
+2. production 先独占 `/srv/mq-production/operation.lock`，与发布共享；再创建本部署的 `backup-window.lock`。已有锁拒绝新的调度，不停止另一项操作。先停止 proxy/app，再调用已有 rotation CLI `pause`，由数据库核验写身份排空。
 3. 调用原 backup CLI；仅在其成功且真实 receipt 可读、部署 ID、snapshot 和源 commit 一致后，原子更新同部署 `latest.json`。
 4. 成功才 `resume` 和 `up --wait app proxy`。任何失败或中断尝试关闭入口并再次 pause；未能确认关闭时输出 `closureConfirmed=false`，必须立即人工处理，不能宣称已经安全关闭。失败保留锁；不会自行重试、删除快照或解锁。
 
@@ -99,7 +99,7 @@ MQ_BACKUP_WINDOW_CONFIG=/etc/mq/backup/window.json
 
 服务的 `ExecStopPost` 在失败时重新核对目标并只执行关闭入口/pause，成功时不再操作。`OnFailure` 通过实例 UUID 调用告警 CLI 的 `--backup-failure`，生成当前时间的固定 `BACKUP_FAILED` 信封；不读取可能缺失或过期的 `backup-failure.json`，该文件仅保留作故障诊断。告警默认仅 dry-run；尚未配置和实际验证通知接收者时，不得声称告警会送达。需要真实通知时，须另行批准 webhook 文件及 `--send`。[Ubuntu 24.04 的服务退出清理语义](https://manpages.ubuntu.com/manpages/noble/man5/systemd.service.5.html)。
 
-运维监控读取 `/srv/mq/backup-status/latest.json`；它只证明最近一次备份完整，不证明应用随后恢复成功，仍须核对服务退出状态与入口健康。失败后检查固定错误阶段、容器状态、DB 写身份与遗留工作目录；确认没有在途备份/维护操作后，才可移除**这个部署的空 `backup-window.lock` 目录**并按 rotation 手册人工恢复。不要删除整个 status/workspace，也不要用 Restic unlock 或重复启动掩盖未完成的维护。
+运维监控读取配置的 receiptDirectory 中 `latest.json`；它只证明最近一次备份完整，不证明应用随后恢复成功，仍须核对服务退出状态与入口健康。失败后检查固定错误阶段、容器状态、DB 写身份与遗留工作目录；确认没有在途备份/维护操作并获得恢复批准后，才可移除**这个部署的空 `backup-window.lock` 目录**，将匹配本次操作的全局 `operation.lock` 保留归档，再按 rotation 手册人工恢复。不能只移除局部锁就重复执行，也不能接管活跃进程或其他部署/发布的锁。不要删除整个 status/workspace，不用 Restic unlock 掩盖未完成的维护。
 
 协调器的状态机、真实 receipt 文件发布、错误目标拒绝和中断行为已有自动化测试。工具容器以 UID10001 写入 0600 receipt，主机 root 用专门的有界元数据读取器接收；秘密文件读取规则没有放宽。读取器拒绝符号链接、硬链接、其他用户归属和宽松权限。注入的 Docker runner 测试不等同于目标 VPS 的 systemd 演练。真正安装、时间窗口、进程强杀/重启恢复及通知送达仍需主机验收。
 

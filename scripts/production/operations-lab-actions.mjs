@@ -7,6 +7,7 @@ import { readDeploymentManifest, readDeploymentFile } from "./runtime-config.mjs
 import { assertDatabaseUrl } from "./database-config.mjs";
 import { pauseDeploymentWriters, resumeDeploymentWriters } from "./rotation.mjs";
 import { auditRuntimeDatabase } from "./database.mjs";
+import { ossLabBudget, ossLabRepository, OSS_LAB_CONFIRM } from "./oss-real-lab.mjs";
 
 // Disposable-container-only test adapter. Never accepts production, real
 // deployment names or arbitrary SQL. No secrets enter its result JSON.
@@ -25,11 +26,24 @@ try {
   const repository = process.env.MQ_LAB_S3_REPOSITORY || "/var/lib/mq/operations/repository";
   const workspace = "/var/lib/mq/operations/work", passwordFile = process.env.RESTIC_PASSWORD_FILE;
   const remote = Boolean(process.env.MQ_LAB_S3_REPOSITORY);
+  const oss = process.env.MQ_LAB_REAL_OSS !== undefined;
+  if (oss) {
+    assert.equal(repository, ossLabRepository(process.env.MQ_LAB_OSS_SOURCE_ID, process.env.MQ_LAB_REAL_OSS));
+    if (["backup", "oss-budget", "oss-snapshots"].includes(action)) assert.equal(config.deploymentId, process.env.MQ_LAB_OSS_SOURCE_ID);
+  }
   const options = { repository, passwordFile, workspace, ...(remote ? { backend: "s3",
-    s3: { region: "us-east-1", credentialsFile: "/run/s3/s3_credentials", caCertificateFile: "/etc/mq-s3/ca.crt" } } : {}) };
-  if (remote && action !== "backup") options.expectedRepositoryId = (await readFile("/var/lib/mq/operations/repository-id", "utf8")).trim();
+    s3: oss ? { region: "oss-cn-hongkong", credentialsFile: "/run/s3/s3_credentials" }
+      : { region: "us-east-1", credentialsFile: "/run/s3/s3_credentials", caCertificateFile: "/etc/mq-s3/ca.crt" } } : {}) };
+  // Restored targets have a new deployment identity but consume the original
+  // repository. Its fixed source UUID is supplied separately for this lab only.
+  if (remote && !["backup", "oss-budget"].includes(action)) options.expectedRepositoryId = (await readFile("/var/lib/mq/operations/repository-id", "utf8")).trim();
   let result;
-  if (action === "create-target") {
+  if (action === "oss-budget") {
+    assert.ok(oss);
+    const sizes = (await pool.query(`SELECT pg_database_size(current_database())::text AS database_bytes,
+      (SELECT COALESCE(sum(display_bytes+thumbnail_bytes),0)::text FROM public.media_asset WHERE state='READY') AS media_bytes`)).rows[0];
+    result = { budget: ossLabBudget(Number(sizes.database_bytes), Number(sizes.media_bytes)) };
+  } else if (action === "create-target") {
     // Cluster administrator creates only this lab's fresh database. Never
     // DROP/TRUNCATE/reuse an existing database, even on test failure.
     const name = config.database.name;
@@ -48,11 +62,14 @@ try {
     const { backupDeployment, initializeBackupRepository } = await import("./backup.mjs");
     await mkdir(workspace, { mode: 0o700, recursive: true });
     if (remote) {
-      assert.match(repository, /^s3:https:\/\/mq-backup\.localhost\/mq-lab\/mq-p302-[a-f0-9]{32}$/);
+      if (!oss) assert.match(repository, /^s3:https:\/\/mq-backup\.localhost\/mq-lab\/mq-p302-[a-f0-9]{32}$/);
       const { readS3CredentialsEnvironment, runBackupTool } = await import("./backup-tools.mjs");
-      const env = { ...await readS3CredentialsEnvironment(options.s3.credentialsFile), AWS_DEFAULT_REGION: "us-east-1", GOMAXPROCS: "2" };
-      const args = ["--repo", repository, "--password-file", passwordFile, "--cacert", options.s3.caCertificateFile, "--no-cache"];
-      // Explicit initialization only of this private fixture's pre-created bucket.
+      const env = { ...await readS3CredentialsEnvironment(options.s3.credentialsFile), GOMAXPROCS: "2" };
+      const args = ["--repo", repository, "--password-file", passwordFile, "--no-cache", "-o", `s3.region=${options.s3.region}`,
+        "-o", `s3.bucket-lookup=${oss ? "dns" : "path"}`, "-o", "s3.connections=2", "-o", "s3.retries=2",
+        ...(!oss ? ["--cacert", options.s3.caCertificateFile] : [])];
+      // Explicitly approved fresh synthetic prefix only. Host-side boto3 has
+      // already required an empty prefix + config 404; init also refuses reuse.
       await runBackupTool("restic", [...args, "init", "--repository-version", "2"], { env });
       options.expectedRepositoryId = JSON.parse(await runBackupTool("restic", [...args, "cat", "config"], { env })).id;
       await writeFile("/var/lib/mq/operations/repository-id", options.expectedRepositoryId, { flag: "wx", mode: 0o600 });
@@ -95,6 +112,21 @@ try {
     const plan = await retentionDryRun({ ...options, deploymentId: config.deploymentId });
     assert.equal(plan.deleted, 0); assert.equal(plan.dryRun, true);
     result = { noDeletion: true };
+  } else if (action === "oss-snapshots") {
+    assert.ok(oss); assert.equal(process.env.MQ_LAB_REAL_OSS, OSS_LAB_CONFIRM);
+    const { readS3CredentialsEnvironment, runBackupTool } = await import("./backup-tools.mjs");
+    const env = { ...await readS3CredentialsEnvironment(options.s3.credentialsFile), GOMAXPROCS: "2" };
+    const snapshots = JSON.parse(await runBackupTool("restic", ["--repo", repository, "--password-file", passwordFile, "--no-cache",
+      "-o", "s3.region=oss-cn-hongkong", "-o", "s3.bucket-lookup=dns", "-o", "s3.connections=2", "-o", "s3.retries=2",
+      "snapshots", "--json"], { env }));
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].hostname, `mq-${config.deploymentId}`);
+    assert.match(snapshots[0].id, /^[a-f0-9]{64}$/);
+    result = { snapshots: snapshots.map(row => row.id), repositoryId: options.expectedRepositoryId };
+  } else if (action === "oss-failure-receipt") {
+    assert.ok(oss);
+    await assert.rejects(access("/var/lib/mq/operations/failed-cli.json"), error => error.code === "ENOENT");
+    result = { absentFailedReceipt: true };
   } else if (action === "assert-restored") {
     const sessions = (await pool.query('SELECT count(*)::int AS n FROM public."Session"')).rows[0].n;
     const keys = (await pool.query("SELECT (SELECT count(*) FROM mq_publish_private.signing_key)+(SELECT count(*) FROM mq_comment_private.moderation_key) AS n")).rows[0].n;
@@ -135,6 +167,10 @@ try {
   // print it, even in this synthetic environment.
   console.log(JSON.stringify({ action, ok: true,
     ...(result?.snapshotId ? { snapshotId: result.snapshotId } : {}),
+    ...(action === "oss-budget" ? { budget: result.budget } : {}),
+    ...(action === "oss-snapshots" ? { snapshots: result.snapshots, repositoryId: result.repositoryId } : {}),
+    ...(oss && action === "backup" ? { databaseDumpBytes: result.manifest.database.byteLength,
+      mediaBytes: result.manifest.inventory.filter(row => row.state === "READY").reduce((sum, row) => sum + row.display_bytes + row.thumbnail_bytes, 0) } : {}),
     ...(action === "receipt" ? { verified: result.verified, deploymentId: result.deploymentId, completedAt: result.completedAt } : {}) }));
 } catch (error) {
   const phase = /^[a-z-]{1,48}$/.test(error.phase ?? "") ? ` phase=${error.phase}` : "";

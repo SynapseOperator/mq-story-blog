@@ -31,6 +31,29 @@ test("hidden terminal input never echoes characters and restores terminal state 
   assertRestored(io);
 });
 
+test("hidden input disables echo and attaches the reader before exposing the prompt", async () => {
+  const io = terminal();
+  io.output.write = function(value) {
+    this.text += value;
+    if (value === "Password: ") {
+      assert.equal(io.input.isRaw, true, "Visible password prompt must already have echo disabled");
+      assert.equal(io.input.listenerCount("data"), 1);
+      assert.equal(io.input.paused, false);
+      io.input.emit("data", "synthetic_immediate_input\n");
+    }
+  };
+  assert.equal(await readHiddenPassword("Password: ", io), "synthetic_immediate_input");
+  assertRestored(io);
+});
+
+test("failure to disable terminal echo refuses before showing a password prompt", async () => {
+  const io = terminal();
+  io.input.setRawMode = () => { throw new Error("SYNTHETIC_TTY_MODE_FAILED"); };
+  await assert.rejects(readHiddenPassword("Password: ", io), /SYNTHETIC_TTY_MODE_FAILED/);
+  assert.equal(io.output.text, "");
+  assert.equal(io.input.listenerCount("data"), 0);
+});
+
 test("hidden input cancellation, stream error and overflow reject without echo or stale listeners", async () => {
   for (const scenario of ["ctrl-c", "ctrl-d", "escape", "overflow", "stream-error"]) {
     const io = terminal(true);

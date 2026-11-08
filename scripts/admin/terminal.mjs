@@ -3,7 +3,6 @@
  */
 export function readHiddenPassword(prompt, { input = process.stdin, output = process.stdout } = {}) {
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== "function") throw new Error("TTY_REQUIRED");
-  output.write(prompt);
   const previousRaw = Boolean(input.isRaw);
   let value = "";
   let settled = false;
@@ -36,5 +35,8 @@ export function readHiddenPassword(prompt, { input = process.stdin, output = pro
     input.on("data", onData);
     input.once("error", onError);
     input.resume();
+    // The kernel must stop echoing and our reader must be ready before the
+    // prompt becomes visible. Fast typing (or a PTY) can arrive immediately.
+    output.write(prompt);
   });
 }

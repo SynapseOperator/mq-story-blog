@@ -1,6 +1,6 @@
 # P3-03：单机运维与上线前检查
 
-关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 已完成真实 VPS 只读采集，见 [VPS_READINESS.md](VPS_READINESS.md)；尚未安装组件、加固或部署。域名已购买但公开DNS仍受阻，正式密钥和上线验收未完成。本手册中的变更步骤尚未在目标 VPS 执行；本地容器证据不能替代实机验收。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)。
+关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 的历史只读采集见 [VPS_READINESS.md](VPS_READINESS.md)。随后已完成 SSH/UFW/NTP、Docker 初始化和 P5-01 真实 VPS 隔离演练，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；域名 A 已指向 VPS，正式密钥和公网 HTTPS/上线验收仍未完成。下列正式运维变更不因历史实验授权而自动执行。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)，R2 与新增飞书/外部探针见 [P5-02 外部服务](OFFSITE_BACKUP_AND_ALERTS.md)。
 
 ## 主机、网络和账号
 
@@ -30,7 +30,7 @@ MQ_OPS_BACKUP_RECEIPT=/srv/mq/backup-status/verified.json \
 node scripts/production/operations-check.mjs
 ```
 
-输出只包含指标及固定故障码，不输出 container Env、日志、凭据、正文或证书身份。检测主机可用内存、每 CPU load、磁盘剩余和 inode、三个服务存活/健康/OOM、容器内存占用、app/PG 是否误发布端口、实际 TLS 验证/证书剩余天数及已验证备份的新鲜度。任一失败退出 1；无法读取数据也退出 1，不以“没有指标”当健康。没有网络证书验证例外；本地临时 CA 仅在测试函数中显式信任。
+输出只包含指标及固定故障码，不输出 container Env、日志、凭据、正文或证书身份。检测主机可用内存、每 CPU load、磁盘剩余和 inode、三个服务存活/健康/OOM、容器内存占用、app/PG 是否误发布端口、实际 HTTPS 公开 API 响应/证书剩余天数及已验证备份的新鲜度。任一失败退出 1；无法读取数据也退出 1，不以“没有指标”当健康。没有网络证书验证例外；本地临时 CA 仅在测试函数中显式信任。
 
 阈值初值：磁盘保留 8GiB、inode 至少 5%、主机可用内存 256MiB、每 CPU load ≤1.5、容器内存 <90%、证书至少 14 天、备份不超过 26 小时。load/瞬时内存需要连续样本判断是否扩容；脚本报错不自动重启/删数据。Windows 只能证明解析及本地 Docker/TLS 行为，Linux 内存/inode 指标须在真实主机验证。备份 receipt 是本机运维证据，不证明异地副本存在。
 

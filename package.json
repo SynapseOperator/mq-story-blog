@@ -54,10 +54,14 @@
     "test:production:container": "node scripts/production/lab.mjs",
     "test:production:operations": "node scripts/production/lab.mjs --operations",
     "test:production:release": "node scripts/production/lab.mjs --release",
+    "test:backup:oss": "node scripts/production/oss-transport-tests.mjs",
     "test:release": "node scripts/release/integration.mjs",
     "host:preflight": "node scripts/production/host-preflight.mjs",
     "test:production:rotation": "npm run db:generate && node scripts/production/rotation-tests.mjs",
-    "test:auth:session-spike": "npm run db:generate && node scripts/auth/session-token-spike.mjs"
+    "test:auth:session-spike": "npm run db:generate && node scripts/auth/session-token-spike.mjs",
+    "test:production:admin": "npm run db:generate && node scripts/production/admin-tests.mjs",
+    "test:production:bootstrap": "node scripts/production/production-bootstrap-lab.mjs",
+    "release:production": "node scripts/release/production-cli.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
