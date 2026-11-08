@@ -84,4 +84,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第六轮 [42504484226](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42504484226) 导航一次成功、DOM/load完成，但有fetch失败，图片等待超时；不能将其写成图片解码失败。现在单独验证完整by-slug HTTPS响应，记录浏览器该GET的状态/固定网络码/完成事件，先等待真实正文ready或错误UI。仅当该正文请求精确报`ERR_NETWORK_CHANGED`时点击原有“重试加载故事”（最多3次总尝试）；HTTP、鉴权、Schema错误和普通超时仍失败。正文必须实际ready、HTTP200且完整接收，然后继续原图片解码断言；不修改阅读器或隐藏失败。
 
+第七轮 [42505885253](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42505885253) 在reader阶段超时，尚未发出正文请求。复核发现此前资源失败统计在关闭浏览器之后输出，可能混入清理取消；不能由script/image计数推定原始根因。现将固定资源类型/网络码/HTTP状态在关闭前记录，且将空闲浏览器初始化移到目标Docker网络变更前。这个顺序调整不关闭网络检测或TLS，不改变任何验收断言；是否解决CI差异仍以最终运行实测为准，不预称根因已证实。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。

@@ -55,9 +55,17 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
   for (const [key, value] of Object.entries({ MQ_SYNTHETIC_LAB: "true", MQ_SYNTHETIC_DEPLOYMENT_ID: id, MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json",
     BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url", MIGRATION_DATABASE_URL_FILE: "/run/secrets/migration_database_url",
     RESTIC_PASSWORD_FILE: "/run/secrets/restic_password", MQ_BACKUP_SNAPSHOT_ID: fixture.backupReceipt.snapshotId })) restoreArgs.push("-e", `${key}=${value}`);
-  let succeeded = false, stage = "target-database-start", browserObservation;
-  compose(["stop", "postgres"]); // Keep one database/app pair active on small hosts.
+  let succeeded = false, stage = "restored-browser-prepare", browserObservation, browser;
   try {
+    // Initialize the empty browser before changing Docker interfaces, rather
+    // than interleaving Chromium's initial network observation with navigation.
+    browser = await chromium.launch({ args: ["--host-resolver-rules=MAP mq.localhost 127.0.0.1"] });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
+      isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    await page.goto("about:blank");
+    stage = "target-database-start";
+    compose(["stop", "postgres"]); // Keep one database/app pair active on small hosts.
     targetCompose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
     stage = "target-restore-and-permission-audit";
     operation("bootstrap"); targetCompose(["run", "--rm", "--no-deps", "volumes-init"]);
@@ -107,15 +115,8 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     const bySlug = await request(storyPath);
     assert.equal(bySlug.status, 200);
     assert.equal(bySlug.data.story.id, fixture.storyId);
-    stage = "restored-browser-launch";
-    // Match laboratoryTransport and the explicitly IPv4-only Docker binding;
-    // keep the HTTPS hostname/SNI and certificate behavior unchanged.
-    const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP mq.localhost 127.0.0.1"] });
-    try {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
-        isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
-      const page = await context.newPage();
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: [], storyRequests: [], storyState: "loading" };
+    {
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, resourceFailures: [], httpErrors: [], documentFailures: [], navigationAttempts: [], storyRequests: [], storyState: "loading" };
       let navigationRequest, navigationFailure, storyRequest, storyObservation;
       page.on("request", request => {
         if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigationRequest = request;
@@ -130,21 +131,21 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       page.on("response", response => {
         if (response.request() === navigationRequest) browserObservation.documentStatus = response.status();
         if (response.request() === storyRequest) storyObservation.status = response.status();
+        if (response.status() >= 400) browserObservation.httpErrors.push({ type: response.request().resourceType(), status: response.status() });
       });
       page.on("requestfinished", request => { if (request === storyRequest) storyObservation.finished = true; });
       page.on("requestfailed", request => {
         const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
           ? request.resourceType() : "other";
         browserObservation.failedResources[type] = (browserObservation.failedResources[type] ?? 0) + 1;
+        const reported = request.failure()?.errorText;
+        const code = /^net::ERR_[A-Z0-9_]+$/.test(reported ?? "") ? reported : "UNCLASSIFIED_NETWORK_FAILURE";
+        browserObservation.resourceFailures.push({ type, code });
         if (request === navigationRequest) {
-          const code = request.failure()?.errorText;
-          navigationFailure = /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE";
+          navigationFailure = code;
           browserObservation.documentFailures.push(navigationFailure);
         }
-        if (request === storyRequest) {
-          const code = request.failure()?.errorText;
-          storyObservation.code = /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE";
-        }
+        if (request === storyRequest) storyObservation.code = code;
       });
       stage = "restored-browser-navigation";
       // A recovery check waits for the application and decoded story image
@@ -210,11 +211,10 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       await image.evaluate(element => element.decode());
       stage = "restored-browser-screenshot";
       await page.screenshot({ path: join(evidence, "production-restored-mobile.png"), scale: "device" });
-      await context.close();
-    } finally { await browser.close(); }
+    }
     const result = { restored: true, sourceDatabase: "mq_production", targetDatabase: "mq_production", distinctClusters: true,
       distinctDeploymentIds: true, sessionsCleared: true, businessKeysCleared: true, publicAndPrivateMediaVerified: true,
-      elapsedMs: Date.now() - started, productionDeployed: false, browser: browserObservation };
+      elapsedMs: Date.now() - started, productionDeployed: false, browser: globalThis.structuredClone(browserObservation) };
     await writeFile(join(evidence, "production-recovery.json"), JSON.stringify(result, null, 2));
     succeeded = true; return result;
   } catch (error) {
@@ -236,12 +236,16 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       : error?.name === "TimeoutError" ? "BROWSER_TIMEOUT" : "REJECTED"}`);
     throw error;
   } finally {
-    targetCompose(["down", "--remove-orphans"], { fail: false });
-    if (succeeded) for (const name of docker(["volume", "ls", "--filter", `name=${targetProject}`, "--format", "{{.Name}}"] ).stdout.trim().split(/\r?\n/).filter(Boolean)) {
-      assert.ok(name.startsWith(`${targetProject}_`)); docker(["volume", "rm", name]);
+    // Failure observations above are serialized before close can abort pending
+    // resources, so cleanup cancellations cannot be mistaken for the cause.
+    try { await browser?.close(); } finally {
+      targetCompose(["down", "--remove-orphans"], { fail: false });
+      if (succeeded) for (const name of docker(["volume", "ls", "--filter", `name=${targetProject}`, "--format", "{{.Name}}"] ).stdout.trim().split(/\r?\n/).filter(Boolean)) {
+        assert.ok(name.startsWith(`${targetProject}_`)); docker(["volume", "rm", name]);
+      }
+      // Do not revive an uncertain source after failed recovery. Its known data
+      // volume remains intact for diagnosis; successful recovery resumes its PG.
+      if (succeeded) compose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
     }
-    // Do not revive an uncertain source after failed recovery. Its known data
-    // volume remains intact for diagnosis; successful recovery resumes its PG.
-    if (succeeded) compose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]);
   }
 }
