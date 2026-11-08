@@ -80,4 +80,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第四轮 [42501526850](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42501526850) 捕获`net::ERR_NETWORK_CHANGED`，app健康、代理运行且均无OOM。实验刚切换Docker网络后出现了Chromium网络变更通知；不能据此推定应用或认证失败。仅对此公开GET、尚无文档响应且精确匹配该码时，短等500ms再导航，最多3次；记录每次失败和总尝试数。超时、HTTP错误、其他网络错误及全部写操作均不重试。所有权限、HTTP200、阅读器、真实图片解码断言保持。错误分类依据[Chromium定义](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/net/base/net_error_list.h)及[Playwright失败事件](https://playwright.dev/docs/api/class-request#request-failure)。
 
+第五轮 [42502889687](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42502889687) 收到200响应头后，同一主文档请求以`ERR_NETWORK_CHANGED`失败，DOM未完成，最终导航超时；上一版保护拒绝重试，原失败保留。现先用验证CA的Node请求确认完整分享HTML、200和公开标题，再在浏览器内将失败事件关联到本次主框架Request。仅当它精确报告网络变更且DOM未完成时，才允许有界重新读取公开GET（包括响应头后断流），记录每次状态/错误/DOM；没有该失败记录的普通超时仍直接失败。最终HTTP200、DOMContentLoaded、阅读器和图片解码全部必须通过，不重试任何写操作。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。

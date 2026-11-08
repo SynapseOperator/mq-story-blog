@@ -97,6 +97,11 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     assert.equal((await request(`/api/admin/media/${fixture.privateAssetId}/content`, { jar: adminJar })).status, 200);
     assert.equal((await request(`/api/admin/stories/${fixture.storyId}/withdraw`, { method: "POST", jar: adminJar,
       body: { expectedVersion: detail.data.story.version ?? 0 } })).status, 503);
+    stage = "restored-https-share-html";
+    const sharePath = `/stories/${detail.data.story.slug}`;
+    const share = await request(sharePath);
+    assert.equal(share.status, 200);
+    assert.ok(share.text.includes(detail.data.story.title) && share.text.includes("</html>"));
     stage = "restored-browser-launch";
     // Match laboratoryTransport and the explicitly IPv4-only Docker binding;
     // keep the HTTPS hostname/SNI and certificate behavior unchanged.
@@ -105,19 +110,24 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: 0 };
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: [] };
+      let navigationRequest, navigationFailure;
+      page.on("request", request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigationRequest = request;
+      });
       page.on("domcontentloaded", () => { browserObservation.domReady = true; });
       page.on("load", () => { browserObservation.loadComplete = true; });
       page.on("response", response => {
-        if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) browserObservation.documentStatus = response.status();
+        if (response.request() === navigationRequest) browserObservation.documentStatus = response.status();
       });
       page.on("requestfailed", request => {
         const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
           ? request.resourceType() : "other";
         browserObservation.failedResources[type] = (browserObservation.failedResources[type] ?? 0) + 1;
-        if (type === "document") {
+        if (request === navigationRequest) {
           const code = request.failure()?.errorText;
-          browserObservation.documentFailures.push(/^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE");
+          navigationFailure = /^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE";
+          browserObservation.documentFailures.push(navigationFailure);
         }
       });
       stage = "restored-browser-navigation";
@@ -125,23 +135,27 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       // below, not the load event of every background scene resource.
       let response;
       for (let attempt = 1; attempt <= 3; attempt++) {
-        browserObservation.navigationAttempts = attempt;
-        const failuresBefore = browserObservation.documentFailures.length;
+        navigationRequest = undefined; navigationFailure = undefined;
+        browserObservation.documentStatus = null; browserObservation.domReady = false; browserObservation.loadComplete = false;
         try {
-          response = await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`, { waitUntil: "domcontentloaded" });
+          response = await page.goto(`${manifest.origin}${sharePath}`, { waitUntil: "domcontentloaded" });
+          browserObservation.navigationAttempts.push({ attempt, status: response.status(), domReady: browserObservation.domReady, code: navigationFailure ?? null });
           break;
         } catch (error) {
           // Linux Chromium may observe delayed Docker interface changes after
-          // the restored stack becomes healthy. Retry only this public GET,
-          // before any document response, never a timeout/HTTP error or write.
-          if (error?.name === "TimeoutError" || attempt === 3 || browserObservation.documentStatus !== null
-            || browserObservation.documentFailures.length !== failuresBefore + 1
-            || browserObservation.documentFailures.at(-1) !== "net::ERR_NETWORK_CHANGED") throw error;
+          // the restored stack becomes healthy. A header is not a complete
+          // document: retry this public GET only after its own network failure,
+          // never an ordinary timeout/HTTP error, completed DOM or any write.
+          browserObservation.navigationAttempts.push({ attempt, status: browserObservation.documentStatus,
+            domReady: browserObservation.domReady, code: navigationFailure ?? null });
+          if (attempt === 3 || browserObservation.domReady || navigationFailure !== "net::ERR_NETWORK_CHANGED"
+            || ![null, 200].includes(browserObservation.documentStatus)) throw error;
           console.log(`PRODUCTION_RECOVERY_NETWORK_CHANGED retry=${attempt}`);
           await delay(500);
         }
       }
       assert.equal(response.status(), 200);
+      assert.equal(browserObservation.domReady, true);
       stage = "restored-browser-reader";
       await page.locator('dialog[data-phase="reading"]').waitFor();
       stage = "restored-browser-image-load";
