@@ -76,4 +76,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第二轮 [42498347596](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42498347596) 定位为 `restored-browser-navigation/BROWSER_TIMEOUT`，尚未到图片步骤。恢复导航改为等待DOMContentLoaded，再明确验证HTTP200、阅读器、真实图片解码及截图；不把所有背景资源的load事件当作业务就绪。补充仅含状态码/布尔值/资源类型计数的诊断，不记录URL、响应正文或原始错误。不能据此宣称已证明某一个背景资源是根因；本地完整重跑通过，远端以最终提交CI为准。
 
+第三轮 [42499861373](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42499861373) 的观察为主文档无HTTP响应、DOM未建立且一次document请求失败，明确排除图片就绪判断。恢复浏览器现与已验证的Node HTTPS客户端一样，将测试域名固定解析到实际绑定的127.0.0.1；域名/SNI、TLS合同与断言保持不变。新增仅匹配`net::ERR_*`的网络分类及容器running/OOM/exit/health状态，后续失败不再只留笼统REJECTED。原记录未提供网络错误种类，不能反推它一定由DNS导致。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。

@@ -98,12 +98,14 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     assert.equal((await request(`/api/admin/stories/${fixture.storyId}/withdraw`, { method: "POST", jar: adminJar,
       body: { expectedVersion: detail.data.story.version ?? 0 } })).status, 503);
     stage = "restored-browser-launch";
-    const browser = await chromium.launch();
+    // Match laboratoryTransport and the explicitly IPv4-only Docker binding;
+    // keep the HTTPS hostname/SNI and certificate behavior unchanged.
+    const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP mq.localhost 127.0.0.1"] });
     try {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {} };
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [] };
       page.on("domcontentloaded", () => { browserObservation.domReady = true; });
       page.on("load", () => { browserObservation.loadComplete = true; });
       page.on("response", response => {
@@ -113,6 +115,10 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
         const type = ["document", "script", "stylesheet", "image", "font", "fetch", "xhr"].includes(request.resourceType())
           ? request.resourceType() : "other";
         browserObservation.failedResources[type] = (browserObservation.failedResources[type] ?? 0) + 1;
+        if (type === "document") {
+          const code = request.failure()?.errorText;
+          browserObservation.documentFailures.push(/^net::ERR_[A-Z0-9_]+$/.test(code ?? "") ? code : "UNCLASSIFIED_NETWORK_FAILURE");
+        }
       });
       stage = "restored-browser-navigation";
       // A recovery check waits for the application and decoded story image
@@ -138,6 +144,17 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
     succeeded = true; return result;
   } catch (error) {
     if (browserObservation) console.error(`PRODUCTION_RECOVERY_BROWSER=${JSON.stringify(browserObservation)}`);
+    if (stage.startsWith("restored-browser")) {
+      for (const name of ["app", "proxy"]) {
+        const id = service(name);
+        const probe = id && docker(["inspect", id, "--format", "{{json .State}}"], { fail: false });
+        if (probe?.status === 0) {
+          const state = JSON.parse(probe.stdout);
+          console.error(`PRODUCTION_RECOVERY_SERVICE=${JSON.stringify({ service: name, running: state.Running,
+            oom: state.OOMKilled, exitCode: state.ExitCode, health: state.Health?.Status ?? "none" })}`);
+        }
+      }
+    }
     const known = ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ERR_TLS_CERT_ALTNAME_INVALID", "CERT_HAS_EXPIRED",
       "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "SELF_SIGNED_CERT_IN_CHAIN", "DEPTH_ZERO_SELF_SIGNED_CERT", "ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR", "ERR_ASSERTION"];
     console.error(`PRODUCTION_RECOVERY_FAILED stage=${stage};code=${known.includes(error?.code) ? error.code
