@@ -105,7 +105,7 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true,
         isMobile: true, reducedMotion: "reduce", ignoreHTTPSErrors: true });
       const page = await context.newPage();
-      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [] };
+      browserObservation = { documentStatus: null, domReady: false, loadComplete: false, failedResources: {}, documentFailures: [], navigationAttempts: 0 };
       page.on("domcontentloaded", () => { browserObservation.domReady = true; });
       page.on("load", () => { browserObservation.loadComplete = true; });
       page.on("response", response => {
@@ -123,7 +123,25 @@ ${["manifest", "pg", "app", "proxy"].map(name => `  ${name}: { external: true, n
       stage = "restored-browser-navigation";
       // A recovery check waits for the application and decoded story image
       // below, not the load event of every background scene resource.
-      assert.equal((await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`, { waitUntil: "domcontentloaded" })).status(), 200);
+      let response;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        browserObservation.navigationAttempts = attempt;
+        const failuresBefore = browserObservation.documentFailures.length;
+        try {
+          response = await page.goto(`${manifest.origin}/stories/${detail.data.story.slug}`, { waitUntil: "domcontentloaded" });
+          break;
+        } catch (error) {
+          // Linux Chromium may observe delayed Docker interface changes after
+          // the restored stack becomes healthy. Retry only this public GET,
+          // before any document response, never a timeout/HTTP error or write.
+          if (error?.name === "TimeoutError" || attempt === 3 || browserObservation.documentStatus !== null
+            || browserObservation.documentFailures.length !== failuresBefore + 1
+            || browserObservation.documentFailures.at(-1) !== "net::ERR_NETWORK_CHANGED") throw error;
+          console.log(`PRODUCTION_RECOVERY_NETWORK_CHANGED retry=${attempt}`);
+          await delay(500);
+        }
+      }
+      assert.equal(response.status(), 200);
       stage = "restored-browser-reader";
       await page.locator('dialog[data-phase="reading"]').waitFor();
       stage = "restored-browser-image-load";

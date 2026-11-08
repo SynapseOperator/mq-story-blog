@@ -78,4 +78,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第三轮 [42499861373](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42499861373) 的观察为主文档无HTTP响应、DOM未建立且一次document请求失败，明确排除图片就绪判断。恢复浏览器现与已验证的Node HTTPS客户端一样，将测试域名固定解析到实际绑定的127.0.0.1；域名/SNI、TLS合同与断言保持不变。新增仅匹配`net::ERR_*`的网络分类及容器running/OOM/exit/health状态，后续失败不再只留笼统REJECTED。原记录未提供网络错误种类，不能反推它一定由DNS导致。
 
+第四轮 [42501526850](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42501526850) 捕获`net::ERR_NETWORK_CHANGED`，app健康、代理运行且均无OOM。实验刚切换Docker网络后出现了Chromium网络变更通知；不能据此推定应用或认证失败。仅对此公开GET、尚无文档响应且精确匹配该码时，短等500ms再导航，最多3次；记录每次失败和总尝试数。超时、HTTP错误、其他网络错误及全部写操作均不重试。所有权限、HTTP200、阅读器、真实图片解码断言保持。错误分类依据[Chromium定义](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/net/base/net_error_list.h)及[Playwright失败事件](https://playwright.dev/docs/api/class-request#request-failure)。
+
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。
