@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -51,7 +52,7 @@ export async function runCommentDatabaseTests({ connectionString, runtimeUrl, ma
         username: `comment_${randomUUID().replaceAll("-", "").slice(0, 20)}`, email: `${userId}@accounts.invalid` } });
       if (index === 0) await owner.query('INSERT INTO "AdminGrant"("userId") VALUES($1)', [userId]);
       const sessionId = randomUUID();
-      await trusted.session.create({ data: { id: sessionId, userId, token: randomUUID(), expiresAt: new Date(Date.now() + 3600_000) } });
+      await trusted.session.create({ data: sessionFixture.row({ id: sessionId, userId, expiresAt: new Date(Date.now() + 3600_000) }) });
       principals.push({ userId, sessionId });
     }
     const [admin, reader] = principals;
@@ -174,7 +175,7 @@ export async function runCommentDatabaseTests({ connectionString, runtimeUrl, ma
     });
     await check("expiry while waiting for the comment row prevents moderation", async () => {
       const receipt = await submit(storyId), sessionId = randomUUID();
-      await trusted.session.create({ data: { id: sessionId, userId: admin.userId, token: randomUUID(), expiresAt: new Date(Date.now() + 1500) } });
+      await trusted.session.create({ data: sessionFixture.row({ id: sessionId, userId: admin.userId, expiresAt: new Date(Date.now() + 1500) }) });
       const gate = await owner.connect(); let pending;
       try {
         await gate.query("BEGIN"); await gate.query("SELECT id FROM story_comment WHERE id=$1 FOR UPDATE", [receipt.receiptId]);
@@ -187,7 +188,7 @@ export async function runCommentDatabaseTests({ connectionString, runtimeUrl, ma
     });
     await check("expiry during a duplicate-key wait rolls back the eventual account insert", async () => {
       const sessionId = randomUUID(), keyHash = hash(randomUUID()), body = "合成幂等等待";
-      await trusted.session.create({ data: { id: sessionId, userId: reader.userId, token: randomUUID(), expiresAt: new Date(Date.now() + 1500) } });
+      await trusted.session.create({ data: sessionFixture.row({ id: sessionId, userId: reader.userId, expiresAt: new Date(Date.now() + 1500) }) });
       const gate = await owner.connect(); let pending;
       try {
         await gate.query("BEGIN");

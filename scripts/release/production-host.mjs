@@ -16,7 +16,7 @@ import { planProductionBootstrap, planProductionChange, planProductionActivation
 
 const source = fileURLToPath(new URL("../../", import.meta.url));
 const reserve = 8 * 1024 ** 3;
-const secretOwners = { postgres_password: 999, database_url: 10001, auth_secret: 10001,
+const secretOwners = { postgres_password: 999, database_url: 10001, auth_secret: 10001, session_storage_key: 10001,
   auth_proxy_secret: 10001, publish_signing_key: 10001, comment_signing_key: 10001,
   bootstrap_database_url: 10001, migration_database_url: 10001, role_passwords: 10001 };
 
@@ -80,9 +80,9 @@ export async function readSecrets(directory, config) {
   assert.equal(decodeURIComponent(bootstrap.password), values.postgres_password);
   assert.equal(decodeURIComponent(new URL(values.database_url).password), passwords.runtime);
   assert.equal(decodeURIComponent(new URL(values.migration_database_url).password), passwords.migration);
-  const keys = ["auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => values[name]);
+  const keys = ["auth_secret", "session_storage_key", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => values[name]);
   for (const key of keys) assert.match(key, /^[a-f0-9]{64}$/);
-  assert.equal(new Set([...Object.values(passwords), values.postgres_password, ...keys]).size, LOGIN_IDENTITIES.length + 5,
+  assert.equal(new Set([...Object.values(passwords), values.postgres_password, ...keys]).size, LOGIN_IDENTITIES.length + 1 + keys.length,
     "PRODUCTION_SECRET_REUSE_REJECTED");
   // Contents never enter state, Docker argv, output, or the approval record.
 }
@@ -125,7 +125,7 @@ async function publicHttpsHealthy(origin) {
   return false;
 }
 
-// A receipt includes four OCI manifests and eight migrations, so it is larger
+// A receipt includes four OCI manifests and nine migrations, so it is larger
 // than a secret. Keep the 4 KiB secret limit; use a separate private 64 KiB cap.
 export async function readProductionReceipt(path) {
   await privateDirectory(dirname(path));

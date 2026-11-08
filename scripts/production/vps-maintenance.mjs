@@ -108,7 +108,7 @@ export async function runVpsMaintenance(ctx, action) {
         "--tmpfs", "/var/lib/mq/media:rw,noexec,nosuid,size=8m,uid=10001,gid=10001,mode=0700"];
       for (const [name, value] of Object.entries({ NODE_ENV: "production", MQ_SYNTHETIC_LAB: "true", MQ_DEPLOYMENT_ENV: "staging",
         MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json", DATABASE_URL_FILE: "/run/secrets/database_url",
-        AUTH_SECRET_FILE: "/run/secrets/auth_secret", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
+        AUTH_SECRET_FILE: "/run/secrets/auth_secret", SESSION_STORAGE_KEY_FILE: "/run/secrets/session_storage_key", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
         MQ_PUBLISH_SIGNING_KEY_FILE: "/run/secrets/publish_signing_key", MQ_COMMENT_SIGNING_KEY_FILE: "/run/secrets/comment_signing_key" })) args.push("-e", `${name}=${value}`);
       enter("low-disk-tmpfs");
       docker([...args, images.tools, "scripts/production/lab-actions.mjs", "disk-refusal"]);
@@ -139,7 +139,7 @@ export async function runVpsMaintenance(ctx, action) {
       await volume("restore-media", {});
       await volume("restore-secrets", { bootstrap_database_url: targetBootstrap.href, role_passwords: JSON.stringify(targetPasswords),
         migration_database_url: targetUrl("migration"), database_url: targetUrl("runtime"), restic_password: resticPassword,
-        auth_secret: secret(), auth_proxy_secret: files.auth_proxy_secret, publish_signing_key: secret(), comment_signing_key: secret() });
+        auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: files.auth_proxy_secret, publish_signing_key: secret(), comment_signing_key: secret() });
       const op = (name, { target = false, script = "scripts/production/operations-lab-actions.mjs", env = {}, fail = true } = {}) => {
         const args = ["run", "--rm", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
           "--network", `${project}_database`, "--memory", "512m", "--cpus", "1", "--pids-limit", "128",

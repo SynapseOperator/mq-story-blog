@@ -123,6 +123,7 @@ jobs:
           TEST_DATABASE_URL: postgresql://mq_test@127.0.0.1:5432/mq_test
         run: |
           npm run test:auth:session-spike
+          npm run test:auth:session-storage
           npm run test:production:rotation
       - name: PostgreSQL log disclosure controls and negative control
         run: npm run test:auth:logs

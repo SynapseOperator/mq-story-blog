@@ -1,3 +1,4 @@
+import { sessionFixture } from "./session-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -38,6 +39,9 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       const separator = first.indexOf("=");
       const key = first.slice(0, separator);
       const value = first.slice(separator + 1);
+      if (key.endsWith(".session_token") && value) {
+        secrets.add(value); secrets.add(decodeURIComponent(value).split(".", 1)[0]);
+      }
       if (/max-age=0(?:;|$)/i.test(line) || !value) jar.delete(key);
       else jar.set(key, value);
     }
@@ -66,7 +70,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
     // Check every authentication response, including error/429/unknown routes.
     expect(!text.includes("@accounts.invalid"), "Public HTTP responses must not disclose internal compatibility email");
     expect(!data || typeof data !== "object" || !Object.hasOwn(data, "token"), "Public HTTP responses must not expose a raw session token");
-    if (data?.session) expect(!Object.hasOwn(data.session, "token"), "Public session DTO must not contain a token");
+    if (data?.session) expect(!Object.hasOwn(data.session, "token") && !Object.hasOwn(data.session, "tokenCiphertext"), "Public session DTO must not contain protected token fields");
     return { status: response.status, data, cookieLines, headers: response.headers };
   }
 
@@ -95,7 +99,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
 
   async function sessionRows(account) {
     const sessions = (await pool.query('SELECT * FROM "Session" WHERE "userId" = $1 ORDER BY "createdAt", id', [account.id])).rows;
-    for (const session of sessions) secrets.add(session.token);
+    for (const session of sessions) { secrets.add(session.token); secrets.add(session.tokenCiphertext); }
     return sessions;
   }
 
@@ -182,7 +186,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       secrets.add(account[0].password);
     });
 
-    await run("loopback session cookie attributes, no session cache, documented raw DB token", async () => {
+    await run("loopback session cookie attributes, no session cache and protected DB token", async () => {
       expect(Boolean(primary), "Registration prerequisite must pass");
       const cookie = primary.response.cookieLines.find((line) => /^[^=]*session_token=/i.test(line));
       expect(Boolean(cookie), "A session cookie must be issued");
@@ -194,7 +198,9 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       const rows = await sessionRows(primary);
       expect(rows.length === 1, "Signup must create one database session");
       const signed = decodeURIComponent(cookie.split(";", 1)[0].split("=").slice(1).join("="));
-      expect(signed.startsWith(`${rows[0].token}.`), "The framework stores the token payload in raw form, not as a database hash");
+      const bearer = signed.split(".", 1)[0];
+      expect(/^hmac1:[a-f0-9]{64}$/.test(rows[0].token), "Database query index must use the protected versioned format");
+      expect(typeof rows[0].tokenCiphertext === "string" && !JSON.stringify(rows[0]).includes(bearer), "The bearer must not appear in the stored Session row");
     });
 
     await run("both production instances read the same session through safe DTOs", async () => {
@@ -427,7 +433,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
 
     await run("expired database sessions cannot authenticate on either process", async () => {
       const account = await register("expire");
-      await pool.query('UPDATE "Session" SET "expiresAt" = now() - interval \'1 minute\' WHERE "userId" = $1', [account.id]);
+      await sessionFixture.expire(pool, account.id);
       for (const server of [origin, secondOrigin]) {
         const result = await request("/get-session", { method: "GET", jar: new Map(account.jar), requestOrigin: null, server });
         expect(result.status === 200 && !result.data?.user, "Expired sessions must not authenticate");
@@ -574,7 +580,7 @@ export async function runAuthHttpTests({ connectionString, origin, secondOrigin 
       expect(resumed.status === 401, "After database expiry the other process must permit credential validation");
     });
 
-    const collected = await pool.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL');
+    const collected = await pool.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL');
     for (const row of collected.rows) secrets.add(row.value);
     return { total: cases.length, passed: cases.filter((item) => item.passed).length, cases, secrets: [...secrets] };
   } finally {

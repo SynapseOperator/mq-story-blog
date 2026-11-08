@@ -92,7 +92,7 @@ export async function inspectOciArchive(path, { sourceSha } = {}) {
   const image = images[0];
   if (sourceSha) assert.equal(image.config.config?.Labels?.["org.opencontainers.image.revision"], sourceSha, "RELEASE_IMAGE_SOURCE_MISMATCH");
   assert.equal(image.config.config?.User, "10001:10001", "RELEASE_NONROOT_REQUIRED");
-  assert.ok(!(image.config.config?.Env ?? []).some(value => /^(DATABASE_URL|AUTH_SECRET|AUTH_PROXY_SECRET|MQ_.*SIGNING_KEY)=/.test(value)), "RELEASE_EMBEDDED_SECRET_REJECTED");
+  assert.ok(!(image.config.config?.Env ?? []).some(value => /^(DATABASE_URL|AUTH_SECRET|SESSION_STORAGE_KEY|AUTH_PROXY_SECRET|MQ_.*SIGNING_KEY)=/.test(value)), "RELEASE_EMBEDDED_SECRET_REJECTED");
   return { archiveSha256: await hashFile(path), archiveBytes: stat.size,
     indexDigest: index.manifests[0].digest, manifestDigest: image.descriptor.digest,
     configDigest: image.configDigest, platform: "linux/amd64", user: "10001:10001" };
@@ -101,11 +101,11 @@ export async function inspectOciArchive(path, { sourceSha } = {}) {
 export async function releaseCompatibility(projectRoot) {
   const directory = join(projectRoot, "prisma", "migrations");
   const names = (await readdir(directory, { withFileTypes: true })).filter(item => item.isDirectory()).map(item => item.name).sort();
-  assert.equal(names.length, 8, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+  assert.equal(names.length, 9, "RELEASE_MIGRATION_REVIEW_REQUIRED");
   const migrations = [];
   for (const name of names) migrations.push({ name, sha256: sha256(await readFile(join(directory, name, "migration.sql"))) });
   const files = ["prisma/schema.prisma", "scripts/production/database-policy.mjs", "scripts/production/runtime-config.mjs",
-    "compose.production.yaml", "src/server/stories/content.ts"];
+    "compose.production.yaml", "src/server/stories/content.ts", "src/server/auth/session-storage.ts", "src/server/auth/session-adapter.ts"];
   const contracts = {};
   for (const name of files) contracts[name] = sha256(await readFile(join(projectRoot, name)));
   return { migrations, contracts };

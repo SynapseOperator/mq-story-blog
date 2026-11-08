@@ -84,13 +84,14 @@ services:
       MQ_COMMENTS_ENABLED: ${MQ_COMMENTS_ENABLED:-false}
       DATABASE_URL_FILE: /run/secrets/database_url
       AUTH_SECRET_FILE: /run/secrets/auth_secret
+      SESSION_STORAGE_KEY_FILE: /run/secrets/session_storage_key
       AUTH_PROXY_SECRET_FILE: /run/secrets/auth_proxy_secret
       MQ_PUBLISH_SIGNING_KEY_FILE: /run/secrets/publish_signing_key
       MQ_COMMENT_SIGNING_KEY_FILE: /run/secrets/comment_signing_key
     configs:
       - source: deployment
         target: /etc/mq/deployment.json
-    secrets: [database_url, auth_secret, auth_proxy_secret, publish_signing_key, comment_signing_key]
+    secrets: [database_url, auth_secret, session_storage_key, auth_proxy_secret, publish_signing_key, comment_signing_key]
     volumes: [media:/var/lib/mq/media]
     tmpfs:
       - "/tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=0700"
@@ -198,6 +199,7 @@ secrets:
   postgres_password: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/postgres_password" }
   database_url: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/database_url" }
   auth_secret: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/auth_secret" }
+  session_storage_key: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/session_storage_key" }
   auth_proxy_secret: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/auth_proxy_secret" }
   publish_signing_key: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/publish_signing_key" }
   comment_signing_key: { file: "${MQ_SECRET_DIRECTORY:?Private secret directory}/comment_signing_key" }

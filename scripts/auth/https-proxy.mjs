@@ -100,7 +100,7 @@ export async function runHttpsChecks({ origin, ca, backendOrigin, connectionStri
           try {
             assert.ok(!text.includes("@accounts.invalid"), "HTTPS DTO cannot disclose internal email");
             const data = text ? JSON.parse(text) : null;
-            assert.ok(!data?.token && !data?.session?.token, "HTTPS DTO cannot disclose raw session token");
+            assert.ok(!data?.token && !data?.session?.token && !data?.tokenCiphertext && !data?.session?.tokenCiphertext, "HTTPS DTO cannot disclose protected session fields");
             done({ status: response.statusCode, headers: response.headers, data });
           } catch (error) { reject(error); }
         });
@@ -126,8 +126,9 @@ export async function runHttpsChecks({ origin, ca, backendOrigin, connectionStri
     assert.ok(line && /;\s*Secure(?:;|$)/i.test(line) && /;\s*HttpOnly(?:;|$)/i.test(line) && /;\s*SameSite=Lax(?:;|$)/i.test(line), "HTTPS cookie must use Secure prefix, Secure, HttpOnly and SameSite=Lax");
     assert.ok(!lines.some((value) => /session_data=|account_data=/i.test(value) && !/max-age=0(?:;|$)/i.test(value)), "HTTPS sessions must not enable cookie caching");
     const cookie = line.split(";", 1)[0];
-    const sessions = (await pool.query('SELECT token FROM "Session" WHERE "userId" = $1', [user.id])).rows;
-    secrets.push(...sessions.map((value) => value.token));
+    const sessions = (await pool.query('SELECT token,"tokenCiphertext" FROM "Session" WHERE "userId" = $1', [user.id])).rows;
+    secrets.push(cookie, decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)).split(".", 1)[0]);
+    secrets.push(...sessions.flatMap((value) => [value.token, value.tokenCiphertext]));
     pass("Secure/HttpOnly/SameSite cookie attributes and disabled cookie session cache");
 
     const session = await request("/get-session", { method: "GET", cookie });
@@ -203,8 +204,8 @@ export async function runHttpsChecks({ origin, ca, backendOrigin, connectionStri
     assert.equal(frameworkCounter.length, 1, "The admitted TLS requests must use one shared framework path bucket");
     assert.equal(frameworkCounter[0].count, 8, "The ninth attempt must be stopped before framework processing or password execution");
     pass("eight TLS attempts share one username quota and the ninth returns exact RATE_LIMITED without creating a session");
-    const finalSessions = (await pool.query('SELECT token FROM "Session" WHERE "userId" = $1', [user.id])).rows;
-    secrets.push(...finalSessions.map(value => value.token));
+    const finalSessions = (await pool.query('SELECT token,"tokenCiphertext" FROM "Session" WHERE "userId" = $1', [user.id])).rows;
+    secrets.push(...finalSessions.flatMap(value => [value.token, value.tokenCiphertext]));
     // Leave the subsequent browser phase with fresh test-owned budgets.
     await pool.query('DELETE FROM "AuthRateLimit"');
     await pool.query('DELETE FROM "RateLimit"');

@@ -84,7 +84,7 @@ export async function runPublishingEditorBrowser({ baseURL, connectionString, ma
     assert.ok((await page.context().cookies()).some(cookie => cookie.name === "__Secure-mq.session_token" && cookie.secure && cookie.httpOnly));
     // Keep every new synthetic token in the parent's Node-only log audit, even
     // though the final revocation removes those session rows before cleanup.
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
     rows.forEach(row => privateValues.add(row.value));
   }
   async function editor(page, id) {

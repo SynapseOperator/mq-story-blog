@@ -13,10 +13,10 @@ import { assertTemporaryTarget } from "../admin-drafts/test-support.mjs";
 import { runPrisma } from "../db/prisma-command.mjs";
 import { verifyDatabaseLogging } from "../db/log-privacy.mjs";
 
-/** Native backup/restore of a populated 008 database. Keys and old sessions are
- * preserved as data, never treated as permission to enable a restored service. */
+/** Native backup/restore of a populated database. Restored sessions are revoked;
+ * preserved business signing keys alone never permit privileged operations. */
 export async function runPublicationBackupTests({ source, controlURL, projectRoot, workspace, storage,
-  runtimeRole, maintenanceRole, key, first, oldJar, origin, ca, secrets, rememberDatabase, withRestoredServer }) {
+  runtimeRole, maintenanceRole, key, first, oldJar, admin, origin, ca, secrets, rememberDatabase, withRestoredServer }) {
   assertTemporaryTarget(source.connectionString);
   const pool = new pg.Pool({ connectionString: source.connectionString, max: 1 });
   let restoredPool, runtime, passed = 0, stage = "source snapshot";
@@ -33,7 +33,7 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
     assert.ok(sourceKey.equals(Buffer.from(key, "hex")));
     const sourceSessions = (await pool.query('SELECT * FROM "Session" ORDER BY id')).rows;
     assert.ok(sourceSessions.length > 0);
-    sourceSessions.forEach(session => secrets.add(session.token)); secrets.add(oldJar.cookie);
+    sourceSessions.forEach(session => { secrets.add(session.token); secrets.add(session.tokenCiphertext); }); secrets.add(oldJar.cookie);
     const sourceGrant = (await pool.query('SELECT * FROM "AdminGrant" WHERE id=1')).rows[0];
     const sourceStory = (await pool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0];
     const adminSession = sourceSessions.find(session => session.userId === sourceGrant.userId && session.expiresAt > new Date());
@@ -67,14 +67,14 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       assert.ok(!manifest.includes(key) && !manifest.includes(commentKey.toString("hex")) && !manifest.includes(oldJar.cookie));
       for (const session of sourceSessions) assert.ok(!manifest.includes(session.token));
     });
-    await check("restored 008 retains comments, likes, both private keys and sessions with PUBLIC privileges closed", async () => {
+    await check("restored database retains comments, likes and both private keys while revoking sessions and PUBLIC privileges", async () => {
       result = await restoreMediaBackup({ directory: archive.directory, controlURL, restoreParent: restores, projectRoot, tools });
       rememberDatabase(result.database);
       restoredPool = new pg.Pool({ connectionString: result.databaseURL, max: 2 });
       await verifyDatabaseLogging(restoredPool);
       const restoredKey = (await restoredPool.query("SELECT secret FROM mq_publish_private.signing_key WHERE id=1")).rows[0].secret;
       assert.ok(restoredKey.equals(sourceKey));
-      assert.deepEqual((await restoredPool.query('SELECT * FROM "Session" ORDER BY id')).rows, sourceSessions);
+      assert.equal((await restoredPool.query('SELECT count(*)::int n FROM "Session"')).rows[0].n, 0);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story WHERE id=$1", [first.id])).rows[0], sourceStory);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, sourceLikes);
       assert.deepEqual((await restoredPool.query("SELECT * FROM story_comment ORDER BY id")).rows, sourceComments);
@@ -94,6 +94,7 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       assert.equal(acl, 0);
       const configured = JSON.parse(await readFile(join(result.privateRoot, "RESTORE_COMPLETE.json"), "utf8"));
       assert.equal(configured.serviceEnabled, false); assert.equal(configured.privilegesRequireProvisioning, true);
+      assert.equal(configured.sessionsRevoked, true);
       await runPrisma(["migrate", "status"], result.databaseURL);
       await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], result.databaseURL);
     });
@@ -116,10 +117,16 @@ export async function runPublicationBackupTests({ source, controlURL, projectRoo
       }
       await assert.rejects(runtime.query("SELECT public.mq_apply_story_publication($1,$2)", ["[]", Buffer.alloc(32)]), { code: "42501" });
     });
-    await check("old HTTPS cookie and matching old key cannot enable publication after only normal application provisioning", async () => {
+    await check("restored old HTTPS cookie is invalid; fresh login retains business reads but cannot publish without owner provisioning", async () => {
       await withRestoredServer({ DATABASE_URL: restoredRuntime.href, MQ_MEDIA_TEST_ROOT: result.privateRoot,
         MQ_COMMENTS_ENABLED: "true", MQ_COMMENT_SIGNING_KEY: commentKey.toString("hex") }, async () => {
-        const jar = { ...oldJar };
+        const stale = await request("/api/auth/get-session", { jar: { ...oldJar } });
+        assert.equal(stale.status, 200); assert.equal(stale.data, null);
+        assert.equal((await request("/api/admin/status", { jar: { ...oldJar } })).status, 401);
+        await restoredPool.query('DELETE FROM "AuthRateLimit"; DELETE FROM "RateLimit"');
+        const jar = {};
+        const login = await request("/api/auth/sign-in/username", { method: "POST", body: admin, jar });
+        assert.equal(login.status, 200); assert.ok(login.data.user);
         const session = await request("/api/auth/get-session", { jar });
         assert.equal(session.status, 200); assert.ok(session.data.user);
         assert.equal((await request("/api/admin/status", { jar })).status, 200);

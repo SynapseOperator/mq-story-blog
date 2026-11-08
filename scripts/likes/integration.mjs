@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -55,7 +56,7 @@ async function main() {
   const base = await databaseUrl("test"), control = new pg.Pool({ connectionString: base, max: 1, connectionTimeoutMillis: 5000 });
   const suffix = randomUUID().replaceAll("-", ""), runtimeRole = `mq_admin_rt_${suffix}`, maintenanceRole = `mq_admin_mt_${suffix}`;
   const passwords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")];
-  const databases = [], roles = [], servers = [], secrets = new Set([base, ...passwords]);
+  const databases = [], roles = [], servers = [], secrets = new Set([base, ...passwords, sessionFixture.key]);
   let tls, failure;
   async function isolated() {
     const name = `mq_test_admin_${randomUUID().replaceAll("-", "")}`;
@@ -101,7 +102,7 @@ async function main() {
       if (secure) { tls = await startHttpsProxy(port); secrets.add(tls.proxySecret); }
       const origin = secure ? tls.origin : `http://127.0.0.1:${port}`, secret = randomBytes(48).toString("base64url"); secrets.add(secret);
       const env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: application.runtimeUrl,
-        MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: secure ? "false" : "true",
+        MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, SESSION_STORAGE_KEY: sessionFixture.key, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: secure ? "false" : "true",
         AUTH_PROXY_SECRET: secure ? tls.proxySecret : "", MQ_PUBLISH_ENABLED: "false", MQ_MEDIA_ENABLED: "false" };
       const ingress = secure ? { "x-mq-proxy-key": tls.proxySecret, "x-mq-client-ip": "127.0.0.1" } : {};
       let server = await startServer(port, env, servers, ingress);

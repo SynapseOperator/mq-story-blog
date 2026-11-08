@@ -42,6 +42,7 @@ erDiagram
     string username UK
     string email UK }
   Session { string token UK
+    string tokenCiphertext
     datetime expiresAt
     string userId FK }
   Account { string providerId
@@ -56,7 +57,7 @@ erDiagram
 - `Account` 仅允许 credential，accountId=userId、密码非空且 OAuth token 为空；providerId/accountId 复合唯一，用户外键。公开接口不接受内部字段。
 - 不使用 role 字段或 Better Auth 管理员插件；公开注册始终普通身份。P2-05 在独立迁移中增加 AdminGrant，以稳定 User ID 关联，公开认证 HTTP 路径没有授权能力；不以 `User.role UNIQUE` 代替单例约束。
 - `Session` 有唯一 token、用户 FK、绝对过期时间；Cookie cache 关闭，每次读取检查数据库，默认 24 小时绝对有效、不自动续期。退出/删除 Session/过期后旧 Cookie 立即失效。后续受控管理服务可撤销记录，本轮没有无鉴权撤销 API。
-- **Better Auth 默认 Session.token 在数据库中原值存储，本实现未改为哈希保存。** Cookie 签名、HttpOnly 与响应字段剔除不等于数据库 token 已哈希；DB/备份泄漏仍是关键风险。
+- P5-04 通过官方 DBAdapter 接入[安全存储](SESSION_STORAGE.md)：`token` 是 HMAC 查询索引，`tokenCiphertext` 是身份/期限绑定的 AES-256-GCM 封装，独立密钥不在数据库。框架原 Token 只在应用/浏览器生命周期使用；公开 DTO 继续剔除。009 撤销旧会话，不能混用旧格式。任意数据库写入、完整有效行重放或密钥失陷仍有明确风险。
 - `Verification` 是框架兼容模型，当前无邮件功能且测试要求零记录。`RateLimit` 是框架第二道保守限流；`AuthRateLimit` 是项目共享原子窗口。
 - 注册的 User/Account/Session 使用 Prisma adapter `transaction:true`；Account 或 Session 故障不能留下半个账号。没有修改故事/星位表或接入前端真实故事。
 

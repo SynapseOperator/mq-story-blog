@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, createHmac } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL, URL } from "node:url";
 import pg from "pg";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import { databaseUrl } from "../db/environment.mjs";
 import { logPrivacySettings } from "../db/log-privacy.mjs";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
@@ -44,8 +45,7 @@ export async function runRotationTests() {
   }
   const user = randomUUID(), session = randomUUID(), story = randomUUID(), revision = randomUUID(), comment = randomUUID();
   async function seedSession(target, sessionId) {
-    await target.query('INSERT INTO public."Session"(id,"userId",token,"expiresAt","updatedAt") VALUES($1,$2,$3,CURRENT_TIMESTAMP+interval \'1 hour\',CURRENT_TIMESTAMP)',
-      [sessionId, user, randomBytes(24).toString("hex")]);
+    await sessionFixture.insert(target, { id: sessionId, userId: user });
   }
   async function sign(target, kind, secret, sessionId, fields) {
     const client = await target.connect();

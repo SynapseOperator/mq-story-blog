@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -37,7 +38,7 @@ export async function runDraftHttpTests({ connectionString, maintenanceUrl, runt
     method: "PUT", jar, body: { expectedVersion: story.version, title, content: content(title) },
   });
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
     rows.forEach(row => secrets.add(row.value));
   }
   async function run(name, test) {
@@ -453,7 +454,7 @@ export async function runDraftHttpTests({ connectionString, maintenanceUrl, runt
       assert.equal(draft.version, stored.version);
     });
     await run("expired and logged-out sessions cannot read or mutate private content", async () => {
-      await owner.query('UPDATE "Session" SET "expiresAt"=CURRENT_TIMESTAMP-interval \'1 second\' WHERE "userId"=$1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await request(path(draft.id), { jar: adminJar })).status, 401);
       adminJar = await login();
       const old = { ...adminJar };

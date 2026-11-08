@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | runtime / migration / maintenance / mediaMaintenance / backup 数据库口令 | 只影响新连接；旧连接不会自动消失。先阻止新写连接并排空，再原子更新 5 个口令、替换各自秘密文件、重启对应客户端 | 隔离 PG18 SCRAM 验证旧口令拒绝、新口令成功，角色权限没有增加 |
 | AUTH_SECRET | MQ 使用单一 secret；改变 Cookie 签名验证及限流 HMAC 命名空间。删除全部 Session、换文件、重启 app，所有用户重新登录 | Better Auth 1.7.12 Cookie 与 Session 实验见 [SESSION_TOKEN_SPIKE.md](SESSION_TOKEN_SPIKE.md)；不启用未经本项目验证的多 secret 模式 |
+| SESSION_STORAGE_KEY | 独立保护数据库Session及身份绑定。停入口/app、pause排空、撤销Session、原子换文件并重建app；可保持AUTH_SECRET不变 | 错key拒绝旧会话，无原值fallback或长期双key；恢复新key并清Session，见[安全存储](SESSION_STORAGE.md) |
 | AUTH_PROXY_SECRET | Caddy 和 app 必须一致；不同步时认证请求拒绝。停止入口/app，替换两个挂载源并重建两个容器 | 使用实际 HTTPS 容器演练；无旧、新代理 key 同时接受的过渡期 |
 | 发布 / 留言审核 HMAC | 独立私有 schema 与 app 文件必须配对。两类 key 原子替换，撤销全部 Session；重新登录之后才允许生成新签名 | 真实 PG 验证旧 key、旧会话失败，新 key 发布/审核成功，错误旧 key 与事务失败整体回滚 |
 | Restic 仓库密码 / 仓库密钥 | 与上述秘密分开保管；本轮运维工具不自动删换 Restic key。备份仓库含旧数据库秘密，应用轮换并不会重新加密已有快照 | 仓库密码泄露不能只 `key passwd` 后宣称旧备份安全；新建仓库/密钥、重新备份并验证，再受控退休旧仓库；远端副本需独立授权 |
@@ -41,7 +42,7 @@ node scripts/production/rotation-cli.mjs resume --confirm-deployment=<deployment
 
 1. 核对受审镜像、目标、维护时间和可恢复加密备份；关闭入口，停止 app、上传/清理及其他写入维护容器。退出操作者已有运行身份连接。
 2. 调用 `pause`。工具先提交四个写身份的 `NOLOGIN`，再等其连接排空，最多 5 秒。backup 保持只读 LOGIN，可在此期间备份。`NOLOGIN` 不终止既有连接；忙连接会使命令非零退出，保持禁止新登录，不强杀或自动恢复。
-3. 按需执行 `database`、`signing` 或 `revoke-sessions`。`database` 先将 backup 也设为 NOLOGIN，再要求它没有既有连接；若忙则拒绝并保持关闭，五口令一起提交。`signing` 在同一事务验证两个旧 key、替换两个新 key并撤销 Session。AUTH_SECRET 轮换单独调用 `revoke-sessions`。身份/目标/密钥不匹配和数据库错误均拒绝，不输出内部值。
+3. 按需执行 `database`、`signing` 或 `revoke-sessions`。`database` 先将 backup 也设为 NOLOGIN，再要求它没有既有连接；若忙则拒绝并保持关闭，五口令一起提交。`signing` 在同一事务验证两个旧 key、替换两个新 key并撤销 Session。AUTH_SECRET 或 SESSION_STORAGE_KEY 轮换单独调用 `revoke-sessions`。身份/目标/密钥不匹配和数据库错误均拒绝，不输出内部值。
 4. 将新的文件原子安装到受控外部秘密目录，保留正确 owner/mode。Compose file secret 使用 bind mount；替换文件 inode 后应 **force-recreate app/proxy**，不能假定普通 restart 会重新挂载新的 inode。不得将旧文件临时放入 Git 或公开目录。DB 口令变化时同步对应连接 URL 文件，不能继续使用旧五口令 JSON。
 5. `resume` 恢复五个角色的 LOGIN，不启动 app、不放行业务开关。该操作和备份/轮换使用同一 advisory lock，避免恢复登录与备份同时进行。再运行 runtime 权限审计，重建 app/proxy，验证健康、旧 Cookie/旧 DB 口令/旧签名拒绝和新登录正常；失败保持入口关闭，重新 `pause`，不要回滚到泄露的 key。
 6. 人工确认新配置和回归后才恢复入口。记录 UTC 时间、部署 ID、镜像 digest、操作类型、撤销 Session 数量和结果，不记录账号口令、key、Cookie、Session Token、正文或 SQL。
@@ -53,7 +54,7 @@ node scripts/production/rotation-cli.mjs resume --confirm-deployment=<deployment
 ## 泄露后的处置
 
 1. 先通过可信通道关闭公网入口和停止 app；冻结部署/清理任务，保全受控审计证据。不要将疑似秘密粘贴到 Issue、日志或聊天。
-2. 确定泄露范围：应用 Cookie、AUTH_SECRET、runtime URL、bootstrap、主机、备份密码可能需要不同响应。只改变 DB 密码不会撤销已建立连接；只改变 AUTH_SECRET 也不能消除数据库中原值 Token。
+2. 确定泄露范围：应用 Cookie、AUTH_SECRET、runtime URL、bootstrap、主机、备份密码可能需要不同响应。只改变 DB 密码不会撤销已建立连接；只改变 AUTH_SECRET 不撤销已有 Session 封装；若存储密钥也泄露，必须独立轮换并撤销会话。历史 008 备份仍可能含原值 Token。
 3. 在确认可信的主机/维护镜像中 `pause`，撤销全部 Session，按涉及范围更换独立秘密及 DB 口令。若 root/Docker/bootstrap 可能泄露，按整机失陷处理；从受审镜像与已验证备份恢复到新的隔离主机，不信任原机就地“修好”。
 4. 完成新配置和权限审计、拒绝旧凭据测试后，再由负责人决定开放。已泄露的私密内容不能靠轮换撤回；备份读取与数据泄露另行记录。
 

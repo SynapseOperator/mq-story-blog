@@ -43,13 +43,16 @@ export function runImageConfigurationChecks({ appImage, toolsImage, proxyImage }
       [{ source: "deployment", target: compose.services[service].environment.MQ_DEPLOYMENT_CONFIG }]);
   }
   assert.ok(!compose.services.tools.secrets);
+  assert.ok(compose.services.app.secrets.some(item => item.source === "session_storage_key"));
+  assert.equal(compose.services.app.environment.SESSION_STORAGE_KEY_FILE, "/run/secrets/session_storage_key");
+  assert.deepEqual(compose.services.proxy.secrets.map(item => item.source), ["auth_proxy_secret"]);
   assert.equal(compose.services["volumes-init"].network_mode, "none");
   assert.ok(!compose.services["volumes-init"].secrets);
   for (const network of ["frontend", "database"]) assert.equal(compose.networks[network].internal, true);
   for (const image of [appImage, toolsImage, proxyImage]) {
     const data = JSON.parse(docker(["image", "inspect", image]).stdout)[0];
     assert.equal(data.Config.User, "10001:10001");
-    assert.ok(!data.Config.Env.some(value => /^(DATABASE_URL|AUTH_SECRET|AUTH_PROXY_SECRET|MQ_.*SIGNING_KEY)=/.test(value)));
+    assert.ok(!data.Config.Env.some(value => /^(DATABASE_URL|AUTH_SECRET|SESSION_STORAGE_KEY|AUTH_PROXY_SECRET|MQ_.*SIGNING_KEY)=/.test(value)));
   }
   const missingConfig = docker([...isolated, appImage], 1);
   assert.equal(missingConfig.stderr.trim(), "MQ_STARTUP_REJECTED");

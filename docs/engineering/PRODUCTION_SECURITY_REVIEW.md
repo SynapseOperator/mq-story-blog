@@ -1,5 +1,15 @@
 # 生产候选安全审查
 
+## P5-04：会话存储变更
+
+PR #62 已普通合并为 `c1de9981a5310ee634919e8a8036dc76b7a4911f`，main 的 [42493637189](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42493637189) 三项检查成功。以下 P5-03 扫描与原值存储实验是历史证据，不代表本次候选镜像或认证代码已经通过审批。
+
+本分支新增 009 和受支持的数据库 adapter：独立密钥、AES-256-GCM 封装、HMAC 查询索引及身份/期限 AAD；数据库不再保存有效 Token 明文。27 项真实 PostgreSQL/HTTP 检查覆盖原生列表和撤销、更新/事务、泄露、篡改、原生删除与管理员撤权的并发顺序。详见 [Session 安全存储](SESSION_STORAGE.md)。这不是简单摘要替换，也没有开放额外生产认证路径。
+
+独立只读 Agent `p504_runtime_plan` 未参与核心 codec/adapter 编写，复核了它们、009、认证入口、测试及既有锁顺序，未发现阻塞性认证绕过；该 Agent 也参与运维接线，不冒充 GitHub 协作者 APPROVED。完整有效旧行与原 Cookie 同时被攻击者持有时仍可重放原身份；数据库任意写入、密码哈希篡改、应用密钥/进程失陷不因此被解决。短表锁会串行 Session 更新/撤销；当前 MQ 禁止自动刷新，未来启用或扩容须重新评估。
+
+P5-03 镜像漏洞、主机/公网验收与正式独立安全评审仍是单独门槛。本轮不操作 VPS、不启用生产业务、不发送告警。
+
 ## P5-03：本轮结论（2026-11-08）
 
 PR #60 的精确HEAD独立审批与三项CI复核后，以普通merge合并为 `2dc86a9039a364e9348277a8b8a5196a3b35c6dd`；合并后的 [Quality 42479369327](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42479369327) quality/database/container全部成功。本轮P5-03是其后的独立增量，没有生产部署授权。

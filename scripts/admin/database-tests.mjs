@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { URL } from "node:url";
 import pg from "pg";
 import { applyAdminDatabasePrivileges } from "./privileges.mjs";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 
 /** Real PostgreSQL assertions; only the caller-owned empty temporary DB is
  * accepted. The persistent singleton and audit remain until its owner drops
@@ -60,8 +61,7 @@ export async function runAdminDatabaseTests({ connectionString, runtimeUrl, main
   }
   async function addSession(userId = adminId, expired = false) {
     const id = randomUUID();
-    await owner.query(`INSERT INTO public."Session" (id,token,"expiresAt","updatedAt","userId")
-      VALUES ($1,$2,now() + ($3 * interval '1 hour'),now(),$4)`, [id, randomUUID(), expired ? -1 : 1, userId]);
+    await sessionFixture.insert(owner, { id, userId, expiresAt: new Date(Date.now() + (expired ? -1 : 1) * 3_600_000) });
     return id;
   }
   async function allowed(sessionId, userId = adminId, pool = runtime) {

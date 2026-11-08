@@ -12,7 +12,7 @@ function fixture() {
     database: { host: "postgres", port: 5432, name: "mq_production" }, origin: "https://synthetic.example.invalid",
     media: { root: "/var/lib/mq/media", minFreeBytes: 8 * 1024 ** 3 } };
   const release = { version: 1, sourceSha, platform: "linux/amd64", gate: { kind: "reviewed-main", sourceSha },
-    compatibility: { migrations: Array.from({ length: 8 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })),
+    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })),
       contracts: { schema: digest, permissions: digest } },
     images: Object.fromEntries(TARGETS.map(target => [target, { indexDigest: `sha256:${digest}` }])) };
   const currentRelease = { ...globalThis.structuredClone(release), sourceSha: previousSha,
@@ -76,7 +76,7 @@ test("production planning rejects staging, wrong database, weak reserve, HTTP an
   }
 });
 
-test("all four image digests, eight migrations and reviewed candidate identity are required", () => {
+test("all four image digests, nine migrations and reviewed candidate identity are required", () => {
   for (const mutate of [
     input => { input.candidateManifestSha256 = "not-a-digest"; },
     input => { input.release.sourceSha = "bad"; },

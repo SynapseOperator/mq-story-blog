@@ -43,6 +43,9 @@ export async function restoreMediaBackup({ directory, controlURL, restoreParent,
         REVOKE ALL ON SCHEMA ${schema} FROM PUBLIC`);
     }
     const rows = await compareRestoredInventory(pool, manifest);
+    // A restored database must never revive a previously revoked device,
+    // even when an operator later supplies the same application storage key.
+    await pool.query('DELETE FROM "Session"');
     const store = await createLocalMediaStore({ projectRoot, roots: { development: join(restoreParent, `unused-${randomUUID()}`), test: privateRoot },
       environment: "test", maxVariantBytes: 4 * 1024 * 1024 });
     for (const row of rows) for (const variant of ["display", "thumbnail"]) {
@@ -50,7 +53,7 @@ export async function restoreMediaBackup({ directory, controlURL, restoreParent,
       await store.write(row.storage_key, variant, bytes);
     }
     await writePrivate(join(privateRoot, "RESTORE_COMPLETE.json"), Buffer.from(JSON.stringify({ format: "mq-restore-drill-v1", database: name,
-      files: rows.length * 2, serviceEnabled: false, privilegesRequireProvisioning: true })));
+      files: rows.length * 2, sessionsRevoked: true, serviceEnabled: false, privilegesRequireProvisioning: true })));
     return { database: name, databaseURL: restored.href, privateRoot, files: rows.length * 2 };
   } catch {
     // A partial private directory is retained for diagnosis, never labeled complete.

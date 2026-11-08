@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { URL } from "node:url";
@@ -32,7 +33,7 @@ export async function runCommentHttpTests({ connectionString, maintenanceUrl, ru
     return response;
   }
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
     rows.forEach(item => secrets.add(item.value));
   }
   async function check(name, action) {
@@ -307,7 +308,7 @@ export async function runCommentHttpTests({ connectionString, maintenanceUrl, ru
     await check("expired, deleted, logged-out and forged sessions cannot submit under an account", async () => {
       const user = (await owner.query('SELECT id FROM "User" WHERE username=$1', [accounts[0].username])).rows[0];
       for (const invalidate of [
-        () => owner.query('UPDATE "Session" SET "expiresAt"=CURRENT_TIMESTAMP-INTERVAL \'1 minute\' WHERE "userId"=$1', [user.id]),
+        () => sessionFixture.expire(owner, user.id),
         () => owner.query('DELETE FROM "Session" WHERE "userId"=$1', [user.id]),
         () => request("/api/auth/sign-out", { method: "POST", body: {}, jar: { ...jars[0] } }),
       ]) {
@@ -327,7 +328,7 @@ export async function runCommentHttpTests({ connectionString, maintenanceUrl, ru
       grant = await restoreAdmin(maintenance, { userId: grant.userId, expectedVersion: grant.version });
       assert.equal((await moderate(receipt, "approve", 0)).status, 401);
       adminJar = await login(admin);
-      await owner.query('UPDATE "Session" SET "expiresAt"=CURRENT_TIMESTAMP-INTERVAL \'1 minute\' WHERE "userId"=$1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await moderate(receipt, "approve", 0)).status, 401);
       assert.deepEqual(await row(receipt), before); adminJar = await login(admin); await approve(receipt);
     });

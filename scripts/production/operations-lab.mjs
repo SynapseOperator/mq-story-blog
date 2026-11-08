@@ -42,10 +42,11 @@ async function runOperationsLabImpl(ctx, fixture) {
   const targetUrl = name => { const url = new URL(targetBootstrap); url.username = targetConfig.roles[name]; url.password = targetPasswords[name]; return url.href; };
   await volume("restore-manifest", { "deployment.json": JSON.stringify(targetManifest) });
   await volume("restore-media", {});
-  await volume("restore-secrets", { bootstrap_database_url: targetBootstrap.href, role_passwords: JSON.stringify(targetPasswords),
+  const restoreSecrets = { bootstrap_database_url: targetBootstrap.href, role_passwords: JSON.stringify(targetPasswords),
     migration_database_url: targetUrl("migration"), database_url: targetUrl("runtime"),
     ...(!ctx.oss ? { restic_password: await ctx.readVolumeSecret("backup-secrets", "restic_password") } : {}),
-    auth_secret: secret(), auth_proxy_secret: files.auth_proxy_secret, publish_signing_key: secret(), comment_signing_key: secret() });
+    auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: files.auth_proxy_secret, publish_signing_key: secret(), comment_signing_key: secret() };
+  await volume("restore-secrets", restoreSecrets);
 
   const op = (action, { target = false, group = target ? "restore-secrets" : "backup-secrets", env = {}, script = "scripts/production/operations-lab-actions.mjs", extra = [], fail = true } = {}) => {
     const args = ["run", "--rm", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
@@ -182,9 +183,25 @@ volumes:
   result.restoreToServingMs = Date.now() - restoreStarted;
   pass("restored application desktop/mobile rendering and actual image decode");
 
+  // Rotate only the independent storage key, keeping AUTH_SECRET unchanged.
+  // The paused-writer command revokes sessions first: reverting a file later
+  // must not restore an old signed Cookie's authority.
+  compose(["stop", "app"]);
+  const sessionRotation = action => op(action, { target: true, script: "scripts/production/rotation-cli.mjs",
+    extra: [`--confirm-deployment=${targetConfig.deploymentId}`] });
+  sessionRotation("pause"); sessionRotation("revoke-sessions");
+  await volume("restore-secrets", { ...restoreSecrets, session_storage_key: secret() });
+  sessionRotation("resume");
+  docker([...composeBase, "-f", override, "up", "-d", "--force-recreate", "--wait", "--wait-timeout", "180", "app"]);
+  assert.equal((await request("/api/admin/stories", { jar: restoredAdmin })).status, 401);
+  const storageRotated = {};
+  assert.equal((await request("/api/auth/sign-in/username", { method: "POST", body: accounts.admin, jar: storageRotated })).status, 200);
+  assert.equal((await request("/api/admin/stories", { jar: storageRotated })).status, 200);
+  pass("independent session storage key rotation revokes old cookie and permits fresh HTTPS login");
+
   compose(["stop", "app"]);
   const replacements = Object.fromEntries(LOGIN_IDENTITIES.map(name => [name, secret()]));
-  const replacementKeys = { auth_secret: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret() };
+  const replacementKeys = { auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret() };
   await volume("rotation-secrets", { bootstrap_database_url: bootstrapUrl, old_passwords: JSON.stringify(passwords), new_passwords: JSON.stringify(replacements),
     previous_publish: files.publish_signing_key, previous_comment: files.comment_signing_key,
     next_publish: replacementKeys.publish_signing_key, next_comment: replacementKeys.comment_signing_key });

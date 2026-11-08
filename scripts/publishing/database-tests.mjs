@@ -4,6 +4,7 @@ import { URL } from "node:url";
 import pg from "pg";
 import { assertTemporaryTarget, observeWait } from "../admin-drafts/test-support.mjs";
 import { initializePublishingKey } from "./privileges.mjs";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 
 export async function runPublishingDatabaseTests({ connectionString, runtimeUrl, maintenanceUrl, publicationOwnerRole, key }) {
   const target = assertTemporaryTarget(connectionString);
@@ -29,8 +30,7 @@ export async function runPublishingDatabaseTests({ connectionString, runtimeUrl,
   }
   async function session(userId, expired = false) {
     const id = randomUUID();
-    await runtime.query(`INSERT INTO public."Session"(id,token,"expiresAt","updatedAt","userId")
-      VALUES($1,$2,now()+($3 * interval '1 hour'),now(),$4)`, [id, randomUUID(), expired ? -1 : 1, userId]);
+    await sessionFixture.insert(runtime, { id, userId, expiresAt: new Date(Date.now() + (expired ? -1 : 1) * 3_600_000) });
     return id;
   }
   async function create(kind = "STAR", content = { version: 1, blocks: [{ type: "paragraph", text: "Synthetic publication" }] }) {

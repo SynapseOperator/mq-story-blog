@@ -8,7 +8,7 @@ P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01
 
 浏览器 → Caddy 80/443 → 非 root Next.js 3000 → PostgreSQL 18。只有 Caddy 发布主机端口；应用与数据库分别处于 internal 网络，数据库没有端口映射。媒体卷不在 `public/`，所有图片仍经既有权限查询、完整性核验和 no-store 响应。
 
-`Dockerfile` 固定 Node 24.19.0、Caddy 2.11.9 及基础镜像 digest，`package-lock.json` 固定依赖。`app` 为 standalone 产物，`tools` 为离线操作镜像，`proxy` 为 Caddy 镜像；均默认 UID/GID 10001。构建不接收运行秘密；`.dockerignore` 使用白名单，排除本地配置、Git、备份和宿主机生成的 Prisma Client。`tools` 含完整依赖，仅按需启动，不是常驻服务。
+`Dockerfile` 当前固定 Node 24.22.2（P5-03 更新）、Caddy 2.11.9 及基础镜像 digest，`package-lock.json` 固定依赖。`app` 为 standalone 产物，`tools` 为离线操作镜像，`proxy` 为 Caddy 镜像；均默认 UID/GID 10001。构建不接收运行秘密；`.dockerignore` 使用白名单，排除本地配置、Git、备份和宿主机生成的 Prisma Client。`tools` 含完整依赖，仅按需启动，不是常驻服务。
 
 应用只读文件系统，临时目录与 Next 缓存使用限额 tmpfs。PG18 挂载 `/var/lib/postgresql`，保留其版本目录。Compose 的 `volumes-init` 是明确调用的一次性 root 步骤：无网络、无秘密，只处理三个已挂载卷的根目录，不递归修改文件。其他服务不依赖 root 应用进程。
 
@@ -31,7 +31,7 @@ P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01
 
 staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名称由 environment 和 deploymentId 派生，不接受任意角色列表；连接 URL 必须精确匹配主机、端口、数据库和身份。`NODE_ENV` 始终是 `production`，不借用 development/test 绕过保护。
 
-应用需要五个秘密文件：`database_url`、`auth_secret`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`。由对应 `*_FILE` 变量读取，原始秘密环境变量和 Better Auth 别名会被拒绝。四个密钥为相互独立的 32-byte 随机值，以 64 位小写十六进制保存。生产生成、分发与启用须另获授权。
+应用需要六个秘密文件：`database_url`、`auth_secret`、`session_storage_key`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`。由对应`*_FILE`变量读取，原始秘密环境变量和Better Auth别名拒绝。五个密钥是互相独立的32-byte随机值，以64位小写hex保存；Session存储key只默认挂给app，不存数据库。生产生成与启用另需授权。009撤销旧Session而保留账号和业务数据，见[存储合同](SESSION_STORAGE.md)。
 
 秘密文件必须是单硬链接普通文件、0400/0600、属 root 或当前 UID；进程仍需实际读取权限。Linux Compose 的 file secrets 是 bind mount，`uid/mode` 声明不能修复宿主机权限：应在私有父目录中准备 UID10001 的 0400 文件。PG 引导密码供 postgres 用户读取，单独准备为该镜像的 postgres UID，不能与应用秘密共用目录权限。manifest 所在目录也须允许容器遍历。Windows 文件 mode 不证明 ACL；本地演练使用 Linux named volumes 严格验证，不放宽生产检查。
 
@@ -64,7 +64,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 1. 审核 manifest、镜像 digest、外部秘密文件权限、磁盘和日志配置；启动单独的 postgres。
 2. `node scripts/production/database-cli.mjs bootstrap`：`BOOTSTRAP_DATABASE_URL_FILE`、`MQ_ROLE_PASSWORDS_FILE`。后者为 migration/runtime/maintenance/mediaMaintenance/backup 的独立随机密码 JSON，每值满足 `[A-Za-z0-9_-]{32,128}` 且五项互异（推荐 64 位 hex）。只接受空库；bootstrap/provision/keys 均须离线 SUPERUSER 且为本库 owner。
-3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–008。
+3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–009。
 4. `... database-cli.mjs provision`：仅 `BOOTSTRAP_DATABASE_URL_FILE`，同一事务设置 11 owner 与完整权限矩阵；验证失败整体回滚。
 5. `... database-cli.mjs keys`：引导连接及两个独立签名秘密文件；只允许首次插入，不覆盖旧密钥，不是轮换命令。
 6. `... database-cli.mjs audit`：仅 `RUNTIME_DATABASE_URL_FILE`，只读核验。不得用引导身份代替 runtime 验收。

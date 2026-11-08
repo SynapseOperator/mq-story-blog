@@ -48,7 +48,7 @@ async function main() {
   const url = identity => `postgresql://${identity === "bootstrap" ? "mq_bootstrap" : config.roles[identity]}:${identity === "bootstrap" ? bootstrapPassword : passwords[identity]}@postgres:5432/mq_production`;
   const files = { postgres_password: bootstrapPassword, database_url: url("runtime"), bootstrap_database_url: url("bootstrap"),
     migration_database_url: url("migration"), maintenance_database_url: url("maintenance"), backup_database_url: url("backup"),
-    role_passwords: JSON.stringify(passwords), auth_secret: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret(), restic_password: secret() };
+    role_passwords: JSON.stringify(passwords), auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret(), restic_password: secret() };
   const accounts = { admin: { username: `lab_admin_${suffix.slice(0, 8)}`, password: `MqLab!${secret()}` },
     reader: { username: `lab_reader_${suffix.slice(0, 8)}`, password: `MqReader!${secret()}` } };
   files.accounts = JSON.stringify(accounts);
@@ -105,7 +105,7 @@ async function main() {
     for (const image of Object.values(images)) docker(["image", "inspect", image]);
     await writeFile(join(directory, "deployment.json"), JSON.stringify(manifest));
     await volume("manifest", { "deployment.json": JSON.stringify(manifest) });
-    for (const [name, names, uid] of [["app", ["database_url", "auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"]],
+    for (const [name, names, uid] of [["app", ["database_url", "auth_secret", "session_storage_key", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"]],
       ["pg", ["postgres_password"], 999], ["proxy", ["auth_proxy_secret"]], ["bootstrap", ["bootstrap_database_url", "role_passwords"]],
       ["migration", ["migration_database_url"]], ["keys", ["bootstrap_database_url", "publish_signing_key", "comment_signing_key"]],
       ["maintenance", ["maintenance_database_url", "accounts"]], ["backup", ["bootstrap_database_url", "backup_database_url", "restic_password"]], ["operations", []]]) {
@@ -187,7 +187,7 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
       'for tool in npm npx yarn yarnpkg corepack; do if command -v "$tool" >/dev/null 2>&1; then exit 1; fi; done; test ! -d /usr/local/lib/node_modules/npm; test ! -d /usr/local/lib/node_modules/corepack']);
     const appEnv = json(docker(["inspect", service("app"), "--format", "{{json .Config.Env}}"]));
     for (const name of ["AUTH", "MEDIA", "PUBLISH", "COMMENTS"]) assert.ok(appEnv.includes(`MQ_${name}_ENABLED=false`));
-    pass("empty production database, 001–008, exact permissions, disabled business and no ingress");
+    pass("empty production database, 001–009, exact permissions, disabled business and no ingress");
     const localProductionTls = compose(["run", "--rm", "--no-deps", "-e", "MQ_TLS_MODE=local", "proxy"], { fail: false });
     assert.equal(localProductionTls.status, 1); assert.match(localProductionTls.stderr, /MQ_PROXY_CONFIGURATION_REJECTED/);
     fixture("admin-init", "maintenance", { MAINTENANCE_DATABASE_URL_FILE: "/run/secrets/maintenance_database_url", MQ_LAB_ACCOUNTS_FILE: "/run/secrets/accounts" });
@@ -257,7 +257,7 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
     const diskArgs = ["run", "--rm", "--read-only", "--network", `${project}_database`, "--mount", `type=volume,source=${volumes.manifest},target=/etc/mq,readonly`,
       "--mount", `type=volume,source=${volumes.app},target=/run/secrets,readonly`, "--tmpfs", "/var/lib/mq/media:rw,nosuid,size=8m,uid=10001,gid=10001,mode=0700"];
     for (const [key, value] of Object.entries({ NODE_ENV: "production", MQ_DEPLOYMENT_ENV: "production", MQ_SYNTHETIC_LAB: "true", MQ_SYNTHETIC_DEPLOYMENT_ID: id,
-      MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json", DATABASE_URL_FILE: "/run/secrets/database_url", AUTH_SECRET_FILE: "/run/secrets/auth_secret", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
+      MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json", DATABASE_URL_FILE: "/run/secrets/database_url", AUTH_SECRET_FILE: "/run/secrets/auth_secret", SESSION_STORAGE_KEY_FILE: "/run/secrets/session_storage_key", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
       MQ_PUBLISH_SIGNING_KEY_FILE: "/run/secrets/publish_signing_key", MQ_COMMENT_SIGNING_KEY_FILE: "/run/secrets/comment_signing_key" })) diskArgs.push("-e", `${key}=${value}`);
     docker([...diskArgs, images.tools, "tests/fixtures/production-bootstrap-actions.mjs", "disk-refusal"]);
     pass("wrong environment/inline secret denied and real tmpfs enforces 8 GiB reserve");

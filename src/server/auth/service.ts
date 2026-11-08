@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { username } from "better-auth/plugins";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { prismaAdapter } from "better-auth/adapters/prisma";
+import { protectedPrismaAdapter } from "./session-adapter.ts";
 import { toNextJsHandler } from "better-auth/next-js";
 import { createAuthDatabaseClient } from "./database.ts";
 import { authConfiguration, AUTH_PATHS, credentials, inspectRequest, jsonReply } from "./policy.ts";
@@ -27,7 +27,7 @@ function createService() {
   // direct server calls bypass the HTTP admission/limiting boundary.
   const auth = betterAuth({
     appName: "MQ · Our Stories", baseURL: config.origin, secret: config.secret,
-    trustedOrigins: [config.origin], database: prismaAdapter(db, { provider: "postgresql", transaction: true }),
+    trustedOrigins: [config.origin], database: protectedPrismaAdapter(db, config.sessionStorageKey),
     // Framework errors may include adapter values. Log only a fixed category;
     // neither request inputs nor framework Error objects enter application logs.
     logger: { level: "error", log: () => console.error("MQ_AUTH_FRAMEWORK_ERROR") },

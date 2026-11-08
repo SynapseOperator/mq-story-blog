@@ -16,7 +16,7 @@ export async function runProductionRecovery(ctx, fixture) {
   const target = { ...manifest, deploymentId: id }, config = validateDeploymentConfig(target);
   const passwords = Object.fromEntries(LOGIN_IDENTITIES.map(name => [name, secret()])), bootstrapPassword = secret();
   const url = identity => `postgresql://${identity === "bootstrap" ? "mq_bootstrap" : config.roles[identity]}:${identity === "bootstrap" ? bootstrapPassword : passwords[identity]}@postgres:5432/mq_production`;
-  const app = { database_url: url("runtime"), auth_secret: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret() };
+  const app = { database_url: url("runtime"), auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret() };
   Object.values(app).forEach(value => secrets.add(value));
   await volume("restore-manifest", { "deployment.json": JSON.stringify(target) });
   await volume("restore-pg", { postgres_password: bootstrapPassword }, 999);
