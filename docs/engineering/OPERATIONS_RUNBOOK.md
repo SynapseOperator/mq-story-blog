@@ -1,6 +1,6 @@
 # P3-03：单机运维与上线前检查
 
-关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 的历史只读采集见 [VPS_READINESS.md](VPS_READINESS.md)。随后已完成 SSH/UFW/NTP、Docker 初始化和 P5-01 真实 VPS 隔离演练，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；域名 A 已指向 VPS，正式密钥和公网 HTTPS/上线验收仍未完成。下列正式运维变更不因历史实验授权而自动执行。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)，R2 与新增飞书/外部探针见 [P5-02 外部服务](OFFSITE_BACKUP_AND_ALERTS.md)。
+关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 的历史只读采集见 [VPS_READINESS.md](VPS_READINESS.md)。随后已完成 SSH/UFW/NTP、Docker 初始化和 P5-01 真实 VPS 隔离演练，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；域名 A 已指向 VPS，正式密钥和公网 HTTPS/上线验收仍未完成。下列正式运维变更不因历史实验授权而自动执行。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)，OSS 与飞书/外部探针见 [P5-02 外部服务](OFFSITE_BACKUP_AND_ALERTS.md)。
 
 ## 主机、网络和账号
 
@@ -12,7 +12,7 @@
 
 入口规则应在云防火墙与主机两层核对：SSH 仅批准的管理来源，公网只允许 TCP 80/443；3000、5432、Caddy 管理 API、Docker API 不开放，IPv6 必须采用相同边界。Compose 只发布 Caddy，app/postgres 使用内部网络。**Docker 发布端口可以绕过 UFW 的普通 INPUT 规则**，不能以 `ufw status` 一项作为验收。上机后从另一台机器扫描公网 IPv4/IPv6，并核对 `docker compose ps`、`ss -lntup` 与供应商规则；禁止把 Docker socket 挂入应用或把公共 CI runner 放到生产主机。
 
-数据库身份沿用 P3-02 的 runtime、migration、maintenance、mediaMaintenance、backup 和 11 个 NOLOGIN owner；应用不持有维护/备份/引导文件。宿主机 root/Docker 访问等同高权限管理。秘密、媒体和备份工作区分别 0700，文件 0400/0600，Git/镜像/公开目录之外；数据库备份中包括账号哈希、Session Token 和独立业务签名密钥，按最高敏感级别保管。
+数据库身份沿用 P3-02 的 runtime、migration、maintenance、mediaMaintenance、backup 和 11 个 NOLOGIN owner；应用不持有维护/备份/引导文件。宿主机 root/Docker 访问等同高权限管理。秘密、媒体和备份工作区分别 0700，文件 0400/0600，Git/镜像/公开目录之外；数据库备份中包括账号哈希、Session 索引/密文和独立业务签名密钥，按最高敏感级别保管。旧008备份还可能含原始Token；独立Session存储密钥不随数据库/媒体备份保存。
 
 依据：[Ubuntu OpenSSH](https://documentation.ubuntu.com/server/how-to/security/openssh-server/)、[Ubuntu 安全建议](https://documentation.ubuntu.com/server/explanation/security/security_suggestions/)、[Docker/UFW 边界](https://docs.docker.com/engine/network/packet-filtering-firewalls/)、[Docker daemon 权限](https://docs.docker.com/engine/security/)。
 
@@ -45,9 +45,9 @@ node scripts/production/operations-check.mjs
 
 ## 更新与回滚
 
-1. 负责人批准匹配 SHA 的独立 Review、全部 CI 和目标镜像 digest；记录当前/候选 digest、001–008 checksum、manifest deploymentId 和秘密文件版本号（不记录秘密值）。P4 已提供手动 OCI 候选工作流和摘要校验，见 [RELEASE_OPERATIONS.md](RELEASE_OPERATIONS.md)；它不自动部署，也不把本地 image tag 当成受签名发布产物。
+1. 负责人批准匹配 SHA 的独立 Review、全部 CI 和目标镜像 digest；记录当前/候选 digest、001–009 checksum、manifest deploymentId 和秘密文件版本号（不记录秘密值）。P4 已提供手动 OCI 候选工作流和摘要校验，见 [RELEASE_OPERATIONS.md](RELEASE_OPERATIONS.md)；它不自动部署，也不把本地 image tag 当成受签名发布产物。
 2. 进入短维护窗口，停止 app 及所有维护写任务；执行 pause、等待排空，制作并校验加密成套备份，记录 snapshot ID。备份失败不继续升级。没有回滚兼容性结论也不继续。
-3. 备份完成后、app 和其他维护进程仍停止且数据库仍在私网时，显式 resume 数据库 LOGIN（pause 也关闭了 migration，不能在暂停状态直接迁移）。仅启动独立迁移工具执行受审迁移，再 provision/audit；本轮不新增或修改历史迁移。部署候选 digest 后先在受控入口验收健康、公开故事/图片、登录和管理权限。验证通过后由负责人决定开放开关；不要将 main push 直接视为生产部署授权。
+3. 备份完成后、app 和其他维护进程仍停止且数据库仍在私网时，显式 resume 数据库 LOGIN（pause 也关闭了 migration，不能在暂停状态直接迁移）。仅启动独立迁移工具执行受审迁移，再 provision/audit；001–008不改，009首次升级会撤销旧Session并要求独立存储密钥及重新登录，详见[维护窗口](SESSION_STORAGE.md)。部署候选 digest 后先在受控入口验收健康、公开故事/图片、登录和管理权限。验证通过后由负责人决定开放开关；不要将 main push 直接视为生产部署授权。
 4. 应用回滚只切回已证明兼容当前 Schema、内容版本、权限和秘密合同的前一 digest。停止新实例再切换，不回写旧秘密。数据库无法兼容时优先向前修复；禁止 reset/down migration。
 5. 灾难恢复是另一项显式授权：向全新目标恢复已核实 snapshot，撤销旧 Session、清除发布/审核密钥，重新配置身份和新秘密，按恢复手册验收后再切流量。快照之后的写入会丢失；必须确认实际 RPO。备份不能替代发布回滚，切旧镜像也不能替代数据库恢复。
 
@@ -57,7 +57,7 @@ node scripts/production/operations-check.mjs
 - [ ] 独立安全 Review 匹配最终提交；发布候选来源、合并状态及最终 main CI 已核实。
 - [ ] SSH 第二会话、控制台恢复、补丁重启、IPv4/IPv6 防火墙和外部扫描有证据。
 - [ ] runtime/11 owner 权限核验通过；秘密只按服务挂载，生产密钥生成另获授权。
-- [ ] Session Token Spike 的风险处置经负责人和独立安全审查确认。
+- [ ] [Session安全存储](SESSION_STORAGE.md)、迁移/密钥流程和残余风险经负责人及独立安全审查确认。
 - [ ] 正式 HTTPS、代理链、CSRF/Secure Cookie、资源峰值和失败时拒绝均在目标主机通过。
 - [ ] 选择离机备份目标、保留周期、RPO/RTO；独立保管解密密钥，完成离机恢复与通知送达。
 - [ ] 明确生产备份密码轮换不使旧备份失去解密能力；主机失陷后重建信任而非仅改一个密码。

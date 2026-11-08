@@ -10,7 +10,7 @@ PR #62 已普通合并为 `c1de9981a5310ee634919e8a8036dc76b7a4911f`，main 的 
 
 P5-03 镜像漏洞、主机/公网验收与正式独立安全评审仍是单独门槛。本轮不操作 VPS、不启用生产业务、不发送告警。
 
-## P5-03：本轮结论（2026-11-08）
+## P5-03：历史结论（2026-11-08）
 
 PR #60 的精确HEAD独立审批与三项CI复核后，以普通merge合并为 `2dc86a9039a364e9348277a8b8a5196a3b35c6dd`；合并后的 [Quality 42479369327](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42479369327) quality/database/container全部成功。本轮P5-03是其后的独立增量，没有生产部署授权。
 

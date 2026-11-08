@@ -26,8 +26,8 @@
 - `/srv/mq-production`：root:root 0700。一个全局 `operation.lock` 串行化生产发布与定时备份；正常完成保留历史记录，失败不自动解锁。
 - `/srv/mq-production/<deploymentId>`：首次 bootstrap 创建；已有目录、同名 Compose 项目、卷或网络均拒绝接管。Compose 项目固定 `mq-production`。
 - 独立外部 `deployment.json`：`environment=production`、`database={host:postgres,port:5432,name:mq_production}`、正式 HTTPS origin、`media.root=/var/lib/mq/media`、至少 8 GiB 余量。角色名按 deploymentId 派生，不能复用 staging。
-- 专用秘密目录：root:root 0700。`postgres_password` 属于 UID999；`database_url`、`auth_secret`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`、`bootstrap_database_url`、`migration_database_url`、`role_passwords` 属于 UID10001，0400/0600、单链接、每份不超过4KiB。目录不给容器整体挂载，只逐份挂必要文件。
-- `role_passwords` 使用数据库模块规定的五个身份键。数据库密码独立；四个应用/代理/发布/审核秘密为各自独立的64位十六进制随机值。启动检查拒绝复用。这里只规定格式，不提供正式密码生成或聊天传递方式。
+- 专用秘密目录：root:root 0700。`postgres_password` 属于 UID999；`database_url`、`auth_secret`、`session_storage_key`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`、`bootstrap_database_url`、`migration_database_url`、`role_passwords` 属于 UID10001，0400/0600、单链接、每份不超过4KiB。目录不给容器整体挂载，只逐份挂必要文件。
+- `role_passwords` 使用数据库模块规定的五个身份键。数据库密码独立；认证/会话存储/代理/发布/审核五个密钥为各自独立的64位十六进制随机值。启动检查拒绝复用。这里只规定格式，不提供正式密码生成或聊天传递方式。
 - maintenance、backup 连接与 Restic 密码另行隔离保存，仅挂载对应离线工具，不能给 app。具体合同见 [生产基础](PRODUCTION_FOUNDATION.md)、[管理员维护](PRODUCTION_ADMIN.md)和[备份](PRODUCTION_BACKUP.md)。
 
 宿主 root 和 Docker 控制者属于可信运维边界；文件属主检查不能防御已经取得 root 的攻击者。生产签名密钥从外部文件初始化，历史 SQL 迁移没有密钥内容，001–008 未改动。

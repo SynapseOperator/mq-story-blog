@@ -70,7 +70,7 @@ node scripts/production/backup-cli.mjs retention-plan --confirm-deployment=<源�
 
 恢复暂时只允许目标 migration 身份连接；完成 pg_restore 后再次 NOLOGIN，撤销 PUBLIC 权限，清空所有 Session 及两张签名密钥表。数据库历史内容和管理员授权保留，但旧会话不能复活，旧发布/审核证明失效。恢复成功仍是 **writers paused / service disabled / requires provisioning**，不是重新开放许可。
 
-接着保持目标 app/其他工具停止，显式 `resume` 后再用 bootstrap 运行 `provision`：新目标尚未授予 runtime/维护/backup CONNECT，LOGIN 恢复本身并不授予访问权；既有 provision 的完整矩阵审计要求最终 LOGIN 状态，因此不能颠倒这两个步骤。provision 原子设置新 owner/列权限，失败不启动应用。准备新的认证、代理及业务密钥，按独立授权初始化两类业务密钥；运行 runtime audit 后才在隔离网络启动应用。正式重新开放前须验证旧 Cookie/旧签名被拒绝、新登录、公开/私有图片、发布和审核权限及备份恢复结果。不要直接复用源环境秘密来恢复业务开放。
+接着保持目标 app/其他工具停止，显式 `resume` 后再用 bootstrap 运行 `provision`：新目标尚未授予 runtime/维护/backup CONNECT，LOGIN 恢复本身并不授予访问权；既有 provision 的完整矩阵审计要求最终 LOGIN 状态，因此不能颠倒这两个步骤。provision 原子设置新 owner/列权限，失败不启动应用。准备新的认证、独立 `SESSION_STORAGE_KEY`、代理及业务密钥，按独立授权初始化两类业务密钥；运行 runtime audit 后才在隔离网络启动应用。正式重新开放前须验证旧 Cookie/旧签名被拒绝、新登录、公开/私有图片、发布和审核权限及备份恢复结果。不要直接复用源环境秘密来恢复业务开放。
 
 ## 故障、空间与重复运行
 
@@ -109,7 +109,9 @@ MQ_BACKUP_WINDOW_CONFIG=/etc/mq/backup/window.json
 
 协调器的状态机、真实 receipt 文件发布、错误目标拒绝和中断行为已有自动化测试。工具容器以 UID10001 写入 0600 receipt，主机 root 用专门的有界元数据读取器接收；秘密文件读取规则没有放宽。读取器拒绝符号链接、硬链接、其他用户归属和宽松权限。注入的 Docker runner 测试不等同于目标 VPS 的 systemd 演练。真正安装、时间窗口、进程强杀/重启恢复及通知送达仍需主机验收。
 
-## 本轮证据和未完成项
+## P3/P4 历史证据和当时的未完成项
+
+以下保留原实验的8项迁移、计时与当时状态。当前009、独立Session密钥及恢复结果见[Session安全存储](SESSION_STORAGE.md)；真实OSS合成恢复和飞书送达见[外部服务](OFFSITE_BACKUP_AND_ALERTS.md)，正式生产仍未启用。
 
 自动化入口与真实计时由 `test:production:operations` 的隔离容器演练生成：合成账号、公开/私有图文和留言 → 加密备份 → 新目标恢复 → 权限/约束/数据核验 → 实际 HTTPS 应用启动。测试产物只输出计时、数量、固定错误码和合成页面证据，不上传数据库、Restic 仓库、密码或密文备份到 CI Artifacts。
 
