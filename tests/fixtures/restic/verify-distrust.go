@@ -7,6 +7,7 @@ import (
     "crypto/x509"
     "encoding/hex"
     "encoding/pem"
+    "errors"
     "fmt"
     "os"
     "time"
@@ -30,6 +31,10 @@ func main() {
     if err == nil {
         fmt.Println("VULNERABLE_CONTROL: distrusted SPKI accepted")
         os.Exit(1)
+    }
+    var invalid x509.CertificateInvalidError
+    if !errors.As(err, &invalid) || invalid.Reason != x509.NoValidChains {
+        panic("fixture failed for a reason other than SPKI distrust")
     }
     fmt.Println("PASS: distrusted SPKI rejected despite explicit trust anchor")
 }
