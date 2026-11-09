@@ -285,6 +285,10 @@ jobs:
         env:
           PRODUCTION_PRIVATE_BROWSER_IMAGE: mq-private-preview-browser:local
         run: npm run test:production:private-preview
+      - name: Release only this job's finished acceptance browser
+        # Its container is already removed and its dedicated build cache is
+        # gone. Leave capacity for the existing S3 recovery tests that follow.
+        run: docker image rm mq-private-preview-browser:local
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \
