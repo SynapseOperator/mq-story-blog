@@ -1,0 +1,12 @@
+{
+	import /etc/caddy/mq-options.caddy
+	auto_https off
+	skip_install_trust
+}
+
+# The container listens on its interface; only the host publication is loopback.
+# No ACME requests, redirects, generated CA, or system trust-store installation.
+https://{$MQ_PUBLIC_HOST}:443 {
+	tls /run/secrets/preview_certificate /run/secrets/preview_private_key
+	import /etc/caddy/mq-proxy.caddy
+}

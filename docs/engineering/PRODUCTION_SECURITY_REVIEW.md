@@ -1,5 +1,21 @@
 # 生产候选安全审查
 
+## P5-05C：出站 TLS 修复与私有验收边界
+
+关联 Issue #65。基线为 main `7f25366e8b1d5702a1dd3e93f2e2d5438b8fcee2` 和正式候选 run `42558766333`；基线五镜像合计13 Critical / 284 High包匹配。本次修复必须由新 PR 的独立 Review、main CI 和新正式候选接续，不能继续部署旧 operations 摘要，也不能把本分支的本地候选标为已审核 main。
+
+Restic0.19.1 官方成品仍使用 Go1.26.4，受 [GO-2026-6809 / CVE-2026-111943](https://pkg.go.dev/vuln/GO-2026-6809) 影响；[上游问题](https://github.com/restic/restic/issues/22132)尚未提供本次可直接使用的修复成品。更新系统 CA 可去除信任库中的受损锚，但不能覆盖应用自定义信任锚等所有验证路径。实际公共证书负控证明：旧 Go 接受、Go1.27.3 即使显式信任该锚也拒绝。没有关闭 TLS 校验或通过忽略 CVE 消除告警。
+
+采用 **MQ patched rebuild**：校验发行源包、独立 PGP 指纹和 SHA-256，固定官方 Go1.27.3镜像，保持 Restic Go 源码不变，仅对 `go.mod/go.sum` 应用可审查补丁。`x/net`0.62.0 修复实际 S3 HTTP/2 transport，`klauspost/compress`1.20.2 修复实际仓库压缩路径；相应 x/* 最低依赖闭包逐项记录。补丁前后锁文件校验、`go mod verify`、断网构建、真实 buildinfo、负控及双向旧仓库恢复防止把未验证重编译当维护版。来源与版本见 [provenance](../../ops/restic-source-provenance.json)；该二进制**不是官方发行包**，工具链和旧负控 binary 不进入最终 operations 镜像。
+
+私有预览不开放新的生产认证路由。正常公开白名单下验证登录、Secure/HttpOnly/Lax Cookie、Origin/CSRF、普通/管理员权限及退出；列表、单个/其他/全部设备撤销继续由真实框架 PostgreSQL/HTTP Session 套件验证。close-preview 撤销全部实际 Session，再次打开预览时旧 Cookie 仍须失效。测试 CA 与公网公共证书分别验收。
+
+只读辅助复核 Agent `p505c_independent_review` 未编写生产执行器，审查 plan/host/CLI、Caddy/秘密挂载、兼容性摘要和关闭路径，发现并推动修复 Docker `iptables=false` 可绕过回环发布的 P1 准入缺口。修复后 Linux root 的58项合同/文件/真实TLS测试退出0、0skip；Windows对应56通过/2项原有Linux专属skip。该复核不是 SnorkelingBreather 的 APPROVED，也未在真实 VPS 执行生产操作。
+
+本机 Docker Desktop 的 host-gateway 能转发到宿主回环端口，负控失败必须保留为非零/部分验收，不能用 Windows 后端证明 Ubuntu 防火墙。原生 Linux CI 的网络隔离断言仍须真实通过；测试适配执行器也不代替未来 VPS 上真实 production host 的预检和 apply。
+
+分阶段结论：关闭公网的空库 bootstrap 可在新候选、精确批准、网络/权限准入及容量检查后提出有限执行建议；首次生产 OSS 备份还需新的 operations 二进制、完整 S3 TLS/错误凭据/恢复证据和专属仓库授权；公网 activate 另需处理剩余 Caddy、系统库及数据库原生功能风险、云规则、正式证书、外部探针和自动备份告警。**三个阶段均没有从本轮测试自动取得生产许可。** 全部五类最终扫描、退出码和对应摘要随本次 PR 的证据提供；已知漏洞不改写为退出0。
+
 ## P5-04：会话存储变更
 
 PR #62 已普通合并为 `c1de9981a5310ee634919e8a8036dc76b7a4911f`，main 的 [42493637189](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42493637189) 三项检查成功。以下 P5-03 扫描与原值存储实验是历史证据，不代表本次候选镜像或认证代码已经通过审批。

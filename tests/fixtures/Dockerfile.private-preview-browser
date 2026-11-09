@@ -1,0 +1,10 @@
+# Acceptance-only browser, never a release image or a VPS dependency.
+FROM mcr.microsoft.com/playwright@sha256:ee15712262f017b8157421b212b12099146645f44b1bc5c0514cbbe6a229b1d0
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools openssh-server \
+    && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_* \
+    && mkdir -p /run/sshd
+COPY tests/fixtures/private-preview-browser.mjs /fixture/private-preview-browser.mjs
+# The caller creates per-run host keys and authorized_keys in this disposable
+# container. No credentials or CA are embedded in this image.
+CMD ["sleep", "infinity"]

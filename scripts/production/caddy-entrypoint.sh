@@ -21,6 +21,15 @@ case "${MQ_TLS_MODE:-public}" in
     [ "$MQ_DEPLOYMENT_ENV" = staging ] || reject
     case "$MQ_PUBLIC_HOST" in *.localhost) ;; *) reject ;; esac
     MQ_CADDY_CONFIG=/etc/caddy/Caddyfile.local ;;
+  private)
+    [ "$MQ_DEPLOYMENT_ENV" = production ] || reject
+    case "$MQ_PUBLIC_HOST" in localhost|*.localhost|*.invalid) reject ;; esac
+    for file in /run/secrets/preview_certificate /run/secrets/preview_private_key; do
+      [ -f "$file" ] && [ ! -L "$file" ] || reject
+      [ "$(stat -c %u "$file")" = "$(id -u)" ] || reject
+      case "$(stat -c %a "$file")" in 400|600) ;; *) reject ;; esac
+    done
+    MQ_CADDY_CONFIG=/etc/caddy/Caddyfile.private ;;
   *) reject ;;
 esac
 exec caddy run --config "$MQ_CADDY_CONFIG" --adapter caddyfile

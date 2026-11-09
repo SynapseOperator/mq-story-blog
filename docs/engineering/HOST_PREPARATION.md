@@ -2,6 +2,22 @@
 
 关联 Issue #53。本页保留 P4-01 的合成验证与通用操作说明，不替代生产数据库、秘密轮换或备份恢复流程。后续 P4-02 真实只读结果、无需远端 Node 的采集方式及待授权加固步骤见 [VPS_READINESS.md](VPS_READINESS.md)。尚未安装软件、修改 SSH/防火墙或向外部通知渠道发送消息。
 
+## P5-05C：正式操作前需补齐的只读核验
+
+上段是 P4-01 时点说明。后续主机加固、Docker 和合成部署、单条飞书送达已分别验收；P5-05C 不再次修改真实 VPS。现有 P5-05B 只读采样显示公网80/443/3000/5432/2375/2376没有监听，但云安全组和全部用户任务仍未核实。以下是待真实执行的检查清单，不是已经通过的验收。
+
+| 检查 | 只读证据及判断 | 不允许的替代结论 |
+|---|---|---|
+| 云安全组 | 在供应商官方控制台核对这台 VPS 的全部绑定规则、来源 CIDR、IPv4/IPv6；保存不含 Token 的脱敏规则记录 | UFW 拒绝或宿主无监听不能证明云规则安全；无控制台权限就记未验证 |
+| 系统任务 | `systemctl list-timers --all --no-pager`、`systemctl list-unit-files --type=service --no-pager` 的名称/状态；核对 cron/anacron/at 是否安装及任务存在性 | 不直接收集 ExecStart、Environment、完整 journal 或 crontab 内容，这些可能包含秘密 |
+| 用户任务 | 列出 `/var/spool/cron/crontabs` 的任务属主，核对 `/etc/cron.d`、`/etc/crontab` 和各运维用户的 systemd timer；在本机安全会话逐项检查，只记录任务用途、周期、目标及是否冲突 | root 的任务清单不能代替 mqops 和其他用户；不能以“没有 MQ timer”推断主机没有其他需保留服务 |
+| Docker 实际网络 | Docker>=28，原生 dockerd 参数/配置无 `allow-direct-routing`，目标 bridge 无 routed/nat-unprotected/trusted interface；核对 compose 与实际容器的端口/IP | 不打印完整 daemon 配置；不能只看 Compose 文本或 UFW。私有预览执行器另有失败关闭的准入检查 |
+| 容量与峰值 | `free -b`、`df -B1`、`df -i`、`docker stats --no-stream`；获准执行后在初始化/备份/更新全过程采样，保留最高值 | 现有约3GiB空闲内存、31GiB空闲盘仅为历史静态采样；8GiB门槛不降低；只常驻一套 MQ |
+| 合成恢复入口 | 比对已记录项目名、卷、媒体及备份清单；核对最新快照时间、完整校验与精确恢复回执 | 本地加密文件存在不等于新鲜或可恢复。当前合成环境停机前须有负责人认可的恢复点；本轮不写新快照 |
+| 公网 TLS | 开放批准前核对 A/AAAA/CAA、云/主机IPv6边界；80/443开放后验证公共链、SAN、证书有效期与续期日志的固定状态 | 私有测试 CA、SSH 隧道成功不代表 ACME 可达或公共证书有效 |
+
+正式调度待独立批准：每日完整备份和 `check --read-data`，每日新鲜度/仓库 ID 检查，7 daily / 8 weekly 仅 dry-run；主机/容器/数据库/磁盘每5分钟检查，公共 HTTPS/证书由 VPS 外部探针检查。飞书按既有脱敏发送器和有界重试执行，首次真实故障告警、抑制与恢复通知须明确验收；历史单条测试不代替自动闭环。执行前使用 [生产上线顺序](PRODUCTION_LAUNCH.md) 的新 gate、planId 和逐阶段授权，不沿用历史批准。
+
 ## 连接前先完成的事
 
 负责人已确认完成暴露的初始 root 密码轮换、mqops 公钥登录、第二会话和可信控制台指纹核对，并授权本轮只读连接。不要再将未轮换旧密码列为当前阻塞。新密码和私钥不能进入聊天、Git、命令参数或日志，不使用 `StrictHostKeyChecking=no` 绕过身份确认。后续 SSH/防火墙变更仍需单独授权。

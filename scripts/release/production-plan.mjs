@@ -11,6 +11,8 @@ const actions = Object.freeze({
   upgrade: ["preflight", "close-ingress", "stop-app", "migrate", "provision", "audit", "app", "health", "receipt"],
   rollback: ["preflight", "close-ingress", "stop-app", "audit", "app", "health", "receipt"],
   activate: ["preflight", "audit", "app", "health", "open-ingress", "https", "receipt"],
+  "private-preview": ["preflight", "audit", "app", "health", "open-private-ingress", "private-https", "receipt"],
+  "close-preview": ["preflight", "close-ingress", "stop-app", "pause-preview-writers", "revoke-preview-sessions", "resume-preview-writers", "audit", "app", "health", "receipt"],
 });
 const disabled = Object.freeze({ auth: false, media: false, publishing: false, comments: false });
 
@@ -18,6 +20,24 @@ function featureFlags(value = disabled) {
   assert.deepEqual(Object.keys(value).sort(), Object.keys(disabled).sort(), "PRODUCTION_FEATURES_REJECTED");
   assert.ok(Object.values(value).every(item => typeof item === "boolean"), "PRODUCTION_FEATURES_REJECTED");
   return { ...value };
+}
+
+export function validatePrivatePreview(value) {
+  assert.deepEqual(Object.keys(value ?? {}).sort(), ["ca", "certificate", "host", "port", "privateKey", "version"], "PRODUCTION_PREVIEW_REJECTED");
+  assert.equal(value.version, 1, "PRODUCTION_PREVIEW_REJECTED");
+  assert.equal(value.host, "127.0.0.1", "PRODUCTION_PREVIEW_LOOPBACK_REQUIRED");
+  assert.ok(Number.isSafeInteger(value.port) && value.port >= 1024 && value.port <= 65535, "PRODUCTION_PREVIEW_PORT_REJECTED");
+  const paths = [];
+  for (const name of ["ca", "certificate", "privateKey"]) {
+    assert.deepEqual(Object.keys(value[name] ?? {}).sort(), ["path", "sha256"], "PRODUCTION_PREVIEW_CERTIFICATE_REJECTED");
+    const { path, sha256: digest } = value[name];
+    assert.ok(typeof path === "string" && /^\/[A-Za-z0-9_./-]+$/.test(path) && path !== "/"
+      && posix.normalize(path) === path, "PRODUCTION_PREVIEW_CERTIFICATE_REJECTED");
+    assert.match(digest ?? "", /^[a-f0-9]{64}$/, "PRODUCTION_PREVIEW_CERTIFICATE_REJECTED");
+    paths.push(path);
+  }
+  assert.equal(new Set(paths).size, 3, "PRODUCTION_PREVIEW_CERTIFICATE_REJECTED");
+  return globalThis.structuredClone(value);
 }
 
 function productionConfig(input) {
@@ -87,6 +107,15 @@ function receiptMatches(receipt, { config, release, candidateManifestSha256, act
     assert.equal(receipt.publicIngress, false, "PRODUCTION_RECEIPT_REJECTED");
   }
   if (receipt.action !== "activate") assert.equal(receipt.publicIngress, false, "PRODUCTION_RECEIPT_REJECTED");
+  if (receipt.action === "private-preview") {
+    assert.equal(receipt.privateIngress, true, "PRODUCTION_RECEIPT_REJECTED");
+    assert.deepEqual(receipt.features, { ...disabled, auth: true }, "PRODUCTION_RECEIPT_REJECTED");
+    validatePrivatePreview(receipt.preview);
+  } else assert.ok(receipt.privateIngress === undefined || receipt.privateIngress === false, "PRODUCTION_RECEIPT_REJECTED");
+  if (receipt.action === "close-preview") {
+    assert.deepEqual(receipt.features, disabled, "PRODUCTION_RECEIPT_REJECTED");
+    assert.equal(receipt.previewSessionsRevoked, true, "PRODUCTION_RECEIPT_REJECTED");
+  }
   for (const [name, expected] of Object.entries({ candidateManifestSha256, action, planId, features, publicIngress })) {
     if (expected !== undefined) assert.deepEqual(receipt[name], expected, "PRODUCTION_RECEIPT_REJECTED");
   }
@@ -124,12 +153,42 @@ export function planProductionActivation({ currentRelease, config: input, receip
   releaseContract(currentRelease, receipt?.candidateManifestSha256);
   receiptMatches(receipt, { config, release: currentRelease });
   assert.equal(receipt.publicIngress, false, "PRODUCTION_ACTIVATION_REQUIRES_CLOSED_RECEIPT");
+  assert.notEqual(receipt.privateIngress, true, "PRODUCTION_PREVIEW_MUST_CLOSE");
   assert.ok(Date.parse(receipt.completedAt) <= Date.now(), "PRODUCTION_RECEIPT_REJECTED");
   return frozenPlan({ version: 1, action: "activate", deploymentId: config.deploymentId,
     environment: config.environment, database: config.database.name, origin: config.origin,
     sourceSha: currentRelease.sourceSha, candidateManifestSha256: receipt.candidateManifestSha256,
     config, release: currentRelease, priorReceipt: receipt, features: featureFlags(features),
     publicIngress: true, migrationRollback: false, restoreOldSecrets: false, steps: actions.activate });
+}
+
+export function planProductionPrivatePreview({ currentRelease, config: input, receipt, preview, features }) {
+  const config = productionConfig(input);
+  releaseContract(currentRelease, receipt?.candidateManifestSha256);
+  receiptMatches(receipt, { config, release: currentRelease });
+  assert.equal(receipt.publicIngress, false, "PRODUCTION_PREVIEW_REQUIRES_CLOSED_RECEIPT");
+  assert.notEqual(receipt.privateIngress, true, "PRODUCTION_PREVIEW_MUST_CLOSE");
+  assert.ok(Date.parse(receipt.completedAt) <= Date.now(), "PRODUCTION_RECEIPT_REJECTED");
+  const previewFeatures = { ...disabled, auth: true };
+  assert.deepEqual(featureFlags(features ?? previewFeatures), previewFeatures, "PRODUCTION_PREVIEW_AUTH_ONLY");
+  return frozenPlan({ version: 1, action: "private-preview", deploymentId: config.deploymentId,
+    environment: config.environment, database: config.database.name, origin: config.origin,
+    sourceSha: currentRelease.sourceSha, candidateManifestSha256: receipt.candidateManifestSha256,
+    config, release: currentRelease, priorReceipt: receipt,
+    features: previewFeatures, preview: validatePrivatePreview(preview),
+    publicIngress: false, privateIngress: true, migrationRollback: false, restoreOldSecrets: false, steps: actions["private-preview"] });
+}
+
+export function planProductionPreviewClose({ currentRelease, config: input, receipt }) {
+  const config = productionConfig(input);
+  releaseContract(currentRelease, receipt?.candidateManifestSha256);
+  receiptMatches(receipt, { config, release: currentRelease, action: "private-preview", publicIngress: false });
+  return frozenPlan({ version: 1, action: "close-preview", deploymentId: config.deploymentId,
+    environment: config.environment, database: config.database.name, origin: config.origin,
+    sourceSha: currentRelease.sourceSha, candidateManifestSha256: receipt.candidateManifestSha256,
+    config, release: currentRelease, priorReceipt: receipt, features: { ...disabled },
+    publicIngress: false, privateIngress: false, previewSessionsRevoked: true,
+    migrationRollback: false, restoreOldSecrets: false, steps: actions["close-preview"] });
 }
 
 /** An approval file is an explicit operator acknowledgement, not a signature or
@@ -142,7 +201,11 @@ export async function executeProductionPlan({ plan: input, approval, confirmatio
   const plan = input.action === "bootstrap" ? planProductionBootstrap(input)
     : input.action === "activate" ? planProductionActivation({ currentRelease: input.release,
       config: input.config, receipt: input.priorReceipt, features: input.features })
-      : planProductionChange({ ...input, mode: input.action, now });
+      : input.action === "private-preview" ? planProductionPrivatePreview({ currentRelease: input.release,
+        config: input.config, receipt: input.priorReceipt, preview: input.preview, features: input.features })
+        : input.action === "close-preview" ? planProductionPreviewClose({ currentRelease: input.release,
+          config: input.config, receipt: input.priorReceipt })
+          : planProductionChange({ ...input, mode: input.action, now });
   assert.deepEqual(input, plan, "PRODUCTION_PLAN_CHANGED");
   assert.deepEqual(Object.keys(approval ?? {}).sort(), ["action", "approvedAt", "deploymentId", "expiresAt", "planId", "sourceSha", "version"],
     "PRODUCTION_APPROVAL_REQUIRED");
@@ -160,12 +223,13 @@ export async function executeProductionPlan({ plan: input, approval, confirmatio
     for (step of plan.steps) {
       // Mark before invocation: a command can partially change its own target
       // before throwing. Preflight is read-only and must never trigger cleanup.
-      if (!["preflight", "audit", "health", "https"].includes(step)) mutationStarted = true;
+      if (!["preflight", "audit", "health", "https", "private-https"].includes(step)) mutationStarted = true;
       const result = await execute(step, plan);
       assert.notEqual(result, false, "PRODUCTION_STEP_FAILED");
-      if (["preflight", "health", "https"].includes(step)) assert.equal(result, true, "PRODUCTION_PROBE_FAILED");
+      if (["preflight", "health", "https", "private-https"].includes(step)) assert.equal(result, true, "PRODUCTION_PROBE_FAILED");
       if (step === "receipt") {
         receiptMatches(result, plan);
+        if (plan.action === "private-preview") assert.deepEqual(result.preview, plan.preview, "PRODUCTION_RECEIPT_REJECTED");
         receipt = result;
       }
       completed.push(step);

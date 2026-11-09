@@ -1,0 +1,33 @@
+{
+  "distribution": "mq-patched-rebuild",
+  "upstreamVersion": "0.19.1",
+  "source": "https://github.com/restic/restic/releases/download/v0.19.1/restic-0.19.1.tar.gz",
+  "sourceSha256": "bb9b1a19040744d26d8a79be029d4e6b189c45ccc9d8831d7fe367d3c33df725",
+  "signature": "https://github.com/restic/restic/releases/download/v0.19.1/restic-0.19.1.tar.gz.asc",
+  "signerFingerprint": "CF8F18F2844575973F79D4E191A6868BD3F7A907",
+  "compiler": "go1.27.3",
+  "compilerImage": "golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18",
+  "platform": "linux/amd64",
+  "upstreamGoSourceModified": false,
+  "dependencyPatch": "ops/restic-dependencies.patch",
+  "dependencyPatchSha256": "f591b7bd3b24a0f742880a3e84549efa3b9391f5bda13bb9a9cf8170b626b00a",
+  "dependencyVersionsModified": true,
+  "directSecurityUpdates": {
+    "github.com/klauspost/compress": "v1.20.2",
+    "golang.org/x/net": "v0.62.0"
+  },
+  "requiredTransitiveUpdates": {
+    "golang.org/x/crypto": "v0.58.0",
+    "golang.org/x/sync": "v0.24.0",
+    "golang.org/x/sys": "v0.49.0",
+    "golang.org/x/term": "v0.47.0",
+    "golang.org/x/text": "v0.43.0"
+  },
+  "securityFix": "GO-2026-6809 / CVE-2026-111943",
+  "officialReleaseBinary": false,
+  "officialCompatibilityBinary": {
+    "url": "https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2",
+    "sha256": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+    "runtimeImageIncluded": false
+  }
+}

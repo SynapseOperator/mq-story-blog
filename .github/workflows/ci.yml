@@ -203,7 +203,7 @@ jobs:
   container:
     name: container
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 75
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -278,6 +278,8 @@ jobs:
             mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-host-native.test.mjs tests/production-alert-webhook.test.mjs tests/production-external-alerts.test.mjs
       - name: Production contract bootstrap, disabled ingress and protected maintenance
         run: npm run test:production:bootstrap
+      - name: Private production HTTPS, trusted browser, session revocation and closed ingress
+        run: npm run test:production:private-preview
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \

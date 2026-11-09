@@ -13,7 +13,9 @@ export async function productionCommand(args) {
     }
     const result = await applyProductionHost(context, confirmation);
     console.log(JSON.stringify({ completed: true, action, deploymentId: result.receipt.deploymentId,
-      sourceSha: result.receipt.sourceSha, publicIngress: result.receipt.publicIngress }));
+      sourceSha: result.receipt.sourceSha, publicIngress: result.receipt.publicIngress,
+      privateIngress: result.receipt.privateIngress === true,
+      previewSessionsRevoked: result.receipt.previewSessionsRevoked === true }));
     return 0;
   } catch (error) {
     const code = ["PRODUCTION_FAILED_INGRESS_CLOSED", "PRODUCTION_FAILED_CONTAINMENT_UNCONFIRMED",
