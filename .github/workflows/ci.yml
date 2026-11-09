@@ -256,6 +256,9 @@ jobs:
           docker buildx build --builder "$builder" --load --target tools -t mq-p302-tools:local .
           docker buildx build --builder "$builder" --load --target proxy -t mq-p302-proxy:local .
           docker buildx build --builder "$builder" --load --target operations -t mq-p303-operations:local .
+          # The acceptance browser shares this job's builder. Removing that
+          # builder also releases its cache before the 8GiB runtime gate.
+          docker buildx build --builder "$builder" --load --file tests/fixtures/Dockerfile.private-preview-browser -t mq-private-preview-browser:local .
           docker buildx rm "$builder"
           trap - EXIT
           df -h .
@@ -279,6 +282,8 @@ jobs:
       - name: Production contract bootstrap, disabled ingress and protected maintenance
         run: npm run test:production:bootstrap
       - name: Private production HTTPS, trusted browser, session revocation and closed ingress
+        env:
+          PRODUCTION_PRIVATE_BROWSER_IMAGE: mq-private-preview-browser:local
         run: npm run test:production:private-preview
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |

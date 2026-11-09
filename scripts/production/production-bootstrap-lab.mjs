@@ -29,7 +29,8 @@ async function main() {
   const privatePreview = process.argv.length === 3 && process.argv[2] === "--private-preview";
   assert.ok(process.argv.length === 2 || privatePreview);
   const id = randomUUID(), suffix = id.replaceAll("-", ""), project = `mq-p502-${suffix}`;
-  const previewBrowserImage = `${project}-browser:local`;
+  const providedBrowserImage = process.env.PRODUCTION_PRIVATE_BROWSER_IMAGE;
+  const previewBrowserImage = providedBrowserImage || `${project}-browser:local`;
   const directory = await mkdtemp(join(tmpdir(), "mq-p502-production-"));
   const evidence = process.env.PRODUCTION_BOOTSTRAP_EVIDENCE_DIR || join(directory, "evidence");
   await mkdir(evidence, { recursive: true });
@@ -139,7 +140,8 @@ async function main() {
         path: `/isolated-preview/${file}`, sha256: docker(["run", "--rm", "--network", "none", "--mount", `type=volume,source=${volumes.preview},target=/certificates,readonly`,
           "--entrypoint", "sha256sum", images.tools, `/certificates/${file}`]).stdout.trim().split(/\s+/)[0],
       }])) };
-      docker(["build", "--file", "tests/fixtures/Dockerfile.private-preview-browser", "--tag", previewBrowserImage, "."], { timeout: 600000 });
+      if (!providedBrowserImage) docker(["build", "--file", "tests/fixtures/Dockerfile.private-preview-browser", "--tag", previewBrowserImage, "."], { timeout: 600000 });
+      docker(["image", "inspect", previewBrowserImage]);
     }
     await writeEnvironment(disabled);
     await writeFile(overrideFile, `services:
@@ -211,7 +213,12 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
     };
     const apply = (plan, runner = execute) => executeProductionPlan({ plan, approval: { version: 1, action: plan.action,
       deploymentId: id, sourceSha, planId: plan.planId, approvedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() },
-      confirmation: `${plan.action}:${id}:${plan.planId}`, execute: runner });
+      confirmation: `${plan.action}:${id}:${plan.planId}`, execute: runner }).catch(error => {
+        // Containment also executes steps; report the original fixed plan step
+        // instead of replacing its location with the last cleanup operation.
+        if (plan.steps.includes(error.phase)) stage = `${plan.action}/${error.phase}`;
+        throw error;
+      });
     const bootstrap = planProductionBootstrap({ release, config: manifest, candidateManifestSha256: digest });
     await apply(bootstrap);
     fixture("empty", "bootstrap", { BOOTSTRAP_DATABASE_URL_FILE: "/run/secrets/bootstrap_database_url" });
@@ -355,7 +362,7 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
   } finally {
     if (configured) compose(["down", "--remove-orphans"], { fail: false });
     for (const helper of helpers) docker(["rm", "-f", helper], { fail: false });
-    if (privatePreview) docker(["image", "rm", previewBrowserImage], { fail: false });
+    if (privatePreview && !providedBrowserImage) docker(["image", "rm", previewBrowserImage], { fail: false });
     if (succeeded) for (const name of docker(["volume", "ls", "--filter", `name=${project}`, "--format", "{{.Name}}"] ).stdout.trim().split(/\r?\n/).filter(Boolean)) {
       assert.ok(name.startsWith(`${project}_`)); docker(["volume", "rm", name]);
     }
