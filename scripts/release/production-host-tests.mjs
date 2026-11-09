@@ -324,6 +324,10 @@ test("private ingress admits only exact IPv4 loopback TCP, approved cert mounts 
   for (const [args, config] of [[["dockerd", "--allow-direct-routing"], {}], [["dockerd", "--allow-direct-routing=true"], {}],
     [["dockerd"], { "allow-direct-routing": true }]]) assert.throws(() => assertPrivateDockerRouting(args, config));
   assertPrivateProxyNetworks(previewNetworks());
+  assertPrivateProxyNetworks(previewNetworks().slice(1), { allowMissingEdge: true });
+  assert.throws(() => assertPrivateProxyNetworks(previewNetworks().slice(1)));
+  assert.throws(() => assertPrivateProxyNetworks(previewNetworks().slice(0, 1), { allowMissingEdge: true }));
+  assert.throws(() => assertPrivateProxyNetworks([], { allowMissingEdge: true }));
   for (const mutate of [value => { value[0].Driver = "macvlan"; }, value => { value[0].EnableIPv6 = true; },
     value => { value[0].Options["com.docker.network.bridge.gateway_mode_ipv4"] = "routed"; },
     value => { value[0].Options["com.docker.network.bridge.gateway_mode_ipv6"] = "nat-unprotected"; },
@@ -376,18 +380,27 @@ test("private preview host writes only loopback and closing revokes sessions bef
   f.context.settings.deploymentFile = "/root/mq/deployment.json"; f.context.settings.secretDirectory = "/root/mq/secrets";
   const preview = privateMetadata(), opened = planProductionPrivatePreview({ currentRelease: f.context.release,
     config: f.context.config, receipt: f.context.priorReceipt, preview });
-  let proxyRunning = false, unsafeBinding = false;
+  // A real closed bootstrap has frontend, but no proxy container or edge yet.
+  let proxyRunning = false, proxyCreated = false, edgeExists = false, unsafeBinding = false;
   const runDocker = args => {
     f.commands.push(args);
     if (args[0] === "info") return { stdout: JSON.stringify({ OSType: "linux", Architecture: "amd64", ServerVersion: "29.9.3", DockerRootDir: f.root }) };
-    if (args[0] === "network") return { stdout: JSON.stringify(previewNetworks()) };
+    if (args[0] === "network" && args[1] === "ls") return { stdout: edgeExists ? "mq-production_edge\n" : "" };
+    if (args[0] === "network" && args[1] === "inspect") {
+      if (!edgeExists) assert.deepEqual(args.slice(2), ["mq-production_frontend"], "Do not inspect a nonexistent bootstrap edge");
+      return { stdout: JSON.stringify(previewNetworks().filter(network => args.includes(network.Name))) };
+    }
     if (args.includes("config")) {
       const privateMode = readFileSync(join(f.directory, "closed.yaml"), "utf8").includes("MQ_TLS_MODE: private");
       return { stdout: JSON.stringify(privateMode ? privateCompose(f.context.config, images, preview) : composeSpec(f.context.config, images)) };
     }
-    if (args.includes("up") && args.at(-1) === "proxy") proxyRunning = true;
+    if (args.includes("create") && args.at(-1) === "proxy") {
+      assert.equal(proxyRunning, false, "Network preparation must not start ingress");
+      edgeExists = true; proxyCreated = true;
+    }
+    if (args.includes("up") && args.at(-1) === "proxy") { assert.ok(proxyCreated); proxyRunning = true; }
     if (args.includes("stop") && args.at(-1) === "proxy") proxyRunning = false;
-    if (args.includes("ps")) return { stdout: proxyRunning ? "d".repeat(64) : "" };
+    if (args.includes("ps")) return { stdout: proxyCreated ? "d".repeat(64) : "" };
     if (args[0] === "inspect") return { stdout: JSON.stringify([{ Config: { Labels: { "com.docker.compose.project": "mq-production",
       "com.docker.compose.service": "proxy" } }, State: { Running: proxyRunning }, HostConfig: { PortBindings: { "443/tcp": [{ HostIp: unsafeBinding ? "0.0.0.0" : "127.0.0.1", HostPort: "18443" }] } },
       NetworkSettings: { Ports: { "80/tcp": null, "443/tcp": [{ HostIp: "127.0.0.1", HostPort: "18443" }] } } }]) };
@@ -414,6 +427,10 @@ test("private preview host writes only loopback and closing revokes sessions bef
   assert.equal(readFileSync(join(f.directory, "closed.yaml"), "utf8"), "services:\n  proxy:\n    ports: !reset []\n");
   assert.deepEqual(f.commands.filter(args => args.includes("scripts/production/rotation-cli.mjs")).map(args => args.at(-2)), ["pause", "revoke-sessions", "resume"]);
   assert.ok(!f.commands.some(args => args.includes("load")), "Preview uses the already loaded reviewed release");
+  const create = f.commands.findIndex(args => args.includes("create") && args.at(-1) === "proxy");
+  const fullAudit = f.commands.findIndex(args => args[0] === "network" && args[1] === "inspect" && args.includes("mq-production_edge"));
+  const start = f.commands.findIndex(args => args.includes("up") && args.at(-1) === "proxy");
+  assert.ok(create >= 0 && create < fullAudit && fullAudit < start, "Create without start, inspect both actual networks, then open private ingress");
   const bad = planProductionPrivatePreview({ currentRelease: f.context.release, config: f.context.config, receipt: priorReceipt, preview });
   const now = Date.now(); await chmod(f.context.settings.approvalFile, 0o600);
   await writeFile(f.context.settings.approvalFile, JSON.stringify({ version: 1, planId: bad.planId, action: bad.action,
@@ -424,4 +441,45 @@ test("private preview host writes only loopback and closing revokes sessions bef
     `${bad.action}:${bad.deploymentId}:${bad.planId}`, options), /INGRESS_CLOSED/);
   assert.equal(proxyRunning, false, "Actual non-loopback binding closes the proxy instead of issuing a preview receipt");
   assert.deepEqual(await readProductionReceipt(join(f.directory, "receipt.json")), priorReceipt);
+});
+
+test("first private preview refuses Docker errors and unsafe networks before starting the proxy", async t => {
+  for (const failure of ["list-error", "unsafe-frontend", "unsafe-created-edge"]) await t.test(failure, async t => {
+    const f = await hostFixture(t, "activate"), images = Object.fromEntries(TARGETS.map(name => [name, `sha256:${digest}`]));
+    f.context.settings.deploymentFile = "/root/mq/deployment.json"; f.context.settings.secretDirectory = "/root/mq/secrets";
+    const preview = privateMetadata(), plan = planProductionPrivatePreview({ currentRelease: f.context.release,
+      config: f.context.config, receipt: f.context.priorReceipt, preview });
+    const now = Date.now(); await chmod(f.context.settings.approvalFile, 0o600);
+    await writeFile(f.context.settings.approvalFile, JSON.stringify({ version: 1, planId: plan.planId, action: plan.action,
+      sourceSha, deploymentId: plan.deploymentId, approvedAt: new Date(now - 1000).toISOString(), expiresAt: new Date(now + 60000).toISOString() }));
+    await chmod(f.context.settings.approvalFile, 0o400);
+    let created = false;
+    const runDocker = args => {
+      f.commands.push(args);
+      if (args[0] === "info") return { stdout: JSON.stringify({ OSType: "linux", Architecture: "amd64", ServerVersion: "29.9.3", DockerRootDir: f.root }) };
+      if (args[0] === "network" && args[1] === "ls") {
+        if (failure === "list-error") throw new Error("synthetic Docker lookup failure");
+        return { stdout: "" };
+      }
+      if (args[0] === "network" && args[1] === "inspect") {
+        assert.equal(args.includes("mq-production_edge"), created);
+        const networks = previewNetworks().filter(network => args.includes(network.Name));
+        if (failure === "unsafe-frontend" || created) networks[0].Options["com.docker.network.bridge.gateway_mode_ipv4"] = "routed";
+        return { stdout: JSON.stringify(networks) };
+      }
+      if (args.includes("config")) {
+        const privateMode = readFileSync(join(f.directory, "closed.yaml"), "utf8").includes("MQ_TLS_MODE: private");
+        return { stdout: JSON.stringify(privateMode ? privateCompose(f.context.config, images, preview) : composeSpec(f.context.config, images)) };
+      }
+      if (args.includes("create") && args.at(-1) === "proxy") created = true;
+      return { stdout: "" };
+    };
+    await assert.rejects(applyProductionHost({ ...f.context, plan }, `${plan.action}:${plan.deploymentId}:${plan.planId}`, {
+      runDocker, inspectSpace, inspectPrivateRouting: async () => true,
+      claimOperation: value => claimProductionOperation(value, { directory: f.root }),
+    }), failure === "unsafe-created-edge" ? /INGRESS_CLOSED/ : /PREFLIGHT_FAILED_NO_CHANGES/);
+    assert.equal(created, failure === "unsafe-created-edge");
+    assert.ok(!f.commands.some(args => args.includes("up") && args.at(-1) === "proxy"));
+    assert.deepEqual(await readProductionReceipt(join(f.directory, "receipt.json")), f.context.priorReceipt);
+  });
 });

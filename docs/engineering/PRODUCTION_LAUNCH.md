@@ -128,6 +128,8 @@ P5-02 已通过独立评审并合并；真实 OSS 合成恢复也已完成。正
 
 Docker 容器内 Caddy 监听443；宿主发布为 `127.0.0.1:<端口>:443`，二者不是同一个回环。执行器检查 Docker>=28、普通 NAT bridge、无 direct routing/trusted host interface、无 IPv6/host-network 绕行，以及实际发布地址。UFW 状态不能替代这些检查。[Docker 端口文档](https://docs.docker.com/engine/network/port-publishing/)
 
+首次 bootstrap 尚未启动 proxy，因此 edge 网络可能不存在。预览先检查已有 frontend，获得精确批准后只创建停止状态的 proxy，再审核 Compose 实际创建的两个网络，最后启动入口；不能把 Docker 查询失败当作网络不存在。验收浏览器只安装锁定的 Chromium headless-shell，避免无关浏览器占满 CI 磁盘，8GiB 余量门槛保持不变。
+
 运维电脑使用已有受信 SSH 别名，只把本机回环443转发到 VPS 的预览端口（本机443必须空闲）：`ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:443:127.0.0.1:<预览端口> mq-story-vps`。在临时隔离浏览器环境将 mq-story.xyz 解析至127.0.0.1，导入并核对这次测试 CA；禁止忽略证书错误、全局污染系统信任或导入 CA 私钥。若当前平台无法实现独立信任库，使用专用隔离 Linux 浏览器容器，不修改正常浏览器的安全设置。保留 HTTPS URL、Host、SNI 和 Origin，不用 localhost 替代正式域名。
 
 验收结束关闭 SSH 转发、销毁测试浏览器上下文/信任库，并在服务器完成 close-preview；再次确认端口关闭、旧 Session 不可用。测试 CA 成功只证明私有信任路径、Cookie 与认证合同，**不能证明公网证书签发或续期成功**。Caddy private 配置显式使用证书文件，禁用自动 HTTPS/ACME、自动重定向及系统信任安装；activate 继续使用原有公共信任链。[Caddy TLS](https://caddyserver.com/docs/caddyfile/directives/tls)

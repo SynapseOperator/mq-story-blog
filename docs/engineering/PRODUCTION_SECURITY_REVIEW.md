@@ -10,7 +10,7 @@ Restic0.19.1 官方成品仍使用 Go1.26.4，受 [GO-2026-6809 / CVE-2026-11194
 
 私有预览不开放新的生产认证路由。正常公开白名单下验证登录、Secure/HttpOnly/Lax Cookie、Origin/CSRF、普通/管理员权限及退出；列表、单个/其他/全部设备撤销继续由真实框架 PostgreSQL/HTTP Session 套件验证。close-preview 撤销全部实际 Session，再次打开预览时旧 Cookie 仍须失效。测试 CA 与公网公共证书分别验收。
 
-只读辅助复核 Agent `p505c_independent_review` 未编写生产执行器，审查 plan/host/CLI、Caddy/秘密挂载、兼容性摘要和关闭路径，发现并推动修复 Docker `iptables=false` 可绕过回环发布的 P1 准入缺口。修复后 Linux root 的58项合同/文件/真实TLS测试退出0、0skip；Windows对应56通过/2项原有Linux专属skip。该复核不是 SnorkelingBreather 的 APPROVED，也未在真实 VPS 执行生产操作。
+只读辅助复核 Agent `p505c_independent_review` 未编写生产执行器，审查 plan/host/CLI、Caddy/秘密挂载、兼容性摘要和关闭路径，发现并推动修复 Docker `iptables=false` 可绕过回环发布的 P1 准入缺口。修复后 Linux root 的62项合同/文件/真实TLS测试退出0、0skip；Windows保留原有Linux专属检查，由Linux补测。该复核不是 SnorkelingBreather 的 APPROVED，也未在真实 VPS 执行生产操作。
 
 本机 Docker Desktop 的 host-gateway 能转发到宿主回环端口，负控失败必须保留为非零/部分验收，不能用 Windows 后端证明 Ubuntu 防火墙。原生 Linux CI 的网络隔离断言仍须真实通过；测试适配执行器也不代替未来 VPS 上真实 production host 的预检和 apply。
 

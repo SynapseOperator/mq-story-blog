@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { laboratoryTransport } from "./http-tests.mjs";
 
-export async function runPrivatePreviewChecks({ docker, project, directory, evidence, root, origin, port, ca, wrongCa,
+export async function runPrivatePreviewChecks({ docker, project, directory, evidence, origin, port, ca, wrongCa,
   accounts, secrets, toolsImage, browserImage, directRequest, revoke, restore, unusedPort, onStage }) {
   assert.equal(origin, "https://mq-story.xyz");
   const request = laboratoryTransport(origin, ca, secrets, { connectPort: port });
@@ -68,8 +68,7 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
     onStage("private browser image and container startup");
     docker(["image", "inspect", browserImage]);
     docker(["run", "-d", "--name", container, "--label", `mq.lab=${project}`, "--network", "bridge",
-      "--publish", `127.0.0.1:${sshPort}:22`, "--memory", "1g", "--cpus", "1", "--pids-limit", "256", "--shm-size", "256m",
-      "--mount", `type=bind,source=${join(root, "node_modules")},target=/app/node_modules,readonly`, browserImage]);
+      "--publish", `127.0.0.1:${sshPort}:22`, "--memory", "1g", "--cpus", "1", "--pids-limit", "256", "--shm-size", "256m", browserImage]);
     for (const [source, target] of [[`${key}.pub`, "authorized_keys"], [join(directory, "preview-ca.pem"), "ca.pem"], [join(directory, "browser-input.json"), "input.json"]])
       docker(["cp", source, `${container}:/fixture/${target}`]);
     onStage("private browser NSS trust and sshd setup");

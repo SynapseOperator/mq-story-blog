@@ -137,9 +137,9 @@ async function privateDockerRouting() {
   return true;
 }
 
-export function assertPrivateProxyNetworks(networks) {
-  assert.equal(networks.length, 2, "PRODUCTION_PREVIEW_NETWORK_REJECTED");
-  assert.deepEqual(networks.map(network => network.Name).sort(), ["mq-production_edge", "mq-production_frontend"]);
+export function assertPrivateProxyNetworks(networks, { allowMissingEdge = false } = {}) {
+  const expected = allowMissingEdge && networks.length === 1 ? ["mq-production_frontend"] : ["mq-production_edge", "mq-production_frontend"];
+  assert.deepEqual(networks.map(network => network.Name).sort(), expected, "PRODUCTION_PREVIEW_NETWORK_REJECTED");
   for (const network of networks) {
     assert.equal(network.Driver, "bridge", "PRODUCTION_PREVIEW_NETWORK_REJECTED");
     assert.equal(network.EnableIPv6, false, "PRODUCTION_PREVIEW_NETWORK_REJECTED");
@@ -357,7 +357,13 @@ export async function applyProductionHost(context, confirmation, { runDocker = d
       if (plan.action === "private-preview") {
         assert.ok(Number.parseInt(info.ServerVersion, 10) >= 28, "PRODUCTION_PREVIEW_DOCKER_VERSION_REQUIRED");
         assert.equal(await inspectPrivateRouting(), true, "PRODUCTION_PREVIEW_ROUTING_REJECTED");
-        assertPrivateProxyNetworks(JSON.parse(runDocker(["network", "inspect", "mq-production_edge", "mq-production_frontend"]).stdout));
+        // A closed bootstrap starts only postgres/app, so Compose has not yet
+        // created proxy's edge network. Only an absent edge is permissible;
+        // a failed Docker command or a missing/unsafe frontend still blocks.
+        const edge = runDocker(["network", "ls", "--filter", "name=^mq-production_edge$", "--format", "{{.Name}}"]).stdout.trim();
+        assert.ok(edge === "" || edge === "mq-production_edge", "PRODUCTION_PREVIEW_NETWORK_REJECTED");
+        assertPrivateProxyNetworks(JSON.parse(runDocker(["network", "inspect", ...(edge ? [edge] : []), "mq-production_frontend"]).stdout),
+          { allowMissingEdge: true });
       }
       for (const path of [dirname(directory), info.DockerRootDir]) {
         const space = await inspectSpace(path);
@@ -471,6 +477,10 @@ secrets:
     file: ${p.privateKey.path}
 `);
         assertProductionCompose(JSON.parse(compose(["config", "--format", "json"]).stdout), { images, config, preview: p });
+        // Create does not start the proxy or publish its ports. Validate the
+        // networks Compose actually created before allowing the first start.
+        compose(["create", "--no-deps", "proxy"]);
+        assertPrivateProxyNetworks(JSON.parse(runDocker(["network", "inspect", "mq-production_edge", "mq-production_frontend"]).stdout));
         compose(["up", "-d", "--wait", "--wait-timeout", "180", "proxy"]);
         const ids = compose(["ps", "--all", "--quiet", "proxy"]).stdout.trim().split(/\s+/).filter(Boolean);
         assert.equal(ids.length, 1, "PRODUCTION_PREVIEW_PROXY_REQUIRED");

@@ -183,8 +183,10 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
           assert.equal(spec.services.app.environment.MQ_DEPLOYMENT_ENV, "production");
           assert.equal(spec.services.postgres.environment.POSTGRES_DB, "mq_production");
           assert.ok(Object.values(spec.services).every(service => !service.ports?.length));
-          docker(["run", "--rm", "--network", "none", "--read-only", images.tools, "--input-type=module", "--eval",
-            `import {statfs} from 'node:fs/promises';import assert from 'node:assert/strict';const s=await statfs('/');assert.ok(s.bavail*s.bsize>=${reserve});`]);
+          const capacity = json(docker(["run", "--rm", "--network", "none", "--read-only", images.tools, "--input-type=module", "--eval",
+            "import {statfs} from 'node:fs/promises';const s=await statfs('/');console.log(JSON.stringify({freeBytes:s.bavail*s.bsize}));"]));
+          console.log(`Synthetic capacity: ${JSON.stringify({ freeBytes: capacity.freeBytes, reserveBytes: reserve })}`);
+          assert.ok(capacity.freeBytes >= reserve, "SYNTHETIC_DISK_RESERVE_REQUIRED");
           return true;
         }
         case "postgres": compose(["up", "-d", "--wait", "--wait-timeout", "180", "postgres"]); return;
@@ -244,7 +246,7 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
       assert.throws(() => planProductionActivation({ currentRelease: release, config: manifest, receipt, features: enabled }), /PRODUCTION_PREVIEW_MUST_CLOSE/);
       pass("private preview uses production Origin and host-loopback-only publication; activate remains separate");
       stage = "private preview auth and browser acceptance";
-      const previewResult = await runPrivatePreviewChecks({ docker, project, directory, evidence, root, origin, port,
+      const previewResult = await runPrivatePreviewChecks({ docker, project, directory, evidence, origin, port,
         ca: previewCa, wrongCa: previewWrongCa, accounts, secrets, toolsImage: images.tools, browserImage: previewBrowserImage,
         unusedPort, onStage: value => { stage = `private preview/${value}`; },
         directRequest: async () => json(fixture("direct-request")).status,

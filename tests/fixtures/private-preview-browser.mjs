@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
-import { chromium } from "/app/node_modules/playwright/index.mjs";
+import { chromium } from "/opt/mq-browser/node_modules/playwright-core/index.mjs";
 
 // Runs only inside the isolated acceptance browser. Its NSS trust database
 // contains the single disposable laboratory CA, never a host/system import.
