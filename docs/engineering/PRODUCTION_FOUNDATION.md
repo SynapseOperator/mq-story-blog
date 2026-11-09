@@ -8,7 +8,7 @@ P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01
 
 浏览器 → Caddy 80/443 → 非 root Next.js 3000 → PostgreSQL 18。只有 Caddy 发布主机端口；应用与数据库分别处于 internal 网络，数据库没有端口映射。媒体卷不在 `public/`，所有图片仍经既有权限查询、完整性核验和 no-store 响应。
 
-`Dockerfile` 固定 Node 24.19.0、Caddy 2.11.9 及基础镜像 digest，`package-lock.json` 固定依赖。`app` 为 standalone 产物，`tools` 为离线操作镜像，`proxy` 为 Caddy 镜像；均默认 UID/GID 10001。构建不接收运行秘密；`.dockerignore` 使用白名单，排除本地配置、Git、备份和宿主机生成的 Prisma Client。`tools` 含完整依赖，仅按需启动，不是常驻服务。
+`Dockerfile` 当前固定 Node 24.22.2（P5-03 更新）、Caddy 2.11.9 及基础镜像 digest，`package-lock.json` 固定依赖。`app` 为 standalone 产物，`tools` 为离线操作镜像，`proxy` 为 Caddy 镜像；均默认 UID/GID 10001。构建不接收运行秘密；`.dockerignore` 使用白名单，排除本地配置、Git、备份和宿主机生成的 Prisma Client。`tools` 含完整依赖，仅按需启动，不是常驻服务。
 
 应用只读文件系统，临时目录与 Next 缓存使用限额 tmpfs。PG18 挂载 `/var/lib/postgresql`，保留其版本目录。Compose 的 `volumes-init` 是明确调用的一次性 root 步骤：无网络、无秘密，只处理三个已挂载卷的根目录，不递归修改文件。其他服务不依赖 root 应用进程。
 
@@ -31,7 +31,7 @@ P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01
 
 staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名称由 environment 和 deploymentId 派生，不接受任意角色列表；连接 URL 必须精确匹配主机、端口、数据库和身份。`NODE_ENV` 始终是 `production`，不借用 development/test 绕过保护。
 
-应用需要五个秘密文件：`database_url`、`auth_secret`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`。由对应 `*_FILE` 变量读取，原始秘密环境变量和 Better Auth 别名会被拒绝。四个密钥为相互独立的 32-byte 随机值，以 64 位小写十六进制保存。生产生成、分发与启用须另获授权。
+应用需要六个秘密文件：`database_url`、`auth_secret`、`session_storage_key`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`。由对应`*_FILE`变量读取，原始秘密环境变量和Better Auth别名拒绝。五个密钥是互相独立的32-byte随机值，以64位小写hex保存；Session存储key只默认挂给app，不存数据库。生产生成与启用另需授权。009撤销旧Session而保留账号和业务数据，见[存储合同](SESSION_STORAGE.md)。
 
 秘密文件必须是单硬链接普通文件、0400/0600、属 root 或当前 UID；进程仍需实际读取权限。Linux Compose 的 file secrets 是 bind mount，`uid/mode` 声明不能修复宿主机权限：应在私有父目录中准备 UID10001 的 0400 文件。PG 引导密码供 postgres 用户读取，单独准备为该镜像的 postgres UID，不能与应用秘密共用目录权限。manifest 所在目录也须允许容器遍历。Windows 文件 mode 不证明 ACL；本地演练使用 Linux named volumes 严格验证，不放宽生产检查。
 
@@ -64,7 +64,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 1. 审核 manifest、镜像 digest、外部秘密文件权限、磁盘和日志配置；启动单独的 postgres。
 2. `node scripts/production/database-cli.mjs bootstrap`：`BOOTSTRAP_DATABASE_URL_FILE`、`MQ_ROLE_PASSWORDS_FILE`。后者为 migration/runtime/maintenance/mediaMaintenance/backup 的独立随机密码 JSON，每值满足 `[A-Za-z0-9_-]{32,128}` 且五项互异（推荐 64 位 hex）。只接受空库；bootstrap/provision/keys 均须离线 SUPERUSER 且为本库 owner。
-3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–008。
+3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–009。
 4. `... database-cli.mjs provision`：仅 `BOOTSTRAP_DATABASE_URL_FILE`，同一事务设置 11 owner 与完整权限矩阵；验证失败整体回滚。
 5. `... database-cli.mjs keys`：引导连接及两个独立签名秘密文件；只允许首次插入，不覆盖旧密钥，不是轮换命令。
 6. `... database-cli.mjs audit`：仅 `RUNTIME_DATABASE_URL_FILE`，只读核验。不得用引导身份代替 runtime 验收。
@@ -121,7 +121,7 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 
 ## 尚未开放的门槛
 
-- Better Auth 1.7.12 默认 Session Token 仍原值存库。数据库/备份读取者能获取 token；Cookie 签名不等于 token 已哈希。[Session Spike](SESSION_TOKEN_SPIKE.md) 已验证简单摘要 adapter 的撤销兼容缺口，未接入应用；正式开放前仍须明确风险处置和独立安全审查。
-- 加密备份、隔离恢复、数据库/认证/代理/业务密钥轮换及只读告警检查已在合成环境验证。正式域名/TLS、主机防火墙/SSH、异地恢复、生产密钥托管、磁盘硬配额及容量压力测试仍未在目标 VPS 验收。
+- P5-04 已实现独立密钥保护的 Session 存储；009 撤销旧会话，数据库不保存有效 Token 明文。任意 SQL 写入者回放完整旧行、应用密钥/进程失陷仍是残余风险，正式启用前须完成精确提交的独立安全审查，见 [Session 合同](SESSION_STORAGE.md)。
+- 加密备份、隔离恢复、密钥轮换及只读告警已在合成环境验证；主机防火墙/SSH、真实 OSS 合成恢复和一次飞书送达亦已有独立证据。正式公网 TLS、生产秘密托管、生产定时任务、磁盘硬配额及容量压力仍需按目标环境另行验收。
 - 原有备份/管理员维护工具的本地目标保护保持不变；生产合同使用单独受控入口。恢复会清除 Session 与业务签名密钥，须按手册重新配置权限及验证，不能把恢复成功当作重新开放许可。
-- P5-01 已完成 VPS 主机加固、运行组件和隔离合成部署；P5-02 补充独立生产协调路径，但尚未执行正式生产部署。Session 摘要改造、真实异地备份、告警送达与公网验收仍未完成。仓库合并和测试成功均不授权公开注册、留言或正式发布。
+- P5-01 已完成 VPS 主机加固、运行组件和隔离合成部署；P5-02 补充独立生产协调路径，但尚未执行正式生产部署。P5-04 未修改现有 VPS 合成环境；仓库合并和测试成功均不授权公开注册、留言或正式发布。

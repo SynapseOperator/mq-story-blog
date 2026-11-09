@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -68,7 +69,7 @@ async function main() {
   const mediaMaintenanceRole = `mq_media_mt_${suffix}`;
   const rolePasswords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")];
   if (process.env.MQ_MEDIA_LIFECYCLE_TESTS === "true") rolePasswords.push(randomBytes(32).toString("hex"));
-  const roles = [], databases = [], servers = [], secrets = new Set(rolePasswords);
+  const roles = [], databases = [], servers = [], secrets = new Set([...rolePasswords, sessionFixture.key]);
   let workspace, tls, failure;
   async function isolatedDatabase({ drafts = false } = {}) {
     const name = `mq_test_admin_${randomUUID().replaceAll("-", "")}`;
@@ -84,7 +85,7 @@ async function main() {
     try {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
-      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments"]);
+      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions"]);
       const configure = drafts ? applyAdminDraftDatabasePrivileges : applyAdminDatabasePrivileges;
       await configure(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
@@ -132,7 +133,7 @@ async function main() {
     const port = await unusedPort(), origin = `http://127.0.0.1:${port}`, secret = randomBytes(48).toString("base64url");
     secrets.add(secret); secrets.add(workspace);
     const env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: application.runtimeUrl,
-      MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "",
+      MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, SESSION_STORAGE_KEY: sessionFixture.key, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "",
       MQ_MEDIA_ENABLED: "true", MQ_MEDIA_ENV: "test", MQ_MEDIA_DEVELOPMENT_ROOT: devRoot, MQ_MEDIA_TEST_ROOT: testRoot };
     stage = "production HTTP media upload, private access, failures and real server crash recovery";
     let plain = await startServer(port, env, servers);
@@ -245,7 +246,7 @@ async function main() {
             }
             const inspect = new pg.Pool({ connectionString: databaseURL, max: 1 });
             try {
-              const values = (await inspect.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+              const values = (await inspect.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
               values.forEach(row => secrets.add(row.value));
             } finally { await inspect.end(); }
             console.log("PASS restored production HTTPS preserves public/private image boundaries");
@@ -257,7 +258,7 @@ async function main() {
     stage = "production logs contain no synthetic sensitive values or private storage identity";
     const inspect = new pg.Pool({ connectionString: application.connectionString, max: 1 });
     try {
-      const rows = (await inspect.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+      const rows = (await inspect.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
       rows.forEach(row => secrets.add(row.value));
     } finally { await inspect.end(); }
     const logs = servers.map(server => server.output).join("\n");

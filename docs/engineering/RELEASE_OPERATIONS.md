@@ -16,7 +16,7 @@ GitHub 当前环境列表为空。官方说明：Pro/Team 的私有仓库可以�
 
 四个 target 为 app/tools/proxy/operations。BuildKit 直接输出 OCI archive，不向镜像仓库推送；构建不会取得部署密码或签名密钥。构建只绑定依赖/base digest，仍可能受 apt 仓库变化影响，不能承诺相同源码每次构建的字节绝对相同。
 
-`release.json` 记录源码、实时门禁证据、001–008 checksum、Schema/权限/秘密/内容/Compose 合同及每份归档的：
+`release.json` 记录源码、实时门禁证据、001–009 checksum、Schema/权限/秘密/内容/Compose 合同（包括 Session codec/adapter）及每份归档的：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -55,7 +55,7 @@ node scripts/release/cli.mjs plan \
 # 增加最后一个参数 rollback，仅规划兼容的应用回退。
 ```
 
-必须有本 deploymentId 的近期完整备份（≤26小时）；它不证明异地备份可恢复。更新/回退首版均要求 8 项迁移与 Schema、权限、秘密、内容和 Compose 合同完全相同；未来新增迁移必须另审升级及回退兼容性，不能在此绕过。
+必须有本 deploymentId 的近期完整备份（≤26小时）；它不证明异地备份可恢复。当前更新/回退要求 9 项迁移与 Schema、权限、秘密、内容和 Compose 合同完全相同；不能用普通镜像回退跨越 009。已有 008 环境按 [Session 维护窗口](SESSION_STORAGE.md) 升级；未来新增迁移仍须另审兼容性。
 
 合成实验通过 `applySyntheticRelease({plan,confirmation,execute})` 执行固定步骤：关闭入口、停止 app、迁移/重新 provision、运行身份 audit、启动候选、健康检查、恢复入口。回退跳过 migration/provision。`execute` 由本地隔离 lab 映射到已有 Compose/database-cli，沿用不同角色与受限秘密挂载。计划只接受随机 staging 数据库及 `.localhost` HTTPS；生产 apply 明确拒绝。确认 deploymentId 只防错目标，不是授权凭据。
 
@@ -71,7 +71,7 @@ node scripts/release/cli.mjs plan \
 6. 受控验证健康、HTTPS、公开图文/分享、登录、管理权限、点赞/留言和备份，不误开放生产开关；负责人确认后才开放入口。P5-02 提供另行审查的独立生产路径，见 [PRODUCTION_LAUNCH.md](PRODUCTION_LAUNCH.md)；bootstrap 不开放入口，activate 需新的精确批准。本文 P4 合成执行器仍拒绝 production。
 7. 故障时入口保持关闭；兼容回退仅切镜像。数据库 down migration、reset、旧秘密恢复不属于回退。不可兼容时向前修复或经独立授权恢复到全新隔离目标，明确恢复会损失 snapshot 后的数据。
 
-## 本轮证据与未验证部分
+## P4 历史证据与当时未验证部分
 
 - `node --test tests/release.test.mjs`：Review/CI/祖先门禁、OCI 完整性、目标/备份限制、故障闭入口及回退不改数据库等定向检查。
 - `node scripts/release/integration.mjs`：真实 BuildKit 导出约 1MiB 合成 Linux 镜像，完整校验后 Docker load，并按同一 digest 以 UID10001 执行。精确清理本次容器/builder/镜像，无全局 prune。

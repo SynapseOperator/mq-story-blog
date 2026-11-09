@@ -60,7 +60,7 @@ async function main() {
   const url = role => `postgresql://${role}:${role === "mq_bootstrap" ? bootstrapPassword : passwords[Object.keys(config.roles).find(key => config.roles[key] === role)]}@postgres:5432/${config.database.name}`;
   const runtimeUrl = url(config.roles.runtime), bootstrapUrl = url("mq_bootstrap");
   secretValues.add(runtimeUrl); secretValues.add(bootstrapUrl);
-  const files = { postgres_password: bootstrapPassword, database_url: runtimeUrl, auth_secret: secret(), auth_proxy_secret: secret(),
+  const files = { postgres_password: bootstrapPassword, database_url: runtimeUrl, auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: secret(),
     publish_signing_key: secret(), comment_signing_key: secret(), bootstrap_database_url: bootstrapUrl,
     migration_database_url: url(config.roles.migration), maintenance_database_url: url(config.roles.maintenance),
     role_passwords: JSON.stringify(passwords) };
@@ -115,7 +115,7 @@ async function main() {
       console.log("PASS operations: real Restic faults and actual low-capacity filesystem admission");
     }
     await volume("manifest", { "deployment.json": JSON.stringify(manifest) });
-    await volume("app-secrets", Object.fromEntries(["database_url", "auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => [name, files[name]])));
+    await volume("app-secrets", Object.fromEntries(["database_url", "auth_secret", "session_storage_key", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => [name, files[name]])));
     await volume("pg-secrets", { postgres_password: files.postgres_password }, 999);
     await volume("proxy-secrets", { auth_proxy_secret: files.auth_proxy_secret });
     await volume("bootstrap-secrets", { bootstrap_database_url: bootstrapUrl, role_passwords: files.role_passwords });
@@ -226,7 +226,7 @@ ${external}
       "--tmpfs", `${mediaRoot}:rw,noexec,nosuid,size=8m,uid=10001,gid=10001,mode=0700`];
     for (const [key, value] of Object.entries({ NODE_ENV: "production", MQ_SYNTHETIC_LAB: "true", MQ_DEPLOYMENT_ENV: "staging",
       MQ_DEPLOYMENT_CONFIG: "/etc/mq/deployment.json", DATABASE_URL_FILE: "/run/secrets/database_url",
-      AUTH_SECRET_FILE: "/run/secrets/auth_secret", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
+      AUTH_SECRET_FILE: "/run/secrets/auth_secret", SESSION_STORAGE_KEY_FILE: "/run/secrets/session_storage_key", AUTH_PROXY_SECRET_FILE: "/run/secrets/auth_proxy_secret",
       MQ_PUBLISH_SIGNING_KEY_FILE: "/run/secrets/publish_signing_key", MQ_COMMENT_SIGNING_KEY_FILE: "/run/secrets/comment_signing_key" })) diskArgs.push("-e", `${key}=${value}`);
     docker([...diskArgs, images.tools, "scripts/production/lab-actions.mjs", "disk-refusal"]);
     console.log("PASS staging: actual 8MiB tmpfs refuses media write and startup without filling host storage");

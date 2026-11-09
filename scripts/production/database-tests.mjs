@@ -3,6 +3,7 @@ import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { pathToFileURL, URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import { databaseUrl } from "../db/environment.mjs";
 import { logPrivacySettings } from "../db/log-privacy.mjs";
 import { validateDeploymentConfig, LOGIN_IDENTITIES } from "./database-config.mjs";
@@ -42,7 +43,7 @@ export async function runProductionDatabaseTests({ beforeCleanup } = {}) {
       urls[key] = url.href; pools[key] = new pg.Pool({ connectionString: url.href, max: 1, connectionTimeoutMillis: 5000 });
       pools[key].on("error", () => { poolFailed = true; });
     }
-    await check("one-time empty-target bootstrap and non-superuser 001-008 migration", async () => {
+    await check("one-time empty-target bootstrap and non-superuser 001-009 migration", async () => {
       await pools.bootstrap.query("CREATE FUNCTION public.synthetic_preexisting() RETURNS integer LANGUAGE SQL AS 'SELECT 1'");
       await assert.rejects(bootstrapDeploymentDatabase(pools.bootstrap, config, passwords));
       await pools.bootstrap.query("DROP FUNCTION public.synthetic_preexisting()");
@@ -68,12 +69,12 @@ export async function runProductionDatabaseTests({ beforeCleanup } = {}) {
       await pools.maintenance.query(`INSERT INTO public."User"(id,name,email,username,"updatedAt") VALUES($1,'Synthetic administrator',$2,'synthetic_admin',CURRENT_TIMESTAMP)`, [user, `${randomUUID()}@accounts.invalid`]);
       await pools.maintenance.query(`INSERT INTO public."Account"(id,"accountId","providerId","userId",password,"updatedAt") VALUES($1,$2,'credential',$2,'synthetic-password-hash',CURRENT_TIMESTAMP)`, [account, user]);
       await pools.maintenance.query(`INSERT INTO public."AdminGrant"("userId") VALUES($1)`, [user]);
-      await pools.runtime.query(`INSERT INTO public."Session"(id,"userId",token,"expiresAt","updatedAt") VALUES($1,$2,$3,CURRENT_TIMESTAMP+interval '1 hour',CURRENT_TIMESTAMP)`, [session, user, randomUUID()]);
+      await sessionFixture.insert(pools.runtime, { id: session, userId: user });
       await pools.maintenance.query(`UPDATE public."Account" SET password='synthetic-replacement-hash',"updatedAt"=CURRENT_TIMESTAMP WHERE id=$1`, [account]);
       assert.equal((await pools.runtime.query('SELECT count(*)::int AS n FROM public."Session"')).rows[0].n, 0);
       assert.equal((await pools.maintenance.query('SELECT "credentialVersion" FROM public."AdminGrant"')).rows[0].credentialVersion, 1);
       assert.deepEqual((await pools.maintenance.query('SELECT kind FROM public."AdminSecurityEvent" ORDER BY "eventAt",kind')).rows.map(row => row.kind).sort(), ["CREDENTIAL_RESET", "GRANTED"]);
-      await pools.runtime.query(`INSERT INTO public."Session"(id,"userId",token,"expiresAt","updatedAt") VALUES($1,$2,$3,CURRENT_TIMESTAMP+interval '1 hour',CURRENT_TIMESTAMP)`, [session, user, randomUUID()]);
+      await sessionFixture.insert(pools.runtime, { id: session, userId: user });
       assert.equal((await pools.runtime.query("SELECT public.mq_lock_admin_access($1,$2) AS ok", [session, user])).rows[0].ok, true);
       assert.equal((await pools.runtime.query("SELECT public.mq_lock_admin_credentials($1) AS ok", [user])).rows[0].ok, true);
     });

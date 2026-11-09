@@ -114,7 +114,7 @@ export async function migrateDeploymentDatabase(connectionString, config) {
     await verifyDeploymentMigrations(pool);
     await pool.end();
     if (poolFailed) throw new Error("DEPLOYMENT_MIGRATION_CONNECTION_REJECTED");
-    return { migrated: true, migrations: 8 };
+    return { migrated: true, migrations: 9 };
   } catch (cause) { throw new Error("DEPLOYMENT_MIGRATION_REJECTED", { cause }); }
   finally { if (!pool.ending) await pool.end(); }
 }
@@ -122,7 +122,7 @@ export async function migrateDeploymentDatabase(connectionString, config) {
 export async function verifyDeploymentMigrations(connection) {
   const base = new URL("../../prisma/migrations/", import.meta.url);
   const names = (await readdir(base)).filter(name => /^\d{12}_/.test(name)).sort();
-  assert.equal(names.length, 8, "DEPLOYMENT_MIGRATION_SET_REQUIRES_REVIEW");
+  assert.equal(names.length, 9, "DEPLOYMENT_MIGRATION_SET_REQUIRES_REVIEW");
   const records = (await connection.query(`SELECT migration_name,checksum,finished_at,rolled_back_at
     FROM public._prisma_migrations ORDER BY migration_name`)).rows;
   assert.equal(records.length, names.length);

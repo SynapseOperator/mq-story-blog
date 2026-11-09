@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile, readdir, writeFile, unlink } from "node:fs/promises";
@@ -45,7 +46,7 @@ export async function runMediaLifecycleHttpTests({ connectionString, maintenance
   });
   const state = async id => (await owner.query("SELECT state,storage_key FROM media_asset WHERE id=$1", [id])).rows[0];
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
     rows.forEach(row => secrets.add(row.value));
   }
   async function run(name, action) {
@@ -180,7 +181,7 @@ export async function runMediaLifecycleHttpTests({ connectionString, maintenance
       assert.equal((await remove(privateAsset, { jar: copied })).status, 401);
       jar = await login(); assert.equal((await remove(privateAsset)).status, 403);
       grant = await restoreAdmin(maintenance, { userId: grant.userId, expectedVersion: grant.version }); jar = await login();
-      await owner.query('UPDATE "Session" SET "expiresAt"=now()-interval \'1 minute\' WHERE "userId"=$1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await remove(privateAsset)).status, 401); jar = await login();
       const loggedOut = { ...jar };
       assert.equal((await request("/api/auth/sign-out", { method: "POST", body: {}, jar })).status, 200);

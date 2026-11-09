@@ -1,3 +1,4 @@
+import { sessionFixture } from "./session-fixture.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -104,7 +105,7 @@ async function main() {
       ...process.env,
       NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1",
       DATABASE_URL: isolated.href, MQ_AUTH_ENABLED: "true",
-      AUTH_SECRET: secret, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "",
+      AUTH_SECRET: secret, SESSION_STORAGE_KEY: sessionFixture.key, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "",
     };
     stage = "start two production Next.js processes against the isolated database";
     await startServer(port, env, servers);
@@ -146,12 +147,12 @@ async function main() {
     }
     const inspection = new pg.Pool({ connectionString: isolated.href, max: 1 });
     try {
-      const rows = (await inspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+      const rows = (await inspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
       results.secrets.push(...rows.map((row) => row.value));
     } finally { await inspection.end(); }
     stage = "assert production logs do not disclose synthetic secrets";
     const output = servers.map((server) => server.output).join("\n");
-    assert.ok(!output.includes(secret) && !output.includes(isolated.href), "Server logs must not disclose authentication or connection secrets");
+    assert.ok(!output.includes(secret) && !output.includes(sessionFixture.key) && !output.includes(isolated.href), "Server logs must not disclose authentication, session-storage or connection secrets");
     assert.ok(results.secrets.every((value) => !output.includes(value)), "Server logs must not disclose internal email, password or raw session token");
     assert.ok(!output.includes("@accounts.invalid"), "Even rolled-back synthetic internal emails must not reach production logs");
     console.log("PASS captured production logs contain no synthetic secret/email/session token");

@@ -2,6 +2,8 @@
 
 P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；P5-02 又完成真实 OSS 合成备份及隔离恢复，但尚无正式生产仓库、密码或已启用的定时任务。详见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
 
+P5-04：新备份合同为 009。`SESSION_STORAGE_KEY` 不进入数据库 dump 或备份包，须由独立秘密托管保管；恢复始终删除全部 Session，再使用目标新密钥和新登录。旧 008 包需在停写的新隔离目标按旧版本校验/恢复后升级 009，不伪造迁移清单。恢复与密钥步骤见 [Session 安全存储](SESSION_STORAGE.md)。
+
 ## 选择与一致性边界
 
 采用 **Restic 0.19.1 + PostgreSQL 18 原生 custom-format pg_dump**。Restic 提供加密、认证、内容去重与仓库校验；不自行设计密码格式。操作员必须显式选择 `local` 或 `s3`：本地仓库仍须为 Git 外的 0700 目录；S3 只连接预先初始化、具有固定仓库 ID 的 HTTPS 地址。真实 OSS 合成恢复已验证，不代表生产备份已配置。[Restic 备份](https://restic.readthedocs.io/en/stable/040_backup.html)、[仓库检查](https://restic.readthedocs.io/en/stable/045_working_with_repos.html)。
@@ -10,7 +12,7 @@ P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合
 
 媒体和数据库复制不占用 `withAdmin` 事务。备份专用只读快照在有限的维护窗口内保持；写身份排空保障文件复制不会遇到业务删除。宿主机 root、DB bootstrap 和同 UID 的不受控直接文件修改仍属受信运维边界，不能靠 advisory lock 阻止。不要在备份期间手工改库或移动文件。
 
-包含 public、发布私有 Schema、留言审核私有 Schema 的完整数据库、READY 展示图/缩略图、全部素材清单、数据库及文件 SHA-256/尺寸、8 个迁移与应用 commit 标识。不含原始照片，因为系统本来不保存原图。清单与从 dump 恢复的数据库再次对比，防止文件和记录错配；READY 不代表公开，原有 Revision/发布权限关系完整保留。
+包含 public、发布私有 Schema、留言审核私有 Schema 的完整数据库、READY 展示图/缩略图、全部素材清单、数据库及文件 SHA-256/尺寸、9 个迁移与应用 commit 标识。不含原始照片，因为系统本来不保存原图。清单与从 dump 恢复的数据库再次对比，防止文件和记录错配；READY 不代表公开，原有 Revision/发布权限关系完整保留。
 
 `restic backup` 的任何非零退出（包括部分成功）都算失败。成功后执行 `restic check --read-data`，将精确 snapshot 再提取到新目录，检查 dump、清单和每张图片；最后才生成成功 receipt。receipt 是不含账号数据的 `{verified,snapshotId,completedAt,deploymentId,sourceRevision,assets,files,backend}`，S3 另记录非秘密 `repositoryId`。不使用 `latest` 猜测恢复点，不把存在某个 snapshot 等同于该次备份成功。
 
@@ -19,7 +21,7 @@ P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合
 - Bootstrap 文件连接只负责校验目标、控制维护锁和恢复后的权限收口；pg_dump 只使用 backup 只读身份。
 - pg_restore 使用新目标的 migration 身份，不能作为 superuser 导入 SQL。备份只能来自受信仓库；Restic 密码持有者能创建新的可信密文，认证不等于外部独立签名。
 - Restic 密码从独立 0400/0600 文件读取，不与仓库或工作目录重叠，不在 argv 中传值。子进程使用允许列表环境，PG 密码仅进入对应工具进程环境，不继承其他维护秘密；stdout/stderr 不转发路径、SQL、凭据或正文。
-- 仓库、工作目录、receipt 父目录必须在 Git 外，禁止链接路径，POSIX 0700。备份保存身份信息、密码哈希、可能仍有效的 Session Token 和两类签名密钥；取得备份密码等同于取得这些敏感内容。
+- 仓库、工作目录、receipt 父目录必须在 Git 外，禁止链接路径，POSIX 0700。备份保存身份信息、密码哈希、Session 查询索引/认证密文和两类签名密钥（旧版备份仍可能含 Token 原值）；取得备份密码等同于取得这些敏感内容。
 - 密码另行离线保管，不能只留在同台 VPS 或同一个备份卷。丢失密码无法恢复；备份密码泄露必须按完整数据泄露处理，单纯换密码不能收回已复制的历史数据。
 
 ## S3 文件秘密与仓库合同
@@ -68,7 +70,7 @@ node scripts/production/backup-cli.mjs retention-plan --confirm-deployment=<源�
 
 恢复暂时只允许目标 migration 身份连接；完成 pg_restore 后再次 NOLOGIN，撤销 PUBLIC 权限，清空所有 Session 及两张签名密钥表。数据库历史内容和管理员授权保留，但旧会话不能复活，旧发布/审核证明失效。恢复成功仍是 **writers paused / service disabled / requires provisioning**，不是重新开放许可。
 
-接着保持目标 app/其他工具停止，显式 `resume` 后再用 bootstrap 运行 `provision`：新目标尚未授予 runtime/维护/backup CONNECT，LOGIN 恢复本身并不授予访问权；既有 provision 的完整矩阵审计要求最终 LOGIN 状态，因此不能颠倒这两个步骤。provision 原子设置新 owner/列权限，失败不启动应用。准备新的认证、代理及业务密钥，按独立授权初始化两类业务密钥；运行 runtime audit 后才在隔离网络启动应用。正式重新开放前须验证旧 Cookie/旧签名被拒绝、新登录、公开/私有图片、发布和审核权限及备份恢复结果。不要直接复用源环境秘密来恢复业务开放。
+接着保持目标 app/其他工具停止，显式 `resume` 后再用 bootstrap 运行 `provision`：新目标尚未授予 runtime/维护/backup CONNECT，LOGIN 恢复本身并不授予访问权；既有 provision 的完整矩阵审计要求最终 LOGIN 状态，因此不能颠倒这两个步骤。provision 原子设置新 owner/列权限，失败不启动应用。准备新的认证、独立 `SESSION_STORAGE_KEY`、代理及业务密钥，按独立授权初始化两类业务密钥；运行 runtime audit 后才在隔离网络启动应用。正式重新开放前须验证旧 Cookie/旧签名被拒绝、新登录、公开/私有图片、发布和审核权限及备份恢复结果。不要直接复用源环境秘密来恢复业务开放。
 
 ## 故障、空间与重复运行
 
@@ -107,7 +109,9 @@ MQ_BACKUP_WINDOW_CONFIG=/etc/mq/backup/window.json
 
 协调器的状态机、真实 receipt 文件发布、错误目标拒绝和中断行为已有自动化测试。工具容器以 UID10001 写入 0600 receipt，主机 root 用专门的有界元数据读取器接收；秘密文件读取规则没有放宽。读取器拒绝符号链接、硬链接、其他用户归属和宽松权限。注入的 Docker runner 测试不等同于目标 VPS 的 systemd 演练。真正安装、时间窗口、进程强杀/重启恢复及通知送达仍需主机验收。
 
-## 本轮证据和未完成项
+## P3/P4 历史证据和当时的未完成项
+
+以下保留原实验的8项迁移、计时与当时状态。当前009、独立Session密钥及恢复结果见[Session安全存储](SESSION_STORAGE.md)；真实OSS合成恢复和飞书送达见[外部服务](OFFSITE_BACKUP_AND_ALERTS.md)，正式生产仍未启用。
 
 自动化入口与真实计时由 `test:production:operations` 的隔离容器演练生成：合成账号、公开/私有图文和留言 → 加密备份 → 新目标恢复 → 权限/约束/数据核验 → 实际 HTTPS 应用启动。测试产物只输出计时、数量、固定错误码和合成页面证据，不上传数据库、Restic 仓库、密码或密文备份到 CI Artifacts。
 

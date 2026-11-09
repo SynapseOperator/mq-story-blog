@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -22,7 +23,7 @@ export async function runLikeDatabaseTests({ connectionString, runtimeUrl, runti
       const userId = randomUUID(), sessionId = randomUUID();
       await trusted.user.create({ data: { id: userId, name: "Synthetic reader", username: `db_${randomUUID().replaceAll("-", "").slice(0, 24)}`,
         email: `${userId}@accounts.invalid` } });
-      await trusted.session.create({ data: { id: sessionId, userId, token: randomUUID(), expiresAt: new Date(Date.now() + 3600_000) } });
+      await trusted.session.create({ data: sessionFixture.row({ id: sessionId, userId, expiresAt: new Date(Date.now() + 3600_000) }) });
       principals.push({ userId, sessionId });
     }
     const [alice, bob] = principals;

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -17,6 +17,7 @@ import { createLocalMediaStore } from "../../src/server/media/local-store.ts";
 import { createMediaBackup, verifyMediaBackup } from "./backup.mjs";
 import { restoreMediaBackup } from "./restore.mjs";
 import { digest } from "./backup-files.mjs";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 
 const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -58,9 +59,9 @@ export async function runBackupTests({ verifyRestored } = {}) {
     const published = await stories.createDraft({ kind: "STAR", slug: `restore-public-${randomUUID()}`, slotId: "star-1", title: "合成公开恢复测试", content: content(assets[0].id) });
     await stories.publish({ storyId: published.id, expectedVersion: published.version });
     await stories.createDraft({ kind: "STAR", slug: `restore-private-${randomUUID()}`, title: "合成私人草稿恢复测试", content: content(assets[1].id) });
-    const userId = randomUUID(), token = randomUUID();
+    const userId = randomUUID(), token = randomBytes(16).toString("hex");
     await client.user.create({ data: { id: userId, name: "Synthetic backup account", username: `backup_${randomUUID().slice(0,8)}`, email: `${randomUUID()}@accounts.invalid` } });
-    await client.session.create({ data: { id: randomUUID(), userId, token, expiresAt: new Date(Date.now() + 3_600_000) } });
+    await client.session.create({ data: sessionFixture.row({ userId, token }) });
     const admin = { username: `restore_${randomUUID().slice(0,8)}`, password: `MqRestore!${randomUUID()}` };
     await initializeAdmin(client, admin);
     const options = { databaseURL: sourceURL.href, expectedDatabase: name, storage, backupParent: backups, tools };
@@ -128,12 +129,12 @@ export async function runBackupTests({ verifyRestored } = {}) {
       await writeFile(manifestPath, Buffer.from("tampered manifest"));
       try { await assert.rejects(verifyMediaBackup(successful.directory)); } finally { await writeFile(manifestPath, bytes); }
     });
-    await check("native isolated restore preserves revisions, files and synthetic raw-session data; PUBLIC has no function access", async () => {
+    await check("native isolated restore preserves revisions and files, revokes sessions and closes PUBLIC function access", async () => {
       const result = await restoreMediaBackup({ directory: successful.directory, controlURL: base, restoreParent: restores, projectRoot, tools });
       databases.push(result.database);
       const restored = new pg.Pool({ connectionString: result.databaseURL, max: 1 });
       try {
-        assert.equal((await restored.query('SELECT token FROM "Session" WHERE "userId"=$1', [userId])).rows[0].token, token);
+        assert.equal((await restored.query('SELECT count(*)::int n FROM "Session"')).rows[0].n, 0);
         assert.equal((await restored.query("SELECT count(*)::int AS n FROM story_revision_asset")).rows[0].n, 2);
         assert.equal((await restored.query(`SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace,
           LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a

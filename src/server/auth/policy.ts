@@ -15,10 +15,13 @@ export function authConfiguration(env: NodeJS.ProcessEnv = process.env) {
     throw new Error("AUTH_CONFIGURATION_INVALID");
   }
   if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32 || !env.DATABASE_URL) throw new Error("AUTH_CONFIGURATION_INVALID");
+  if (!/^[a-f0-9]{64}$/.test(env.SESSION_STORAGE_KEY ?? "")
+    || [env.AUTH_SECRET, env.AUTH_PROXY_SECRET, env.MQ_PUBLISH_SIGNING_KEY, env.MQ_COMMENT_SIGNING_KEY]
+      .includes(env.SESSION_STORAGE_KEY)) throw new Error("AUTH_CONFIGURATION_INVALID");
   if (env.AUTH_PROXY_SECRET && env.AUTH_PROXY_SECRET.length < 32) throw new Error("AUTH_CONFIGURATION_INVALID");
   // A public host must use a deliberately configured ingress, never raw XFF.
   if (!local && !env.AUTH_PROXY_SECRET) throw new Error("AUTH_PROXY_REQUIRED");
-  return { origin: origin.origin, secret: env.AUTH_SECRET, databaseURL: env.DATABASE_URL,
+  return { origin: origin.origin, secret: env.AUTH_SECRET, sessionStorageKey: env.SESSION_STORAGE_KEY!, databaseURL: env.DATABASE_URL,
     secure: origin.protocol === "https:", proxySecret: env.AUTH_PROXY_SECRET };
 }
 export type AuthConfiguration = ReturnType<typeof authConfiguration>;

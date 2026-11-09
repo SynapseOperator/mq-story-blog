@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -71,7 +72,7 @@ async function main() {
   const roles = [];
   const databases = [];
   const servers = [];
-  const secrets = new Set(rolePasswords);
+  const secrets = new Set([...rolePasswords, sessionFixture.key]);
   let tls;
   let failure;
   async function isolatedDatabase() {
@@ -88,7 +89,7 @@ async function main() {
     const pool = new pg.Pool({ connectionString: owner.href, max: 1 });
     try {
       const migrations = (await pool.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
-      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments"]);
+      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions"]);
       await applyAdminDraftDatabasePrivileges(pool, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await pool.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
     } finally { await pool.end(); }
@@ -121,7 +122,7 @@ async function main() {
     const origin = `http://127.0.0.1:${port}`;
     const secret = randomBytes(48).toString("base64url"); secrets.add(secret);
     const env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: application.runtimeUrl,
-      MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "" };
+      MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, SESSION_STORAGE_KEY: sessionFixture.key, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: "true", AUTH_PROXY_SECRET: "" };
     const plain = await startServer(port, env, servers);
     stage = "production HTTP draft permissions, transaction and concurrency tests";
     const httpResult = await runDraftHttpTests({ ...application, runtimeRole, origin });
@@ -198,7 +199,7 @@ async function main() {
           const campfires = (await freshInspection.query("SELECT kind,state,slot_id FROM story WHERE kind='CAMPFIRE'")).rows;
           assert.equal(campfires.length, 1); assert.equal(campfires[0].state, "DRAFT"); assert.equal(campfires[0].slot_id, null);
           console.log("PASS first UI CAMPFIRE persists as one slot-free draft in its separate database");
-          const rows = (await freshInspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+          const rows = (await freshInspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
           rows.forEach(row => secrets.add(row.value));
         } finally { await freshInspection.end(); }
       }
@@ -206,7 +207,7 @@ async function main() {
     stage = "production application log privacy regression";
     const inspection = new pg.Pool({ connectionString: application.connectionString, max: 1 });
     try {
-      const rows = (await inspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+      const rows = (await inspection.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
       rows.forEach(row => secrets.add(row.value));
     } finally { await inspection.end(); }
     const captured = servers.map(server => server.output).join("\n");

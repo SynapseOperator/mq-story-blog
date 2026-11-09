@@ -22,7 +22,7 @@ function fixture() {
     database: { host: "postgres", port: 5432, name: "mq_production" }, origin: "https://synthetic.example.invalid",
     media: { root: "/var/lib/mq/media", minFreeBytes: 8 * 1024 ** 3 } };
   const release = { version: 1, sourceSha, platform: "linux/amd64", gate: { kind: "reviewed-main", sourceSha },
-    compatibility: { migrations: Array.from({ length: 8 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })), contracts: {} },
+    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })), contracts: {} },
     images: Object.fromEntries(TARGETS.map(name => [name, { file: `${name}.oci.tar`, archiveBytes: 1024, indexDigest: `sha256:${digest}` }])) };
   return { config, release, candidateManifestSha256: digest };
 }
@@ -102,7 +102,7 @@ test("actual production secret files require a strong bootstrap password as well
   const url = (role, password) => `postgresql://${role}:${encodeURIComponent(password)}@postgres:5432/mq_production`;
   const files = {
     database_url: url(config.roles.runtime, passwords.runtime), migration_database_url: url(config.roles.migration, passwords.migration),
-    role_passwords: JSON.stringify(passwords), auth_secret: "6".repeat(64), auth_proxy_secret: "7".repeat(64),
+    role_passwords: JSON.stringify(passwords), auth_secret: "6".repeat(64), session_storage_key: "b".repeat(64), auth_proxy_secret: "7".repeat(64),
     publish_signing_key: "8".repeat(64), comment_signing_key: "9".repeat(64),
   };
   for (const [name, value] of Object.entries(files)) {
@@ -115,6 +115,13 @@ test("actual production secret files require a strong bootstrap password as well
     }
   };
   for (const password of ["a".repeat(64), "_".repeat(32)]) { await setBootstrap(password); await readSecrets(root, config); }
+  const storageFile = join(root, "session_storage_key");
+  for (const value of ["short", files.auth_secret, files.auth_proxy_secret, files.publish_signing_key, files.comment_signing_key, passwords.runtime]) {
+    await writeFile(storageFile, value);
+    await assert.rejects(readSecrets(root, config));
+  }
+  await writeFile(storageFile, files.session_storage_key);
+  await readSecrets(root, config);
   for (const password of ["short", "a".repeat(129), `${"a".repeat(31)}!`]) {
     await setBootstrap(password);
     await assert.rejects(readSecrets(root, config), /PRODUCTION_BOOTSTRAP_PASSWORD_REJECTED/);

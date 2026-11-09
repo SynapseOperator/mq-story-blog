@@ -10,11 +10,12 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { toNodeHandler } from "better-auth/node";
 import { username } from "better-auth/plugins";
 import pg from "pg";
-import { createAuthDatabaseClient } from "../../src/server/auth/database.ts";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { AUTH_TRANSACTION_POLICY } from "../../src/server/auth/database.ts";
 import { hashPassword, verifyPassword } from "../../src/server/auth/password.ts";
 import { databaseUrl } from "../db/environment.mjs";
 import { configureTemporaryDatabaseLogging } from "../db/log-privacy.mjs";
-import { runPrisma } from "../db/prisma-command.mjs";
+import { prepareLegacySessionDatabase } from "./legacy-session-fixture.mjs";
 
 // Isolated experiment only. Never imported by the application. A successful
 // basic login is deliberately NOT treated as proof of complete compatibility.
@@ -65,8 +66,9 @@ function experimentalAdapter(db, mode, observations) {
   };
 }
 
-async function startAuth(connectionString, mode, secret, observations = {}) {
-  const db = createAuthDatabaseClient(connectionString);
+async function startAuth(connectionString, mode, secret, observations = {}, PrismaClient) {
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 3,
+    connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 }), transactionOptions: AUTH_TRANSACTION_POLICY });
   let handler;
   const server = createServer((request, response) => {
     Promise.resolve(handler(request, response)).catch(error => {
@@ -158,7 +160,7 @@ async function main() {
   assert.match(name, /^mq_test_auth_[a-f0-9]{32}$/);
   const isolated = new URL(base); isolated.pathname = `/${name}`;
   const servers = [];
-  let inspection;
+  let inspection, legacy;
   let created = false;
   let poolFailed = false;
   control.on("error", () => { poolFailed = true; });
@@ -169,13 +171,16 @@ async function main() {
     report.postgresVersion = identity.version;
     await control.query(`CREATE DATABASE "${name}"`); created = true;
     await configureTemporaryDatabaseLogging(control, name);
-    await runPrisma(["migrate", "deploy"], isolated.href);
+    // Keep the original 16 negative-control cases against their actual 008
+    // schema. The production 009 constraints are never disabled or weakened.
+    legacy = await prepareLegacySessionDatabase(isolated.href);
+    report.migrations = "001-008 historical negative control";
     inspection = new pg.Pool({ connectionString: isolated.href, max: 1, connectionTimeoutMillis: 5000 });
     inspection.on("error", () => { poolFailed = true; });
     const secret = randomBytes(32).toString("hex");
     const password = `SyntheticOnly!${randomBytes(24).toString("base64url")}`;
     const server = async (mode, key = secret, observations) => {
-      const value = await startAuth(isolated.href, mode, key, observations); servers.push(value); return value;
+      const value = await startAuth(isolated.href, mode, key, observations, legacy.PrismaClient); servers.push(value); return value;
     };
     const stored = async id => (await inspection.query('SELECT * FROM "Session" WHERE id=$1', [id])).rows[0];
     stage = "baseline token storage and signed HTTP session";
@@ -396,7 +401,7 @@ async function main() {
     const crossOrigin = await candidate.request("/sign-in/username", { method: "POST", badOrigin: true, body: { username: hashed.username, password } });
     assert.equal(crossOrigin.status, 403);
     passed("secret rotation rejects old signed cookies; global revoke survives secret rollback; Origin stays enforced");
-    report.conclusion = "DO_NOT_DEPLOY: basic MQ paths work, full framework list/revoke semantics do not; production authentication unchanged";
+    report.conclusion = "HISTORICAL_NEGATIVE_CONTROL: do not deploy this digest adapter; full framework list/revoke semantics are incompatible";
     assert.equal(poolFailed, false);
   } finally {
     for (const active of servers) await active.close();
@@ -412,6 +417,7 @@ async function main() {
       await control.query(`DROP DATABASE "${name}"`);
     }
     await control.end();
+    await legacy?.cleanup();
     report.cleanup = true;
   }
   console.log(JSON.stringify(report));

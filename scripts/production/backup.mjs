@@ -123,7 +123,7 @@ export async function backupDeployment({ controlPool, backupUrl, config, workspa
     const database = await fileDigest(dump); assert.ok(database.byteLength);
     const manifest = { format: "mq-private-backup-v1", postgresMajor: 18, createdAt: new Date().toISOString(), sourceDatabase: config.database.name,
       database, inventory, files: ready.length * 2, deployment: { format: "mq-deployment-backup-v1", id: config.deploymentId,
-        environment: config.environment, revision: sourceRevision, migrations: 8, restic: "0.19.1" } };
+        environment: config.environment, revision: sourceRevision, migrations: 9, restic: "0.19.1" } };
     const manifestBytes = Buffer.from(JSON.stringify(manifest));
     await writePrivate(join(directory, "manifest.json"), manifestBytes);
     await snapshotClient.query("COMMIT");

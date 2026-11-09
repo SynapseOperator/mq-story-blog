@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL, URL } from "node:url";
 import pg from "pg";
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import { databaseUrl } from "../db/environment.mjs";
 import { logPrivacySettings } from "../db/log-privacy.mjs";
 import { LOGIN_IDENTITIES, validateDeploymentConfig } from "./database-config.mjs";
@@ -66,8 +67,7 @@ export async function runDeploymentAdminTests() {
     });
     const session = async () => {
       const sid = randomUUID();
-      await runtime.query('INSERT INTO public."Session"(id,"userId",token,"expiresAt","updatedAt") VALUES($1,$2,$3,CURRENT_TIMESTAMP+interval \'1 hour\',CURRENT_TIMESTAMP)',
-        [sid, grant.userId, randomBytes(24).toString("hex")]);
+      await sessionFixture.insert(runtime, { id: sid, userId: grant.userId });
       return sid;
     };
     await check("revoke, restore and password reset preserve CAS and invalidate all old sessions", async () => {

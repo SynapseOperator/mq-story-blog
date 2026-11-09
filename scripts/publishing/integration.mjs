@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -62,7 +63,7 @@ async function main() {
   const suffix = randomUUID().replaceAll("-", ""), runtimeRole = `mq_admin_rt_${suffix}`, maintenanceRole = `mq_admin_mt_${suffix}`;
   const publicationOwnerRole = `mq_publish_owner_${suffix}`;
   const passwords = [randomBytes(32).toString("hex"), randomBytes(32).toString("hex")], key = randomBytes(32).toString("hex");
-  const databases = [], roles = [], servers = [], secrets = new Set([...passwords, key]);
+  const databases = [], roles = [], servers = [], secrets = new Set([...passwords, key, sessionFixture.key]);
   let workspace, tls, failure;
   async function isolated() {
     const name = `mq_test_admin_${randomUUID().replaceAll("-", "")}`;
@@ -79,7 +80,7 @@ async function main() {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
       assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle",
-        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments"]);
+        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions"]);
       await applyAdminDraftDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
       await applyPublishingDatabasePrivileges(owner, { runtimeRole, publicationOwnerRole, expectedDatabase: name });
@@ -115,7 +116,7 @@ async function main() {
       const port = await unusedPort(); if (secure) { tls = await startHttpsProxy(port); secrets.add(tls.proxySecret); }
       const origin = secure ? tls.origin : `http://127.0.0.1:${port}`, secret = randomBytes(48).toString("base64url"); secrets.add(secret);
       const env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_URL: application.runtimeUrl,
-        MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: secure ? "false" : "true", AUTH_PROXY_SECRET: secure ? tls.proxySecret : "",
+        MQ_AUTH_ENABLED: "true", AUTH_SECRET: secret, SESSION_STORAGE_KEY: sessionFixture.key, AUTH_ORIGIN: origin, AUTH_ALLOW_LOCAL_HTTP: secure ? "false" : "true", AUTH_PROXY_SECRET: secure ? tls.proxySecret : "",
         MQ_MEDIA_ENABLED: "true", MQ_MEDIA_ENV: "test", MQ_MEDIA_DEVELOPMENT_ROOT: devRoot, MQ_MEDIA_TEST_ROOT: storageRoot,
         MQ_PUBLISH_ENABLED: "true", MQ_PUBLISH_SIGNING_KEY: key,
         MQ_PUBLISH_TEST_GATE_FILE: join(workspace, secure ? "https-gate.json" : "http-gate.json") };
@@ -136,12 +137,12 @@ async function main() {
       }
       await stopServer(server);
       if (secure) {
-        stage = "native 008 backup with comments, likes and restored privileged operations default-deny";
+        stage = "native backup with comments, likes, revoked sessions and restored privileged operations default-deny";
         const backupResult = await runPublicationBackupTests({
           source: application, controlURL: base, projectRoot: root, workspace,
           storage: { projectRoot: root, roots: { development: devRoot, test: storageRoot },
             environment: "test", maxVariantBytes: 4 * 1024 * 1024 },
-          runtimeRole, maintenanceRole, key, first: httpResult.first, oldJar: httpResult.oldJar,
+          runtimeRole, maintenanceRole, key, first: httpResult.first, oldJar: httpResult.oldJar, admin: httpResult.admin,
           origin, ca: tls.ca, secrets, rememberDatabase: name => databases.push(name),
           withRestoredServer: async (overrides, action) => {
             const restored = await startServer(port, { ...env, ...overrides }, servers, ingress);

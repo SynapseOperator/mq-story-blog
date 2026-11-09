@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
@@ -38,11 +39,16 @@ function transport(origin, secrets, ca) {
         incoming.on("end", () => {
           try {
             assert.ok(!text.includes("@accounts.invalid"), "Internal email cannot enter an HTTP response");
-            assert.ok(!/"(?:token|email|emailVerified|password)"\s*:/.test(text), "Sensitive fields cannot enter an HTTP response");
+            assert.ok(!/"(?:token|tokenCiphertext|email|emailVerified|password)"\s*:/.test(text), "Sensitive fields cannot enter an HTTP response");
             assert.ok([...secrets].every(secret => !secret || !text.includes(secret)), "Synthetic secret cannot enter an HTTP response");
             let data = null;
             try { data = JSON.parse(text); } catch { /* The protected HTML entry is intentionally not JSON. */ }
             const cookieLines = incoming.headers["set-cookie"] ?? [];
+            for (const line of cookieLines) {
+              if (!/^(?:__Secure-)?mq\.session_token=/.test(line) || /max-age=0(?:;|$)/i.test(line)) continue;
+              const cookie = line.split(";", 1)[0];
+              secrets.add(cookie); secrets.add(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)).split(".", 1)[0]);
+            }
             if (jar) {
               for (const line of cookieLines) {
                 if (!/^(?:__Secure-)?mq\.session_token=/.test(line)) continue;
@@ -79,7 +85,7 @@ export async function runAdminHttpTests({ connectionString, maintenanceUrl, runt
   let stage = "initialization";
 
   async function collectSecrets() {
-    const values = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+    const values = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
     values.forEach(row => secrets.add(row.value));
   }
   async function run(name, fn) {
@@ -208,7 +214,7 @@ export async function runAdminHttpTests({ connectionString, maintenanceUrl, runt
       assert.equal((await request("/api/admin/status", { method: "POST", jar: adminJar, body: { role: "admin" } })).status, 405);
     });
     await run("expired sessions cannot retain administrative access", async () => {
-      await owner.query('UPDATE "Session" SET "expiresAt" = now() - interval \'1 minute\' WHERE "userId" = $1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await status(adminJar)).status, 401);
       adminJar = await login();
       assert.equal((await status(adminJar)).status, 200);

@@ -8,7 +8,7 @@
 
 | 操作 | 实际顺序 | 成功后的入口 |
 |---|---|---|
-| bootstrap | 空目标检查 → PostgreSQL → 五类身份 → 001–008 → 11 个函数 owner/权限 → 独立业务签名 → runtime audit → 私有卷 → app 健康 → 回执 | 无代理端口，四项业务开关全部关闭；不创建管理员或数据 |
+| bootstrap | 空目标检查 → PostgreSQL → 五类身份 → 001–009 → 11 个函数 owner/权限 → 独立业务签名 → runtime audit → 私有卷 → app 健康 → 回执 | 无代理端口，四项业务开关全部关闭；不创建管理员或数据 |
 | upgrade | 近期验证备份 → 关闭入口/app → 迁移/provision/audit → 指定 digest 的 app → 健康 → 回执 | 仍关闭，须单独 activate |
 | rollback | 兼容性和备份检查 → 关闭入口/app → 权限 audit → 已审核旧镜像 → 健康 → 回执 | 仍关闭，不执行 down migration 或恢复旧秘密 |
 | activate | 精确已部署回执 → 权限 audit → 明确选定业务开关 → 健康 → Caddy 80/443 → 公共信任链 HTTPS/公开查询 → 回执 | 仅此操作能绑定 80/443，需另外的正式上线授权 |
@@ -26,8 +26,8 @@
 - `/srv/mq-production`：root:root 0700。一个全局 `operation.lock` 串行化生产发布与定时备份；正常完成保留历史记录，失败不自动解锁。
 - `/srv/mq-production/<deploymentId>`：首次 bootstrap 创建；已有目录、同名 Compose 项目、卷或网络均拒绝接管。Compose 项目固定 `mq-production`。
 - 独立外部 `deployment.json`：`environment=production`、`database={host:postgres,port:5432,name:mq_production}`、正式 HTTPS origin、`media.root=/var/lib/mq/media`、至少 8 GiB 余量。角色名按 deploymentId 派生，不能复用 staging。
-- 专用秘密目录：root:root 0700。`postgres_password` 属于 UID999；`database_url`、`auth_secret`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`、`bootstrap_database_url`、`migration_database_url`、`role_passwords` 属于 UID10001，0400/0600、单链接、每份不超过4KiB。目录不给容器整体挂载，只逐份挂必要文件。
-- `role_passwords` 使用数据库模块规定的五个身份键。数据库密码独立；四个应用/代理/发布/审核秘密为各自独立的64位十六进制随机值。启动检查拒绝复用。这里只规定格式，不提供正式密码生成或聊天传递方式。
+- 专用秘密目录：root:root 0700。`postgres_password` 属于 UID999；`database_url`、`auth_secret`、`session_storage_key`、`auth_proxy_secret`、`publish_signing_key`、`comment_signing_key`、`bootstrap_database_url`、`migration_database_url`、`role_passwords` 属于 UID10001，0400/0600、单链接、每份不超过4KiB。目录不给容器整体挂载，只逐份挂必要文件。
+- `role_passwords` 使用数据库模块规定的五个身份键。数据库密码独立；认证/会话存储/代理/发布/审核五个密钥为各自独立的64位十六进制随机值。启动检查拒绝复用。这里只规定格式，不提供正式密码生成或聊天传递方式。
 - maintenance、backup 连接与 Restic 密码另行隔离保存，仅挂载对应离线工具，不能给 app。具体合同见 [生产基础](PRODUCTION_FOUNDATION.md)、[管理员维护](PRODUCTION_ADMIN.md)和[备份](PRODUCTION_BACKUP.md)。
 
 宿主 root 和 Docker 控制者属于可信运维边界；文件属主检查不能防御已经取得 root 的攻击者。生产签名密钥从外部文件初始化，历史 SQL 迁移没有密钥内容，001–008 未改动。
@@ -88,8 +88,8 @@ bootstrap 后管理员维护使用独立的交互命令：隐藏输入两次密�
 - 宿主机执行器的文件属主/锁/回执/固定 Docker 调用另做 Linux 临时目录测试；尚未在真实 VPS 运行本次新增 production CLI。P5-01 的真实 VPS 演练是 staging，不改称 production。
 - 本轮真实 VPS 只读报告：Node24.19.0、Docker29.9.3、Compose5.7.0；应用/PG健康，代理仅127.0.0.1:18080/18443；发布和留言写入关闭，磁盘约31.34GiB可用、内存约3.01GiB可用。它是采样值，不是负载峰值或正式容量保证。
 - 2026-11-07 Google DNS-over-HTTPS 实查 `mq-story.xyz` 的 A 为154.94.237.36；AAAA、CAA均返回成功查询且无记录。没有修改解析，也没有申请或验收公网证书。
-- Better Auth1.7.12 仍原值保存 Session Token。实际15组Spike发现简单摘要适配不能兼容列表/单个/其他设备撤销；没有接入不可靠的哈希替换。应用只开放既有认证白名单，不提供框架 Session 列表或任意撤销端点。详见 [SESSION_TOKEN_SPIKE.md](SESSION_TOKEN_SPIKE.md)。
-- 正式用户开放前，负责人须处理 Session 数据泄露残余风险：限制 runtime/backup/root访问、加密异地备份、日志隔离、泄露时撤销全部会话并轮换认证秘密。仍需独立安全 Review 和明确风险决定；测试通过不等于审查完成。
+- P5-04 使用独立密钥封装 Session，并由 HMAC 索引查询；009 撤销旧会话。列表、单个/其他/全部撤销在隔离框架 HTTP 中验证，生产仍保留原有路由白名单。详见 [SESSION_STORAGE.md](SESSION_STORAGE.md)。
+- 正式用户开放前，负责人须处理任意 SQL 写入/完整行重放、密钥或进程失陷的残余风险：限制 runtime/backup/root访问、加密异地备份、日志隔离、泄露时撤销全部会话并轮换认证秘密。仍需独立安全 Review 和明确风险决定；测试通过不等于审查完成。
 - 依赖与镜像实测见 [PRODUCTION_SECURITY_REVIEW.md](PRODUCTION_SECURITY_REVIEW.md)，最终CI结果记录在本次PR；运行时无已知 npm 告警不能推定系统镜像、离线工具和未来漏洞均安全。
 
 P5-02 已通过独立评审并合并；真实 OSS 合成恢复也已完成。正式生产仍按下文的独立授权顺序执行，不能从代码合并推导出上线许可。
@@ -104,7 +104,7 @@ P5-02 已通过独立评审并合并；真实 OSS 合成恢复也已完成。正
 
 首次生产操作分为以下两次批准：
 
-1. **关闭公网入口的初始化批准**：负责人先决定 [Session 残余风险](SESSION_TOKEN_SPIKE.md)及[镜像安全审查](PRODUCTION_SECURITY_REVIEW.md)，完成新PR精确HEAD独立评审与main CI。从该main构建四类候选，核验源SHA、归档/index/manifest/config digest，并取得操作前1小时内的GitHub门禁记录。指定正式deploymentId、origin和Git外秘密托管位置；分别生成新的五类数据库密码、认证/代理/发布/审核密钥、Restic密码，不复制实验秘密或账号。批准升级主机运维Node、定点停止现有合成Compose项目（只stop，保留卷、目录、备份）、空库bootstrap、交互式管理员初始化，以及仅经隧道的生产配置验收和正式前缀的备份/新目标恢复。此阶段不得打开公网80/443。
+1. **关闭公网入口的初始化批准**：负责人先决定 [Session 残余风险](SESSION_STORAGE.md)及[镜像安全审查](PRODUCTION_SECURITY_REVIEW.md)，完成新PR精确HEAD独立评审与main CI。从该main构建四类候选，核验源SHA、归档/index/manifest/config digest，并取得操作前1小时内的GitHub门禁记录。指定正式deploymentId、origin和Git外秘密托管位置；分别生成新的五类数据库密码、认证/会话存储/代理/发布/审核密钥、Restic密码，不复制实验秘密或账号。批准升级主机运维Node、定点停止现有合成Compose项目（只stop，保留卷、目录、备份）、空库bootstrap、交互式管理员初始化，以及仅经隧道的生产配置验收和正式前缀的备份/新目标恢复。此阶段不得打开公网80/443。
 2. **公网开放批准**：上述验收通过后再批准精确activate计划、业务开关及80/443。`auth=true`同时启用普通注册，不是仅管理员登录；必须明确接受这一产品行为。确认DNS A、实际IPv6边界与CAA、Caddy公共证书签发/续期、生产Origin和Secure Cookie。完成真实飞书单条送达验收、VPS外部探针及生产备份定时任务授权。任何未完成项必须显式阻塞或由负责人作出记录，不能靠本地测试放行。
 
 资源安排：只长期运行一套MQ环境；保留合成数据并不要求保留其运行进程。常驻app/PG/proxy内存上限合计2,432MiB，离线tools再占512MiB，尚需内核、Docker和页缓存余量。先停止实验服务，再实测初始化、图片处理、备份和更新峰值。主机不构建Next源码；磁盘预检仍要求8GiB加候选归档所需余量，备份暂存容量另行检查。不能用本次空闲采样保证峰值安全。

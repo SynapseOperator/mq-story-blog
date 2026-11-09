@@ -193,6 +193,8 @@ model Session {
   id String @id
   expiresAt DateTime
   token String @unique
+  // Keyed lookup only; the bearer is authenticated-encrypted outside the DB.
+  tokenCiphertext String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?

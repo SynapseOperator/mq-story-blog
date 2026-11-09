@@ -50,8 +50,8 @@ function releaseContract(release, candidateManifestSha256) {
   for (const target of TARGETS) assert.match(release.images[target]?.indexDigest ?? "", /^sha256:[a-f0-9]{64}$/,
     "PRODUCTION_IMAGE_DIGEST_REQUIRED");
   const migrations = release.compatibility?.migrations;
-  assert.ok(Array.isArray(migrations) && migrations.length === 8, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");
-  assert.equal(new Set(migrations.map(item => item.name)).size, 8, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");
+  assert.ok(Array.isArray(migrations) && migrations.length === 9, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");
+  assert.equal(new Set(migrations.map(item => item.name)).size, 9, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");
   for (const item of migrations) {
     assert.match(item.name ?? "", /^[a-zA-Z0-9_]+$/, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");
     assert.match(item.sha256 ?? "", /^[a-f0-9]{64}$/, "PRODUCTION_MIGRATION_REVIEW_REQUIRED");

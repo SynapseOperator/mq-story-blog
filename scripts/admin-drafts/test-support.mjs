@@ -32,11 +32,16 @@ export function transport(origin, secrets, ca) {
         incoming.on("end", () => {
           try {
             assert.ok(!text.includes("@accounts.invalid"), "Compatibility email must not reach a response");
-            assert.ok(!/"(?:token|email|emailVerified|password)"\s*:/.test(text), "Sensitive DTO field found");
+            assert.ok(!/"(?:token|tokenCiphertext|email|emailVerified|password)"\s*:/.test(text), "Sensitive DTO field found");
             assert.ok([...secrets].every(secret => !secret || !text.includes(secret)), "Secret found in response");
             let data;
             try { data = JSON.parse(text); } catch { data = null; }
             const cookieLines = incoming.headers["set-cookie"] ?? [];
+            for (const line of cookieLines) {
+              if (!/^(?:__Secure-)?mq\.session_token=/.test(line) || /max-age=0(?:;|$)/i.test(line)) continue;
+              const cookie = line.split(";", 1)[0];
+              secrets.add(cookie); secrets.add(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)).split(".", 1)[0]);
+            }
             if (jar) for (const line of cookieLines) {
               if (/^(?:__Secure-)?mq\.session_token=/.test(line)) {
                 jar.cookie = /max-age=0(?:;|$)/i.test(line) ? "" : line.split(";", 1)[0];

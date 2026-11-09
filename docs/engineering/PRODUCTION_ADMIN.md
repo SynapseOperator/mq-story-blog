@@ -46,6 +46,6 @@ docker compose ... run --rm --no-deps tools scripts/production/admin-cli.mjs \
 
 `node --test tests/production-admin.test.mjs tests/admin-terminal.test.mjs` 验证参数、目标、无回显/取消和管道拒绝；`tests/production-admin-pty.test.mjs` 在 Linux 的真实伪终端中执行命令的确认与隐藏输入，数据库为固定测试替身，不冒充数据库验收。
 
-`node scripts/production/admin-tests.mjs` 仅通过既有 `mq_test` 防护创建随机 staging 数据库，执行 001–008 和全部身份配置，再验证真实管理员初始化、重复拒绝、撤销/恢复/重置、Session 失效、CAS 和权限漂移。结束只清理自身随机测试数据库与角色，不接管或清空开发库。
+`node scripts/production/admin-tests.mjs` 仅通过既有 `mq_test` 防护创建随机 staging 数据库，执行 001–009 和全部身份配置，再验证真实管理员初始化、重复拒绝、撤销/恢复/重置、Session 失效、CAS 和权限漂移。结束只清理自身随机测试数据库与角色，不接管或清空开发库。
 
 `npm run test:production:bootstrap` 使用随机 Docker 项目和独立 PostgreSQL 集群，实际运行 `environment=production`、`mq_production` 与 8 GiB 余量合同。首次 bootstrap 验证 User、Story、AdminGrant 均为空；之后仅测试 fixture 通过同一管理员维护函数创建合成身份。真实 HTTPS 验证登录、授权撤销及旧 Cookie 失效，恢复到另一个独立集群后重新验证权限和 Session 清除。fixture 不替代正式 CLI 的交互输入，也不会创建正式管理员。TLS 使用仅绑定回环的临时 CA，不代表正式公网证书已验收。

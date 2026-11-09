@@ -7,7 +7,7 @@ import { validateDeploymentConfig, assertDatabaseUrl } from "./database-config.m
 import { createLocalMediaStore, checkMediaFreeSpace } from "../../src/server/media/local-store.ts";
 
 export const RUNTIME_SECRET_NAMES = Object.freeze([
-  "DATABASE_URL", "AUTH_SECRET", "AUTH_PROXY_SECRET", "MQ_PUBLISH_SIGNING_KEY", "MQ_COMMENT_SIGNING_KEY",
+  "DATABASE_URL", "AUTH_SECRET", "SESSION_STORAGE_KEY", "AUTH_PROXY_SECRET", "MQ_PUBLISH_SIGNING_KEY", "MQ_COMMENT_SIGNING_KEY",
 ]);
 const flags = ["MQ_AUTH_ENABLED", "MQ_MEDIA_ENABLED", "MQ_PUBLISH_ENABLED", "MQ_COMMENTS_ENABLED"];
 const reject = () => { throw new Error("DEPLOYMENT_RUNTIME_CONFIG_REJECTED"); };
@@ -108,7 +108,7 @@ export async function loadRuntimeEnvironment(input = process.env, { projectRoot 
       env[name] = value;
     }
     const databaseUrl = assertDatabaseUrl(env.DATABASE_URL, config);
-    if (new Set(RUNTIME_SECRET_NAMES.slice(1).map(name => env[name])).size !== 4) reject();
+    if (new Set(RUNTIME_SECRET_NAMES.slice(1).map(name => env[name])).size !== RUNTIME_SECRET_NAMES.length - 1) reject();
     if (RUNTIME_SECRET_NAMES.slice(1).some(name => env[name] === decodeURIComponent(databaseUrl.password))) reject();
     const media = { projectRoot, maxVariantBytes: 4 * 1024 * 1024, environment: config.environment,
       root: config.media.root, deploymentId: config.deploymentId, minimumFreeBytes: config.media.minFreeBytes };

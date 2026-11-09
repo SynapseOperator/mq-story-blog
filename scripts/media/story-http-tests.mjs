@@ -47,7 +47,7 @@ export async function runMediaStoryHttpTests({ connectionString, maintenanceUrl,
   const contentPath = (story, asset) => `/api/stories/${story}/media/${asset}`;
   const assetPath = id => `/api/admin/media/${id}`;
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
     rows.forEach(row => secrets.add(row.value));
   }
   async function run(name, action) {

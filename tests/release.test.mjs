@@ -111,7 +111,7 @@ test("missing layers, foreign platform, root user, links, duplicate and traversa
 function deploymentFixture() {
   const deploymentId = "a1234567-1234-4234-8234-123456789abc";
   const release = { version: 1, sourceSha, platform: "linux/amd64",
-    compatibility: { migrations: Array.from({ length: 8 }, (_, index) => ({ name: String(index), sha256: "f".repeat(64) })), contracts: { schema: "test" } },
+    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: String(index), sha256: "f".repeat(64) })), contracts: { schema: "test" } },
     images: Object.fromEntries(TARGETS.map(target => [target, { indexDigest: `sha256:${"f".repeat(64)}` }])) };
   return { release, currentRelease: globalThis.structuredClone(release), config: { version: 1, deploymentId, environment: "staging",
     database: { host: "postgres", port: 5432, name: `mq_staging_${deploymentId.replaceAll("-", "")}` }, origin: "https://synthetic.localhost" },

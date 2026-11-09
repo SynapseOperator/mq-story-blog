@@ -4,7 +4,8 @@ import { randomBytes } from "node:crypto";
 import { authConfiguration, canonicalIp, clientIdentity, credentials, inspectRequest } from "../src/server/auth/policy.ts";
 
 const env = { MQ_AUTH_ENABLED: "true", AUTH_ORIGIN: "http://127.0.0.1:3000", AUTH_ALLOW_LOCAL_HTTP: "true",
-  AUTH_SECRET: randomBytes(32).toString("hex"), DATABASE_URL: "postgresql://localhost/synthetic-not-connected" };
+  AUTH_SECRET: randomBytes(32).toString("hex"), SESSION_STORAGE_KEY: randomBytes(32).toString("hex"),
+  DATABASE_URL: "postgresql://localhost/synthetic-not-connected" };
 const config = authConfiguration(env);
 
 test("auth requires explicit enable, secret, origin and TLS except opted-in loopback", () => {
@@ -14,6 +15,9 @@ test("auth requires explicit enable, secret, origin and TLS except opted-in loop
     assert.throws(() => authConfiguration({ ...env, ...invalid }));
   }
   assert.equal(config.secure, false);
+  for (const key of [undefined, "short", "A".repeat(64), env.AUTH_SECRET]) {
+    assert.throws(() => authConfiguration({ ...env, SESSION_STORAGE_KEY: key }));
+  }
   assert.equal(authConfiguration({ ...env, AUTH_ORIGIN: "https://example.com", AUTH_PROXY_SECRET: randomBytes(32).toString("hex") }).secure, true);
 });
 

@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
@@ -22,7 +23,7 @@ export async function runLikeHttpTests({ connectionString, runtimeRole, origin, 
   }
   let passed = 0, stage = "fixtures";
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL')).rows;
     rows.forEach(row => secrets.add(row.value));
   }
   async function check(name, action) {
@@ -123,7 +124,7 @@ export async function runLikeHttpTests({ connectionString, runtimeRole, origin, 
     await check("expired, revoked and logged-out sessions cannot write or retain personalized state", async () => {
       assertLikes(await change(id, jars[0], true), { count: 1, liked: true });
       const user = (await owner.query('SELECT id FROM "User" WHERE username=$1', [accounts[0].username])).rows[0];
-      await owner.query('UPDATE "Session" SET "expiresAt"=CURRENT_TIMESTAMP-INTERVAL \'1 minute\' WHERE "userId"=$1', [user.id]);
+      await sessionFixture.expire(owner, user.id);
       assert.equal((await change(id, jars[0], false)).status, 401);
       assertLikes(await request(likePath(id), { jar: jars[0] }), { count: 1, liked: false });
       await login(0); assertLikes(await request(likePath(id), { jar: jars[0] }), { count: 1, liked: true });

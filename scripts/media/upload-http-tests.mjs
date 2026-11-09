@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
@@ -41,9 +42,14 @@ export function transport(origin, secrets, ca) {
           try {
             const buffer = Buffer.concat(chunks), text = buffer.toString("utf8");
             assert.ok(!text.includes("@accounts.invalid"), "Internal email must stay private");
-            assert.ok(!/"(?:storageKey|storage_key|path|password|email|emailVerified|token)"\s*:/.test(text), "Internal fields must stay private");
+            assert.ok(!/"(?:storageKey|storage_key|path|password|email|emailVerified|token|tokenCiphertext)"\s*:/.test(text), "Internal fields must stay private");
             assert.ok([...secrets].every(value => !value || !buffer.includes(Buffer.from(value))), "Synthetic secret must stay out of responses");
             const cookieLines = incoming.headers["set-cookie"] ?? [];
+            for (const line of cookieLines) {
+              if (!/^(?:__Secure-)?mq\.session_token=/.test(line) || /max-age=0(?:;|$)/i.test(line)) continue;
+              const cookie = line.split(";", 1)[0];
+              secrets.add(cookie); secrets.add(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)).split(".", 1)[0]);
+            }
             if (jar) for (const line of cookieLines) {
               if (/^(?:__Secure-)?mq\.session_token=/.test(line)) jar.cookie = /max-age=0(?:;|$)/i.test(line) ? "" : line.split(";", 1)[0];
             }
@@ -110,7 +116,7 @@ export async function runMediaUploadHttpTests({ connectionString, maintenanceUrl
   const assetPath = id => `/api/admin/media/${id}`;
   const contentPath = id => `${assetPath(id)}/content`;
   async function collectSecrets() {
-    const values = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+    const values = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
     values.forEach(row => secrets.add(row.value));
   }
   async function run(name, action) {
@@ -349,7 +355,7 @@ export async function runMediaUploadHttpTests({ connectionString, maintenanceUrl
     await run("expired, logged-out and forged cookies cannot upload or read confirmed assets", async () => {
       const forged = { cookie: jar.cookie.slice(0, -1) + (jar.cookie.endsWith("a") ? "b" : "a") };
       assert.equal((await request(contentPath(readyId), { jar: forged })).status, 401);
-      await owner.query('UPDATE "Session" SET "expiresAt"=now()-interval \'1 minute\' WHERE "userId"=$1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await upload()).response.status, 401); assert.equal((await request(contentPath(readyId), { jar })).status, 401);
       jar = await login(); const copied = { ...jar };
       assert.equal((await request("/api/auth/sign-out", { method: "POST", body: {}, jar })).status, 200);

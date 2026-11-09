@@ -57,7 +57,7 @@ async function fixture(t, environment = "staging") {
     } };
 }
 
-test("deployment startup reads five file-only secrets and derives an isolated runtime environment", async t => {
+test("deployment startup reads six file-only secrets and derives an isolated runtime environment", async t => {
   const { input, load, config, values, root, projectRoot } = await fixture(t);
   const result = await load({ ...input, MQ_AUTH_ENABLED: "true", MQ_MEDIA_ENABLED: "true", PATH: process.env.PATH,
     NODE_OPTIONS: "--inspect", MQ_ADMIN_MAINTENANCE_DATABASE_URL: "synthetic-discarded", UNKNOWN_FILE: "discarded" });
@@ -133,6 +133,20 @@ test("secrets reject invalid UTF-8, multiline values, whitespace, short keys and
   assert.equal((await load()).env.AUTH_SECRET, values.AUTH_SECRET);
 });
 
+test("session storage requires its own file secret even while business is disabled", async t => {
+  const { load, input, values } = await fixture(t);
+  const missing = { ...input }; delete missing.SESSION_STORAGE_KEY_FILE;
+  await assert.rejects(load(missing), rejected);
+  await assert.rejects(load({ ...input, SESSION_STORAGE_KEY: values.SESSION_STORAGE_KEY }), rejected);
+  for (const value of ["", "a".repeat(63), "A".repeat(64), values.AUTH_SECRET, values.AUTH_PROXY_SECRET,
+    values.MQ_PUBLISH_SIGNING_KEY, values.MQ_COMMENT_SIGNING_KEY, new URL(values.DATABASE_URL).password]) {
+    await fs.writeFile(input.SESSION_STORAGE_KEY_FILE, value);
+    await assert.rejects(load(), rejected);
+  }
+  await fs.writeFile(input.SESSION_STORAGE_KEY_FILE, values.SESSION_STORAGE_KEY);
+  assert.ok((await load()).env.SESSION_STORAGE_KEY === values.SESSION_STORAGE_KEY);
+});
+
 test("manifest schema rejects credentials, insecure origins, arbitrary roles and invalid reserve", async t => {
   const { projectRoot, configPath, manifest, saveManifest } = await fixture(t);
   for (const value of [{ ...manifest, DATABASE_URL: "synthetic" }, { ...manifest, roles: {} },
@@ -183,15 +197,17 @@ test("startup fails closed when the deployment volume is full or statfs is unava
 
 test("POSIX secrets accept only 0400/0600 and nonsecret manifests have no write bits", { skip: process.platform === "win32" }, async t => {
   const { projectRoot, input, configPath } = await fixture(t);
-  for (const mode of [0o400, 0o600]) {
-    await fs.chmod(input.AUTH_SECRET_FILE, mode);
-    assert.ok(await readDeploymentFile(input.AUTH_SECRET_FILE, { projectRoot, secret: true }));
+  for (const file of [input.AUTH_SECRET_FILE, input.SESSION_STORAGE_KEY_FILE]) {
+    for (const mode of [0o400, 0o600]) {
+      await fs.chmod(file, mode);
+      assert.ok(await readDeploymentFile(file, { projectRoot, secret: true }));
+    }
+    for (const mode of [0o644, 0o440, 0o700, 0o200, 0o4600]) {
+      await fs.chmod(file, mode);
+      await assert.rejects(readDeploymentFile(file, { projectRoot, secret: true }), rejected);
+    }
+    await fs.chmod(file, 0o600);
   }
-  for (const mode of [0o644, 0o440, 0o700, 0o200, 0o4600]) {
-    await fs.chmod(input.AUTH_SECRET_FILE, mode);
-    await assert.rejects(readDeploymentFile(input.AUTH_SECRET_FILE, { projectRoot, secret: true }), rejected);
-  }
-  await fs.chmod(input.AUTH_SECRET_FILE, 0o600);
   for (const mode of [0o400, 0o444]) {
     await fs.chmod(configPath, mode);
     assert.ok(await readDeploymentManifest(configPath, { projectRoot }));

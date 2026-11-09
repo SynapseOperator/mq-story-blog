@@ -1,3 +1,4 @@
+import { sessionFixture } from "../auth/session-fixture.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -32,7 +33,7 @@ export async function runPublishingHttpTests({ connectionString, maintenanceUrl,
   const current = async id => (await owner.query("SELECT * FROM story WHERE id=$1", [id])).rows[0];
   const privateTitle = `PRIVATE_UNCONFIRMED_${randomUUID()}`;
   async function collectSecrets() {
-    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
+    const rows = (await owner.query('SELECT email AS value FROM "User" UNION ALL SELECT token AS value FROM "Session" UNION ALL SELECT "tokenCiphertext" AS value FROM "Session" UNION ALL SELECT password AS value FROM "Account" WHERE password IS NOT NULL UNION ALL SELECT storage_key::text AS value FROM media_asset')).rows;
     rows.forEach(row => secrets.add(row.value));
   }
   async function run(name, action) {
@@ -262,7 +263,7 @@ export async function runPublishingHttpTests({ connectionString, maintenanceUrl,
     });
     await run("revoked, expired, logged-out and forged sessions cannot publish", async () => {
       const before = await current(first.id);
-      await owner.query('UPDATE "Session" SET "expiresAt"=now()-interval \'1 minute\' WHERE "userId"=$1', [grant.userId]);
+      await sessionFixture.expire(owner, grant.userId);
       assert.equal((await request(path(first.id, "withdraw"), { method: "POST", jar, body: { expectedVersion: before.version } })).status, 401, "expired session rejected");
       jar = await login(); const old = { ...jar };
       assert.equal((await request("/api/auth/sign-out", { method: "POST", jar, body: {} })).status, 200, "JSON sign-out succeeds");

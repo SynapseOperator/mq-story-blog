@@ -235,7 +235,7 @@ export async function bootstrapVpsLab(input, { docker = dockerCommand, verify = 
   const accounts = { admin: { username: `lab_admin_${target.id.replaceAll("-", "").slice(0, 8)}`, password: `MqLab!${secret()}` },
     reader: { username: `lab_reader_${target.id.replaceAll("-", "").slice(0, 8)}`, password: `MqReader!${secret()}` } };
   const files = { postgres_password: bootstrapPassword, database_url: url(config.roles.runtime, passwords.runtime),
-    auth_secret: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret(),
+    auth_secret: secret(), session_storage_key: secret(), auth_proxy_secret: secret(), publish_signing_key: secret(), comment_signing_key: secret(),
     bootstrap_database_url: bootstrapUrl, migration_database_url: url(config.roles.migration, passwords.migration),
     maintenance_database_url: url(config.roles.maintenance, passwords.maintenance), role_passwords: JSON.stringify(passwords), accounts: JSON.stringify(accounts) };
   const state = { version: 1, ...target, sourceSha: release.sourceSha, images, manifest, accounts, files, passwords, bootstrapUrl,
@@ -245,7 +245,7 @@ export async function bootstrapVpsLab(input, { docker = dockerCommand, verify = 
   phase("prepare-files");
   await writeFile(join(target.directory, "deployment.json"), JSON.stringify(manifest), { flag: "wx", mode: 0o444 });
   await mkdir(join(target.directory, "unused-file-secrets"), { mode: 0o700 });
-  for (const name of ["postgres_password", "database_url", "auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"])
+  for (const name of ["postgres_password", "database_url", "auth_secret", "session_storage_key", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"])
     await writeFile(join(target.directory, "unused-file-secrets", name), "unused: named-volume override required\n", { flag: "wx", mode: 0o600 });
   const environment = { MQ_DEPLOYMENT_ENV: "staging", MQ_DATABASE_NAME: manifest.database.name, MQ_AUTH_ORIGIN: manifest.origin,
     MQ_PUBLIC_HOST: "mq.localhost", MQ_DEPLOYMENT_CONFIG: join(target.directory, "deployment.json"), MQ_SECRET_DIRECTORY: join(target.directory, "unused-file-secrets"),
@@ -255,7 +255,7 @@ export async function bootstrapVpsLab(input, { docker = dockerCommand, verify = 
   phase("prepare-volumes");
   for (const [name, entries, uid] of [
     ["manifest", { "deployment.json": JSON.stringify(manifest) }, 10001],
-    ["app-secrets", Object.fromEntries(["database_url", "auth_secret", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => [name, files[name]])), 10001],
+    ["app-secrets", Object.fromEntries(["database_url", "auth_secret", "session_storage_key", "auth_proxy_secret", "publish_signing_key", "comment_signing_key"].map(name => [name, files[name]])), 10001],
     ["pg-secrets", { postgres_password: files.postgres_password }, 999], ["proxy-secrets", { auth_proxy_secret: files.auth_proxy_secret }, 10001],
     ["bootstrap-secrets", { bootstrap_database_url: bootstrapUrl, role_passwords: files.role_passwords }, 10001],
     ["migration-secrets", { migration_database_url: files.migration_database_url }, 10001],

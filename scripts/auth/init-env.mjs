@@ -7,7 +7,8 @@ const file = new URL("../../.env.auth.local", import.meta.url);
 const source = [
   "# Local-only authentication. Never commit this file or use it for deployment.",
   "MQ_AUTH_ENABLED=true", "AUTH_ORIGIN=http://127.0.0.1:3000", "AUTH_ALLOW_LOCAL_HTTP=true",
-  `AUTH_SECRET=${randomBytes(48).toString("base64url")}`, "",
+  `AUTH_SECRET=${randomBytes(48).toString("base64url")}`,
+  `SESSION_STORAGE_KEY=${randomBytes(32).toString("hex")}`, "",
 ].join("\n");
 try {
   await writeFile(file, source, { flag: "wx", mode: 0o600 });

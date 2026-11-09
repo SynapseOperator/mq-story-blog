@@ -16,6 +16,7 @@ const historical = ["202610230001_database_foundation", "202610230002_story_life
 const publicationMigration = "202611040006_story_publication";
 const likesMigration = "202611040007_story_likes";
 const commentsMigration = "202611050008_story_comments";
+const sessionMigration = "202611080009_protected_sessions";
 const checksum = value => createHash("sha256").update(value).digest("hex");
 let stage = "validate isolated PostgreSQL test target";
 
@@ -64,13 +65,13 @@ async function main() {
     });
     await runPrisma(["migrate", "deploy"], fresh);
     const firstHistory = await migrationHistory(fresh);
-    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration]);
+    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration, sessionMigration]);
     assert.ok(firstHistory.every(row => row.finished_at && row.rolled_back_at === null));
     await runPrisma(["migrate", "deploy"], fresh);
     await runPrisma(["migrate", "status"], fresh);
     await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], fresh);
     assert.deepEqual(await migrationHistory(fresh), firstHistory);
-    console.log("PASS media migrations: empty 001 -> 008, repeated deploy, status and schema drift");
+    console.log("PASS media migrations: empty 001 -> 009, repeated deploy, status and schema drift");
 
     stage = "construct a byte-identical temporary 001 through 004 migration tree";
     temporaryMigrations = await mkdtemp(join(tmpdir(), "mq-media-migrations-"));
@@ -218,9 +219,9 @@ async function main() {
 
     stage = "upgrade populated 007 to 008, preserving existing rows and historical SQL";
     const priorLikes = await withPool(upgrade, async pool => (await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows);
-    await runPrisma(["migrate", "deploy"], upgrade);
-    await runPrisma(["migrate", "status"], upgrade);
-    await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], upgrade);
+    await mkdir(join(migrationDirectory, commentsMigration));
+    await copyFile(join(root, "prisma/migrations", commentsMigration, "migration.sql"), join(migrationDirectory, commentsMigration, "migration.sql"), 1);
+    await runPrisma(["migrate", "deploy", "--config", config], upgrade);
     const commentsHistory = await migrationHistory(upgrade);
     assert.deepEqual(commentsHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration]);
     assert.deepEqual(commentsHistory.slice(0, 7), likesHistory);
@@ -234,9 +235,22 @@ async function main() {
       assert.deepEqual((await pool.query("SELECT * FROM story_revision WHERE id=$1", [legacyRevisionId])).rows[0], legacyBefore);
       assert.equal((await pool.query("SELECT count(*)::int AS n FROM story_comment")).rows[0].n, 0);
     });
-    await runPrisma(["migrate", "deploy"], upgrade);
+    await runPrisma(["migrate", "deploy", "--config", config], upgrade);
     assert.deepEqual(await migrationHistory(upgrade), commentsHistory);
-    console.log("PASS comments migration: real 007 -> 008 preserves stories, media, auth, likes and 001 -> 007 checksums without schema drift");
+    console.log("PASS comments migration: real 007 -> 008 preserves stories, media, auth, likes and 001 -> 007 checksums");
+
+    stage = "upgrade populated 008 to 009, revoking legacy sessions without deleting users or business data";
+    await runPrisma(["migrate", "deploy"], upgrade);
+    await runPrisma(["migrate", "status"], upgrade);
+    await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], upgrade);
+    const protectedHistory = await migrationHistory(upgrade);
+    assert.deepEqual(protectedHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration, sessionMigration]);
+    assert.deepEqual(protectedHistory.slice(0, 8), commentsHistory);
+    assert.deepEqual(await managedSnapshot(), managedBefore);
+    const protectedAuth = await authSnapshot();
+    assert.deepEqual(protectedAuth.users, authBefore.users); assert.deepEqual(protectedAuth.sessions, []);
+    await withPool(upgrade, async pool => assert.deepEqual((await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, priorLikes));
+    console.log("PASS session migration: real 008 -> 009 preserves users, stories, media and likes, revokes legacy sessions, matches schema");
 
     stage = "provision runtime only in this run's disposable database";
     await withPool(fresh, pool => provisionMediaTestRuntime(pool, runtimeRole, new URL(fresh).pathname.slice(1)));

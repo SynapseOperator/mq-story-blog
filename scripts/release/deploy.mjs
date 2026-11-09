@@ -12,7 +12,7 @@ export function planRelease({ release, currentRelease, config: input, backupRece
     assert.ok(item?.version === 1 && item.platform === "linux/amd64", "RELEASE_MANIFEST_REJECTED");
     assert.match(item.sourceSha ?? "", /^[a-f0-9]{40}$/, "RELEASE_SOURCE_REJECTED");
     for (const target of TARGETS) assert.match(item.images?.[target]?.indexDigest ?? "", /^sha256:[a-f0-9]{64}$/, "RELEASE_IMAGE_DIGEST_REQUIRED");
-    assert.equal(item.compatibility?.migrations?.length, 8, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+    assert.equal(item.compatibility?.migrations?.length, 9, "RELEASE_MIGRATION_REVIEW_REQUIRED");
   }
   assert.deepEqual(release.compatibility, currentRelease.compatibility, "RELEASE_ROLLBACK_OR_MIGRATION_INCOMPATIBLE");
   assert.ok(backupReceipt?.verified && backupReceipt.deploymentId === config.deploymentId,
