@@ -71,25 +71,34 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
       "--publish", `127.0.0.1:${sshPort}:22`, "--memory", "1g", "--cpus", "1", "--pids-limit", "256", "--shm-size", "256m", browserImage]);
     for (const [source, target] of [[`${key}.pub`, "authorized_keys"], [join(directory, "preview-ca.pem"), "ca.pem"], [join(directory, "browser-input.json"), "input.json"]])
       docker(["cp", source, `${container}:/fixture/${target}`]);
+    const localPublicKey = spawnSync("ssh-keygen", ["-lf", `${key}.pub`], { encoding: "utf8", windowsHide: true });
+    assert.equal(localPublicKey.status, 0);
+    assert.equal(docker(["exec", container, "ssh-keygen", "-lf", "/fixture/authorized_keys"]).stdout.split(/\s+/)[1],
+      localPublicKey.stdout.split(/\s+/)[1], "PRIVATE_BROWSER_PUBLIC_KEY_COPY_FAILED");
     onStage("private browser NSS trust and sshd setup");
     docker(["exec", container, "sh", "-eu", "-c", `
+      chown 0:0 /fixture /fixture/authorized_keys /fixture/input.json
       chmod 0700 /fixture
       chmod 0600 /fixture/authorized_keys /fixture/input.json
+      test "$(stat -c '%u:%g:%a' /fixture/authorized_keys)" = '0:0:600'
+      test "$(stat -c '%u:%g:%a' /fixture)" = '0:0:700'
       mkdir -p /root/.pki/nssdb
       certutil -N -d sql:/root/.pki/nssdb --empty-password
       certutil -A -d sql:/root/.pki/nssdb -n mq-private-lab -t 'C,,' -i /fixture/ca.pem
       ssh-keygen -q -t ed25519 -N '' -f /fixture/host_key
-      printf '%s\\n' 'Port 22' 'HostKey /fixture/host_key' 'AuthorizedKeysFile /fixture/authorized_keys' 'PermitRootLogin prohibit-password' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' 'UsePAM no' 'AllowTcpForwarding remote' 'PermitListen 127.0.0.1:443' 'GatewayPorts no' 'PermitTunnel no' 'LogLevel ERROR' > /fixture/sshd_config
+      printf '%s\\n' 'Port 22' 'HostKey /fixture/host_key' 'AuthorizedKeysFile /fixture/authorized_keys' 'PermitRootLogin prohibit-password' 'PubkeyAuthentication yes' 'AuthenticationMethods publickey' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' 'UsePAM no' 'AllowTcpForwarding remote' 'PermitListen 127.0.0.1:443' 'GatewayPorts no' 'PermitTunnel no' 'LogLevel VERBOSE' > /fixture/sshd_config
       usermod --password '*' root
-      /usr/sbin/sshd -f /fixture/sshd_config
+      /usr/sbin/sshd -f /fixture/sshd_config -E /fixture/sshd.log
     `]);
     const publicHostKey = docker(["exec", container, "cat", "/fixture/host_key.pub"]).stdout.trim();
     assert.match(publicHostKey, /^ssh-ed25519 [A-Za-z0-9+/=]+(?: .*)?$/);
     await writeFile(knownHosts, `[127.0.0.1]:${sshPort} ${publicHostKey}\n`);
     onStage("private browser reverse tunnel establishment");
-    tunnel = spawn("ssh", ["-N", "-T", "-i", key, "-p", String(sshPort), "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+    // Do not inherit a developer's or runner's SSH agent, ProxyCommand or keys.
+    const sshArgs = ["-F", "none", "-T", "-i", key, "-p", String(sshPort), "-o", "BatchMode=yes", "-o", "IdentityAgent=none", "-o", "IdentitiesOnly=yes",
       "-o", "StrictHostKeyChecking=yes", "-o", `UserKnownHostsFile=${knownHosts}`, "-o", "ExitOnForwardFailure=yes",
-      "-R", `127.0.0.1:443:127.0.0.1:${port}`, "root@127.0.0.1"], { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+      "-o", "ConnectTimeout=5"];
+    tunnel = spawn("ssh", [...sshArgs, "-N", "-R", `127.0.0.1:443:127.0.0.1:${port}`, "root@127.0.0.1"], { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
     let tunnelError = "unknown";
     tunnel.stderr.on("data", chunk => {
       const text = chunk.toString();
@@ -100,6 +109,12 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
     let ready = false;
     for (let i = 0; i < 40; i++) {
       if (tunnel.exitCode !== null) {
+        // Keep sshd diagnostics inside this disposable fixture. Emit only a
+        // fixed cause, never key material, account inputs or raw daemon logs.
+        const log = docker(["exec", container, "cat", "/fixture/sshd.log"], { fail: false }).stdout || "";
+        for (const [pattern, code] of [[/bad ownership or modes/i, "server-key-permissions"], [/account is locked/i, "server-account-locked"],
+          [/Could not open.*authorized keys/i, "server-key-unreadable"], [/not in PubkeyAcceptedAlgorithms/i, "server-key-algorithm"]])
+          if (pattern.test(log)) tunnelError = code;
         onStage(`private browser tunnel failed: ${tunnelError}`);
         throw new Error("PRIVATE_BROWSER_TUNNEL_FAILED");
       }
@@ -108,6 +123,15 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
       if (probe.status === 0) { ready = true; break; } await delay(250);
     }
     assert.ok(ready);
+    await check("isolated SSH transport rejects an unrelated key", async () => {
+      const wrongKey = join(directory, "browser-wrong-key");
+      const generated = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", wrongKey], { encoding: "utf8", windowsHide: true });
+      assert.equal(generated.status, 0);
+      const args = [...sshArgs]; args[args.indexOf("-i") + 1] = wrongKey;
+      const rejected = spawnSync("ssh", [...args, "root@127.0.0.1", "true"], { encoding: "utf8", windowsHide: true, timeout: 15000 });
+      assert.equal(rejected.status, 255);
+      assert.match(rejected.stderr, /Permission denied \(publickey\)/);
+    });
     await check("desktop/mobile browser trusts isolated CA with exact production Origin", async () => {
       const result = docker(["exec", container, "node", "/fixture/private-preview-browser.mjs"], { timeout: 180000, fail: false });
       if (result.status !== 0) {
