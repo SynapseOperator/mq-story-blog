@@ -55,7 +55,7 @@
     "test:production:operations": "node scripts/production/lab.mjs --operations",
     "test:production:release": "node scripts/production/lab.mjs --release",
     "test:backup:oss": "node scripts/production/oss-transport-tests.mjs",
-    "test:release": "node scripts/release/integration.mjs",
+    "test:release": "node scripts/release/integration.mjs && node scripts/release/compose-integration.mjs",
     "host:preflight": "node scripts/production/host-preflight.mjs",
     "test:production:rotation": "npm run db:generate && node scripts/production/rotation-tests.mjs",
     "test:auth:session-spike": "npm run db:generate && node scripts/auth/session-token-spike.mjs",

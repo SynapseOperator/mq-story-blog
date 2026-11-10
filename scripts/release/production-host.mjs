@@ -432,7 +432,7 @@ export async function applyProductionHost(context, confirmation, { runDocker = d
       }
       await writeEnvironment(plan.features);
       await writeControlFile(join(directory, "closed.yaml"), "services:\n  proxy:\n    ports: !reset []\n");
-      assertProductionCompose(JSON.parse(compose(["config", "--format", "json"]).stdout), { images, config });
+      assertProductionCompose(JSON.parse(compose(["--profile", "maintenance", "config", "--format", "json"]).stdout), { images, config });
       prepared = true;
     }
     switch (step) {
@@ -456,7 +456,7 @@ export async function applyProductionHost(context, confirmation, { runDocker = d
         // never written by bootstrap/upgrade/rollback, including on success.
         assert.equal(plan.action, "activate");
         await writeControlFile(join(directory, "closed.yaml"), "services:\n  proxy:\n    ports: !override [\"80:80\", \"443:443\"]\n");
-        assertProductionCompose(JSON.parse(compose(["config", "--format", "json"]).stdout), { images, config, openIngress: true });
+        assertProductionCompose(JSON.parse(compose(["--profile", "maintenance", "config", "--format", "json"]).stdout), { images, config, openIngress: true });
         compose(["up", "-d", "--wait", "--wait-timeout", "180", "proxy"]); return;
       }
       case "open-private-ingress": {
@@ -476,10 +476,10 @@ secrets:
   preview_private_key:
     file: ${p.privateKey.path}
 `);
-        assertProductionCompose(JSON.parse(compose(["config", "--format", "json"]).stdout), { images, config, preview: p });
+        assertProductionCompose(JSON.parse(compose(["--profile", "maintenance", "config", "--format", "json"]).stdout), { images, config, preview: p });
         // Create does not start the proxy or publish its ports. Validate the
         // networks Compose actually created before allowing the first start.
-        compose(["create", "--no-deps", "proxy"]);
+        compose(["up", "--no-start", "--no-deps", "proxy"]);
         assertPrivateProxyNetworks(JSON.parse(runDocker(["network", "inspect", "mq-production_edge", "mq-production_frontend"]).stdout));
         compose(["up", "-d", "--wait", "--wait-timeout", "180", "proxy"]);
         const ids = compose(["ps", "--all", "--quiet", "proxy"]).stdout.trim().split(/\s+/).filter(Boolean);
