@@ -1,0 +1,32 @@
+# Acceptance-only browser, never a release image or a VPS dependency.
+FROM node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9
+USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+WORKDIR /opt/mq-browser
+# Use the reviewed project's exact package URL and npm integrity, without
+# installing application dependencies or any other browser engines.
+COPY package-lock.json /tmp/mq-browser-lock.json
+RUN node --input-type=module <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
+const locked = JSON.parse(readFileSync('/tmp/mq-browser-lock.json', 'utf8')).packages['node_modules/playwright-core'];
+assert.equal(locked.version, '1.64.1');
+assert.equal(locked.resolved, 'https://registry.npmjs.org/playwright-core/-/playwright-core-1.64.1.tgz');
+assert.match(locked.integrity, /^sha512-[A-Za-z0-9+/]+={0,2}$/);
+const root = { name: 'mq-private-preview-browser', version: '1.0.0', dependencies: { 'playwright-core': locked.version } };
+writeFileSync('package.json', JSON.stringify({ ...root, private: true }));
+const { version, resolved, integrity, license, bin, engines } = locked;
+writeFileSync('package-lock.json', JSON.stringify({ name: root.name, version: root.version, lockfileVersion: 3, requires: true,
+  packages: { '': root, 'node_modules/playwright-core': { version, resolved, integrity, license, bin, engines } } }));
+NODE
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+    && apt-get update && apt-get install -y --no-install-recommends ca-certificates libnss3-tools openssh-server \
+    && node node_modules/playwright-core/cli.js install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_* \
+    && rm -f /tmp/mq-browser-lock.json \
+    && npm cache clean --force \
+    && mkdir -p /run/sshd
+COPY tests/fixtures/private-preview-browser.mjs /fixture/private-preview-browser.mjs
+# The caller creates per-run host keys and authorized_keys in this disposable
+# container. No credentials or CA are embedded in this image.
+CMD ["sleep", "infinity"]

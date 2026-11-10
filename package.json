@@ -62,6 +62,7 @@
     "test:auth:session-storage": "npm run db:generate && node scripts/auth/session-storage-integration.mjs",
     "test:production:admin": "npm run db:generate && node scripts/production/admin-tests.mjs",
     "test:production:bootstrap": "node scripts/production/production-bootstrap-lab.mjs",
+    "test:production:private-preview": "node scripts/production/production-bootstrap-lab.mjs --private-preview",
     "release:production": "node scripts/release/production-cli.mjs"
   },
   "dependencies": {

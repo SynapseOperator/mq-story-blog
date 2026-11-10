@@ -9,7 +9,7 @@ import { executeDeploymentAdminOperation } from "../../scripts/production/admin-
 import { createAuthDatabaseClient } from "../../src/server/auth/database.ts";
 import { initializeMediaVolume } from "../../scripts/production/init-media.mjs";
 import { createLocalMediaStore } from "../../src/server/media/local-store.ts";
-import { pauseDeploymentWriters, resumeDeploymentWriters } from "../../scripts/production/rotation.mjs";
+import { pauseDeploymentWriters, resumeDeploymentWriters, revokeDeploymentSessions } from "../../scripts/production/rotation.mjs";
 
 // Test-only adapter, separate from the interactive administrator CLI. The
 // harness owns a random Docker cluster; no existing host/development DB is used.
@@ -20,7 +20,7 @@ try {
   assert.equal(config.environment, "production");
   assert.equal(config.database.name, "mq_production");
   assert.equal(config.deploymentId, process.env.MQ_SYNTHETIC_DEPLOYMENT_ID);
-  assert.equal(new URL(config.origin).hostname, "mq.localhost");
+  assert.ok(new URL(config.origin).hostname === "mq.localhost" || config.origin === "https://mq-story.xyz");
   const read = async name => (await readDeploymentFile(process.env[name], { secret: true })).trim();
   const action = process.argv[2];
   let result;
@@ -38,12 +38,17 @@ try {
     await assert.rejects(loadRuntimeEnvironment(process.env), /DEPLOYMENT_RUNTIME_CONFIG_REJECTED/);
     result = { minimumFreeBytes: config.media.minFreeBytes, diskRefused: true };
   } else {
-    const identity = ["empty", "backup", "restore", "restored"].includes(action) ? "bootstrap" : "maintenance";
+    const identity = ["empty", "backup", "restore", "restored", "pause-preview-writers", "revoke-preview-sessions", "resume-preview-writers", "preview-session-count"].includes(action) ? "bootstrap" : "maintenance";
     const url = await read(`${identity.toUpperCase()}_DATABASE_URL_FILE`);
     assertDatabaseUrl(url, config, identity);
     pool = new pg.Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 5000 });
     pool.on("error", () => { failed = true; });
-    if (action === "empty") {
+    if (action === "pause-preview-writers") result = await pauseDeploymentWriters(pool, config);
+    else if (action === "revoke-preview-sessions") result = await revokeDeploymentSessions(pool, config);
+    else if (action === "resume-preview-writers") result = await resumeDeploymentWriters(pool, config);
+    else if (action === "preview-session-count") {
+      result = { sessions: (await pool.query('SELECT count(*)::int AS n FROM public."Session"')).rows[0].n };
+    } else if (action === "empty") {
       for (const table of ["User", "Story", "AdminGrant"]) {
         const sqlName = table === "Story" ? "story" : table;
         assert.equal((await pool.query(`SELECT count(*)::int AS n FROM public."${sqlName}"`)).rows[0].n, 0);

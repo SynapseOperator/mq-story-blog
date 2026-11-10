@@ -1,19 +1,21 @@
-# P5-02：生产初始化与开放门禁
+# 生产初始化、私有验收与公网开放门禁
 
-关联 Issue #59。本增量把首次空库初始化、日常升级、应用回退和公网开放分成四种明确操作；不替换 P4 的合成部署工具，也不自动执行真实生产操作。P5-01 已在真实 VPS 完成隔离部署与恢复；本轮只读复核仍是合成环境、回环入口，正式账号、秘密、数据库和公网网站均未创建。
+基础实现见 Issue #59；私有 HTTPS 验收见 Issue #65。首次空库初始化、私有验收、升级、应用回退和公网开放使用独立计划。P5-01 的真实 VPS 部署仍是合成环境；代码和合成测试不会创建正式账号、秘密、数据库或公网网站。
 
 ## 执行合同
 
-`scripts/release/production-cli.mjs` 只在 Linux root 运维会话执行。Node 固定使用现有 `/opt/mq/node-v24.19.0/bin/node`，不在 VPS 安装 npm 开发依赖或构建源码。操作器必须来自已审核候选对应的源码；它会核对当前代码的迁移与配置合同和候选一致。
+`scripts/release/production-cli.mjs` 只在 Linux root 运维会话执行。VPS 当前为 `/opt/mq/node-v24.19.0/bin/node`；正式操作前须在 B-PREP 获准后并行安装项目批准的24.22.2、核验官方签名/摘要并切换固定路径，保留旧目录供工具回退。不在 VPS 安装 npm 开发依赖或构建源码。操作器必须来自已审核候选对应的源码；它会核对迁移、配置、私有入口模板和执行器合同与候选一致。
 
 | 操作 | 实际顺序 | 成功后的入口 |
 |---|---|---|
 | bootstrap | 空目标检查 → PostgreSQL → 五类身份 → 001–009 → 11 个函数 owner/权限 → 独立业务签名 → runtime audit → 私有卷 → app 健康 → 回执 | 无代理端口，四项业务开关全部关闭；不创建管理员或数据 |
 | upgrade | 近期验证备份 → 关闭入口/app → 迁移/provision/audit → 指定 digest 的 app → 健康 → 回执 | 仍关闭，须单独 activate |
 | rollback | 兼容性和备份检查 → 关闭入口/app → 权限 audit → 已审核旧镜像 → 健康 → 回执 | 仍关闭，不执行 down migration 或恢复旧秘密 |
+| private-preview | 关闭回执 → 独立批准 → 网络/TLS 准入 → auth-only app → 回环 TLS 代理 → HTTPS → 预览回执 | 仅 `127.0.0.1:<批准端口>`；保持正式 Origin，发布/媒体写入/留言关闭 |
+| close-preview | 预览回执 → 独立批准 → 关闭代理/app → 撤销 Session → 权限 audit → 全关闭 app → 回执 | 无代理端口，须新批准才能再次预览或 activate |
 | activate | 精确已部署回执 → 权限 audit → 明确选定业务开关 → 健康 → Caddy 80/443 → 公共信任链 HTTPS/公开查询 → 回执 | 仅此操作能绑定 80/443，需另外的正式上线授权 |
 
-失败在发生服务变更后会停止代理和 app，保留 PostgreSQL、媒体卷及操作记录。若不能确认关闭，返回 `PRODUCTION_FAILED_CONTAINMENT_UNCONFIRMED`；不能把错误码当成已经安全停止。验证/只读预检失败不停止现有服务。入口检查使用系统证书信任与 hostname 验证，不接受测试 CA、跳过验证或 HTTP 降级。
+失败在发生服务变更后会停止代理和 app，保留 PostgreSQL、媒体卷及操作记录。若不能确认关闭，返回 `PRODUCTION_FAILED_CONTAINMENT_UNCONFIRMED`；不能把错误码当成已经安全停止。验证/只读预检失败不停止现有服务。公网入口检查使用系统证书信任与 hostname 验证；只有独立 private-preview 接受计划绑定的测试 CA，仍严格验证 hostname/信任链，不跳过 TLS 或降级 HTTP。
 
 已公开的回执不能直接再次 activate。调整开关须先完成受控 upgrade/rollback，取得入口关闭的新回执；若回执称关闭但代理仍运行，预检拒绝并保留现场。
 
@@ -58,10 +60,10 @@
 
 ```sh
 # 只读计划，不启动容器、不写主机文件。
-/opt/mq/node-v24.19.0/bin/node scripts/release/production-cli.mjs plan bootstrap /private/mq/settings.json
+/opt/mq/node-v24.22.2/bin/node scripts/release/production-cli.mjs plan bootstrap /private/mq/settings.json
 
 # 仅在负责人批准该精确计划后执行。
-/opt/mq/node-v24.19.0/bin/node scripts/release/production-cli.mjs apply bootstrap /private/mq/settings.json \
+/opt/mq/node-v24.22.2/bin/node scripts/release/production-cli.mjs apply bootstrap /private/mq/settings.json \
   bootstrap:<deploymentId>:<planId>
 ```
 
@@ -102,10 +104,35 @@ P5-02 已通过独立评审并合并；真实 OSS 合成恢复也已完成。正
 
 主机仍运行 `/opt/mq/node-v24.19.0`。P5-03 候选采用更新的 Node 24 安全维护版；主机运维 Node 的安装、签名/摘要核验和固定路径切换需下轮授权，不能把候选容器升级写成 VPS 已升级。systemd 模板继续记录实际已安装路径，正式启用前须同步到获批版本。
 
-首次生产操作分为以下两次批准：
+首次生产操作按以下阶段分别审查，不沿用已过期的 P5-05B 提案或把前一阶段批准解释为后一阶段许可：
 
-1. **关闭公网入口的初始化批准**：负责人先决定 [Session 残余风险](SESSION_STORAGE.md)及[镜像安全审查](PRODUCTION_SECURITY_REVIEW.md)，完成新PR精确HEAD独立评审与main CI。从该main构建四类候选，核验源SHA、归档/index/manifest/config digest，并取得操作前1小时内的GitHub门禁记录。指定正式deploymentId、origin和Git外秘密托管位置；分别生成新的五类数据库密码、认证/会话存储/代理/发布/审核密钥、Restic密码，不复制实验秘密或账号。批准升级主机运维Node、定点停止现有合成Compose项目（只stop，保留卷、目录、备份）、空库bootstrap、交互式管理员初始化，以及仅经隧道的生产配置验收和正式前缀的备份/新目标恢复。此阶段不得打开公网80/443。
-2. **公网开放批准**：上述验收通过后再批准精确activate计划、业务开关及80/443。`auth=true`同时启用普通注册，不是仅管理员登录；必须明确接受这一产品行为。确认DNS A、实际IPv6边界与CAA、Caddy公共证书签发/续期、生产Origin和Secure Cookie。完成真实飞书单条送达验收、VPS外部探针及生产备份定时任务授权。任何未完成项必须显式阻塞或由负责人作出记录，不能靠本地测试放行。
+| 阶段 | 前提与授权范围 | 完成依据 |
+|---|---|---|
+| 安全修复 PR | 精确 HEAD 独立 Review，合并授权，main 三项 CI | 真实 merge SHA；本轮 PR 不自动合并 |
+| 新候选 | 已审核 main 构建四类 OCI，另扫实际 PG 镜像 | source SHA、archive/index/manifest/config、完整扫描及分阶段风险决定 |
+| B-PREP | 精确批准 Node 并行安装/固定路径、正式秘密、定点停止合成服务 | 新运行时校验；合成卷/备份保留；不构建源码、不开放端口 |
+| 主机 plan | 正式配置、空目标、实际资源、临近操作的 GitHub gate | 真实 planId；gate 不超过1小时，逐动作批准不超过24小时 |
+| B-BOOTSTRAP | 只批准新空库 bootstrap | 001–009、五身份/11 owner、权限 audit、健康；所有开关 false、无代理端口 |
+| B-ADMIN | 独立批准现有离线维护工具及安全密码输入 | 单管理员初始化和普通用户权限边界；不复制合成账号 |
+| B-PRIVATE-PREVIEW | 独立 private-preview 计划与 CA 信任范围 | 正式 Origin 的可信 HTTPS/认证/撤销/负控；结束执行获批 close-preview |
+| B-BACKUP-RESTORE | 明确批准 production/ 仓库 init、首份备份和新目标恢复 | 独立 repository ID/密码、每日完整校验、精确快照、权限/旧 Session 失效；保留仍 dry-run |
+| B-ACTIVATE | 前述证据完成后新 activate 计划、业务开关和80/443授权 | 公共 CA 证书、DNS/IPv6/云与主机规则、Origin/Cookie、外部探针、备份/告警定时任务验收 |
+
+`auth=true` 同时启用普通注册，不是“仅管理员登录”。private-preview 仅启用 auth，其余三项 false；访问权限来自回环绑定与受控 SSH 转发。公网 activate 必须明确批准注册等产品开关。飞书单条真实测试已经确认送达，不需重复；自动故障通知和外部探针仍需授权并验收，不能由这条测试代替。
+
+### 私有 HTTPS 的操作者路径
+
+保持 `origin=https://mq-story.xyz`。为本次短期验收生成独立测试 CA 和仅含该域名的服务证书；CA 私钥离线保管，不挂入任何服务。`preview` 配置包含 `version:1`、`host:"127.0.0.1"`、1024–65535 的固定端口，以及 `ca`、`certificate`、`privateKey` 各自的绝对 `path`/SHA-256。三个文件和内容摘要参与 planId；密钥遵循原有项目外文件权限合同，只挂入 proxy，CA 仅用于验证。不能把签名私钥放入公开目录、浏览器或截图。
+
+分别运行 `plan private-preview` / `apply private-preview`，成功后再运行经单独批准的 `plan close-preview` / `apply close-preview`，均使用现有 `production-cli.mjs` 与逐动作确认串。只允许关闭回执开启预览；预览回执不能直接 activate、upgrade 或 rollback。close-preview 关闭代理、停 app、暂停写身份、撤销会话、恢复身份并启动全关闭 app，保留数据库和媒体。失败维持入口关闭并保留操作锁，按失败阶段恢复，不能手改回执假装已关闭。
+
+Docker 容器内 Caddy 监听443；宿主发布为 `127.0.0.1:<端口>:443`，二者不是同一个回环。执行器检查 Docker>=28、普通 NAT bridge、无 direct routing/trusted host interface、无 IPv6/host-network 绕行，以及实际发布地址。UFW 状态不能替代这些检查。[Docker 端口文档](https://docs.docker.com/engine/network/port-publishing/)
+
+首次 bootstrap 尚未启动 proxy，因此 edge 网络可能不存在。预览先检查已有 frontend，获得精确批准后只创建停止状态的 proxy，再审核 Compose 实际创建的两个网络，最后启动入口；不能把 Docker 查询失败当作网络不存在。验收浏览器只安装锁定的 Chromium headless-shell，避免无关浏览器占满 CI 磁盘，8GiB 余量门槛保持不变。
+
+运维电脑使用已有受信 SSH 别名，只把本机回环443转发到 VPS 的预览端口（本机443必须空闲）：`ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:443:127.0.0.1:<预览端口> mq-story-vps`。在临时隔离浏览器环境将 mq-story.xyz 解析至127.0.0.1，导入并核对这次测试 CA；禁止忽略证书错误、全局污染系统信任或导入 CA 私钥。若当前平台无法实现独立信任库，使用专用隔离 Linux 浏览器容器，不修改正常浏览器的安全设置。保留 HTTPS URL、Host、SNI 和 Origin，不用 localhost 替代正式域名。
+
+验收结束关闭 SSH 转发、销毁测试浏览器上下文/信任库，并在服务器完成 close-preview；再次确认端口关闭、旧 Session 不可用。测试 CA 成功只证明私有信任路径、Cookie 与认证合同，**不能证明公网证书签发或续期成功**。Caddy private 配置显式使用证书文件，禁用自动 HTTPS/ACME、自动重定向及系统信任安装；activate 继续使用原有公共信任链。[Caddy TLS](https://caddyserver.com/docs/caddyfile/directives/tls)
 
 资源安排：只长期运行一套MQ环境；保留合成数据并不要求保留其运行进程。常驻app/PG/proxy内存上限合计2,432MiB，离线tools再占512MiB，尚需内核、Docker和页缓存余量。先停止实验服务，再实测初始化、图片处理、备份和更新峰值。主机不构建Next源码；磁盘预检仍要求8GiB加候选归档所需余量，备份暂存容量另行检查。不能用本次空闲采样保证峰值安全。
 

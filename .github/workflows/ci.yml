@@ -203,7 +203,7 @@ jobs:
   container:
     name: container
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 75
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -256,6 +256,9 @@ jobs:
           docker buildx build --builder "$builder" --load --target tools -t mq-p302-tools:local .
           docker buildx build --builder "$builder" --load --target proxy -t mq-p302-proxy:local .
           docker buildx build --builder "$builder" --load --target operations -t mq-p303-operations:local .
+          # The acceptance browser shares this job's builder. Removing that
+          # builder also releases its cache before the 8GiB runtime gate.
+          docker buildx build --builder "$builder" --load --file tests/fixtures/Dockerfile.private-preview-browser -t mq-private-preview-browser:local .
           docker buildx rm "$builder"
           trap - EXIT
           df -h .
@@ -278,6 +281,14 @@ jobs:
             mq-p303-operations:local --test tests/production-host-preflight.test.mjs tests/production-host-native.test.mjs tests/production-alert-webhook.test.mjs tests/production-external-alerts.test.mjs
       - name: Production contract bootstrap, disabled ingress and protected maintenance
         run: npm run test:production:bootstrap
+      - name: Private production HTTPS, trusted browser, session revocation and closed ingress
+        env:
+          PRODUCTION_PRIVATE_BROWSER_IMAGE: mq-private-preview-browser:local
+        run: npm run test:production:private-preview
+      - name: Release only this job's finished acceptance browser
+        # Its container is already removed and its dedicated build cache is
+        # gone. Leave capacity for the existing S3 recovery tests that follow.
+        run: docker image rm mq-private-preview-browser:local
       - name: Root maintenance reads UID10001 receipts without weakening secret permissions
         run: |
           docker run --rm --network none --read-only --user 0:0 --cap-drop ALL \

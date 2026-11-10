@@ -9,19 +9,19 @@ import { URL } from "node:url";
 
 // The laboratory owns a random staging database and a loopback-only Caddy port.
 // TLS is actually verified against Caddy's disposable CA; no global TLS bypass.
-export function laboratoryTransport(origin, ca, secrets) {
+export function laboratoryTransport(origin, ca, secrets, { connectPort } = {}) {
   const target = new URL(origin);
-  assert.equal(target.hostname, "mq.localhost");
+  assert.ok(target.hostname === "mq.localhost" || (target.origin === "https://mq-story.xyz" && Number.isSafeInteger(connectPort)));
   assert.equal(target.protocol, "https:");
   return (path, { method = "GET", body, bytes, jar, headers = {}, requestOrigin = origin } = {}) => new Promise((resolve, reject) => {
     const input = body === undefined ? bytes : Buffer.from(JSON.stringify(body));
     const request = https.request(new URL(path, origin), {
-      method, ca, servername: "mq.localhost", timeout: 45000,
+      method, ca, servername: target.hostname, port: connectPort ?? target.port, timeout: 45000,
       lookup(_hostname, options, done) {
         if (options.all) done(null, [{ address: "127.0.0.1", family: 4 }]);
         else done(null, "127.0.0.1", 4);
       },
-      headers: { ...(requestOrigin === null ? {} : { origin: requestOrigin }),
+      headers: { host: target.host, ...(requestOrigin === null ? {} : { origin: requestOrigin }),
         ...(body === undefined ? {} : { "content-type": "application/json" }),
         ...(input ? { "content-length": String(input.length) } : {}),
         ...(jar?.cookie ? { cookie: jar.cookie } : {}), ...headers },

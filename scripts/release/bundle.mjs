@@ -105,7 +105,9 @@ export async function releaseCompatibility(projectRoot) {
   const migrations = [];
   for (const name of names) migrations.push({ name, sha256: sha256(await readFile(join(directory, name, "migration.sql"))) });
   const files = ["prisma/schema.prisma", "scripts/production/database-policy.mjs", "scripts/production/runtime-config.mjs",
-    "compose.production.yaml", "src/server/stories/content.ts", "src/server/auth/session-storage.ts", "src/server/auth/session-adapter.ts"];
+    "compose.production.yaml", "src/server/stories/content.ts", "src/server/auth/session-storage.ts", "src/server/auth/session-adapter.ts",
+    "ops/Caddyfile.private", "scripts/production/caddy-entrypoint.sh",
+    "scripts/release/production-plan.mjs", "scripts/release/production-host.mjs"];
   const contracts = {};
   for (const name of files) contracts[name] = sha256(await readFile(join(projectRoot, name)));
   return { migrations, contracts };
