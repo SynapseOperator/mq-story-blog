@@ -229,6 +229,7 @@ test("bootstrap, separate activation and upgrade retain distinct receipts withou
     if (args[0] === "info") return { stdout: JSON.stringify({ OSType: "linux", Architecture: "amd64", DockerRootDir: f.root }) };
     if (args[0] === "image" && args[1] === "inspect") return { stdout: JSON.stringify({ digest: `sha256:${digest}` }) };
     if (args.includes("config")) {
+      assert.deepEqual(args.slice(-5), ["--profile", "maintenance", "config", "--format", "json"]);
       const proxyStarts = f.commands.filter(command => command.includes("up") && command.at(-1) === "proxy").length;
       const configChecks = f.commands.filter(command => command.includes("config")).length;
       return { stdout: JSON.stringify(composeSpec(f.context.config, images, configChecks === 3 && proxyStarts === 0)) };
@@ -258,6 +259,8 @@ test("bootstrap, separate activation and upgrade retain distinct receipts withou
     priorReceipt = next.receipt;
   }
   assert.equal((await readdir(f.directory)).filter(name => name.startsWith("operation-")).length, 3);
+  assert.ok(f.commands.filter(args => !args.includes("config")).every(args => !args.includes("--profile")),
+    "Maintenance services are included for validation, not globally enabled for execution");
 });
 
 test("a scheduled production backup cannot stop services while a release owns the host", async t => {
@@ -391,14 +394,16 @@ test("private preview host writes only loopback and closing revokes sessions bef
       return { stdout: JSON.stringify(previewNetworks().filter(network => args.includes(network.Name))) };
     }
     if (args.includes("config")) {
+      assert.deepEqual(args.slice(-5), ["--profile", "maintenance", "config", "--format", "json"]);
       const privateMode = readFileSync(join(f.directory, "closed.yaml"), "utf8").includes("MQ_TLS_MODE: private");
       return { stdout: JSON.stringify(privateMode ? privateCompose(f.context.config, images, preview) : composeSpec(f.context.config, images)) };
     }
-    if (args.includes("create") && args.at(-1) === "proxy") {
+    if (args.includes("up") && args.includes("--no-start") && args.at(-1) === "proxy") {
+      assert.deepEqual(args.slice(-4), ["up", "--no-start", "--no-deps", "proxy"]);
       assert.equal(proxyRunning, false, "Network preparation must not start ingress");
       edgeExists = true; proxyCreated = true;
     }
-    if (args.includes("up") && args.at(-1) === "proxy") { assert.ok(proxyCreated); proxyRunning = true; }
+    if (args.includes("up") && !args.includes("--no-start") && args.at(-1) === "proxy") { assert.ok(proxyCreated); proxyRunning = true; }
     if (args.includes("stop") && args.at(-1) === "proxy") proxyRunning = false;
     if (args.includes("ps")) return { stdout: proxyCreated ? "d".repeat(64) : "" };
     if (args[0] === "inspect") return { stdout: JSON.stringify([{ Config: { Labels: { "com.docker.compose.project": "mq-production",
@@ -427,9 +432,9 @@ test("private preview host writes only loopback and closing revokes sessions bef
   assert.equal(readFileSync(join(f.directory, "closed.yaml"), "utf8"), "services:\n  proxy:\n    ports: !reset []\n");
   assert.deepEqual(f.commands.filter(args => args.includes("scripts/production/rotation-cli.mjs")).map(args => args.at(-2)), ["pause", "revoke-sessions", "resume"]);
   assert.ok(!f.commands.some(args => args.includes("load")), "Preview uses the already loaded reviewed release");
-  const create = f.commands.findIndex(args => args.includes("create") && args.at(-1) === "proxy");
+  const create = f.commands.findIndex(args => args.includes("up") && args.includes("--no-start") && args.at(-1) === "proxy");
   const fullAudit = f.commands.findIndex(args => args[0] === "network" && args[1] === "inspect" && args.includes("mq-production_edge"));
-  const start = f.commands.findIndex(args => args.includes("up") && args.at(-1) === "proxy");
+  const start = f.commands.findIndex(args => args.includes("up") && !args.includes("--no-start") && args.at(-1) === "proxy");
   assert.ok(create >= 0 && create < fullAudit && fullAudit < start, "Create without start, inspect both actual networks, then open private ingress");
   const bad = planProductionPrivatePreview({ currentRelease: f.context.release, config: f.context.config, receipt: priorReceipt, preview });
   const now = Date.now(); await chmod(f.context.settings.approvalFile, 0o600);
@@ -468,10 +473,11 @@ test("first private preview refuses Docker errors and unsafe networks before sta
         return { stdout: JSON.stringify(networks) };
       }
       if (args.includes("config")) {
+        assert.deepEqual(args.slice(-5), ["--profile", "maintenance", "config", "--format", "json"]);
         const privateMode = readFileSync(join(f.directory, "closed.yaml"), "utf8").includes("MQ_TLS_MODE: private");
         return { stdout: JSON.stringify(privateMode ? privateCompose(f.context.config, images, preview) : composeSpec(f.context.config, images)) };
       }
-      if (args.includes("create") && args.at(-1) === "proxy") created = true;
+      if (args.includes("up") && args.includes("--no-start") && args.at(-1) === "proxy") created = true;
       return { stdout: "" };
     };
     await assert.rejects(applyProductionHost({ ...f.context, plan }, `${plan.action}:${plan.deploymentId}:${plan.planId}`, {
@@ -479,7 +485,7 @@ test("first private preview refuses Docker errors and unsafe networks before sta
       claimOperation: value => claimProductionOperation(value, { directory: f.root }),
     }), failure === "unsafe-created-edge" ? /INGRESS_CLOSED/ : /PREFLIGHT_FAILED_NO_CHANGES/);
     assert.equal(created, failure === "unsafe-created-edge");
-    assert.ok(!f.commands.some(args => args.includes("up") && args.at(-1) === "proxy"));
+    assert.ok(!f.commands.some(args => args.includes("up") && !args.includes("--no-start") && args.at(-1) === "proxy"));
     assert.deepEqual(await readProductionReceipt(join(f.directory, "receipt.json")), f.context.priorReceipt);
   });
 });
