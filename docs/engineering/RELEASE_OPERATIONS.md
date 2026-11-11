@@ -4,6 +4,8 @@
 
 ## 候选从哪里来
 
+2026-11-11 负责人因 GitHub Actions 额度不足授权以相关本地验证替代远端 CI。仅在本次明确授权适用时，运行 `node scripts/release/cli.mjs gate SOURCE_SHA GATE_FILE --owner-ci-exemption OWNER_RECORD_FILE`；授权记录为 `{ "version": 1, "sourceSha": "准确的40位main提交", "reason": "owner-approved-github-actions-quota", "localValidationSha256": "本地验证记录的64位SHA-256" }`。保留原始验证记录，运维人员负责核对授权和摘要；该文件不是数字签名，也不提供独立 Review。Gate 仍实时核验 merged main、精确独立 APPROVED 和评审线程，并如实记录失败、缺失或成功的 GitHub run/job 状态；`qualityRunId=null` 明确表示未按远端 CI 放行。没有显式文件参数时仍要求三项 GitHub CI 成功，不读取环境变量暗中跳过，不修改 workflow 或分支保护；公网 activate 仍需原有独立批准。
+
 `Release candidate` 只接受 `workflow_dispatch`，不响应 push，不调用 SSH，不持有运行秘密或 GHCR 凭据。工作流从 main 执行，`source_sha` 必须是 40 位、已合并 main 的提交；允许选择历史 main 祖先作为回退候选。
 
 构建前、归档前各读取一次 GitHub：核实 main 祖先关系、对应合并 PR、SnorkelingBreather 对最终 PR HEAD 的独立 APPROVED、任何评审者未撤销的 CHANGES_REQUESTED、未解决线程，以及目标 SHA 最新 Quality 的 quality/database/container 三 Job 全部成功。输入确认文本不能代替这些查询。CI 取消、待运行、缺 Job、跳过或失败均拒绝。

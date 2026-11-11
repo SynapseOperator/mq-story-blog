@@ -42,9 +42,17 @@ try {
       await page.getByRole("heading", { name: /管理员|管理/ }).first().waitFor();
       assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth > globalThis.innerWidth), false);
       await page.screenshot({ path: `/fixture/private-preview-${name}.png`, scale: "device" });
+      stage = `${name}-private-business-reader`;
+      assert.equal((await page.goto(`${input.origin}/stories/${input.story.slug}`)).status(), 200);
+      await page.locator('dialog[data-phase="reading"]').waitFor();
+      await page.getByRole("heading", { name: input.story.title, exact: true }).waitFor();
+      const image = page.getByRole("img", { name: "私有验收合成图片", exact: true });
+      await image.waitFor(); await image.evaluate(element => element.decode());
+      assert.equal(await page.evaluate(() => globalThis.document.documentElement.scrollWidth > globalThis.innerWidth), false);
+      await page.screenshot({ path: `/fixture/private-preview-${name}-reader.png`, scale: "device" });
       stage = `${name}-console-health`;
       assert.deepEqual(errors, []);
-      checks.push(`${name}: exact Origin, trusted TLS, real admin login, Secure/HttpOnly/Lax Cookie, rendered workspace`);
+      checks.push(`${name}: exact Origin, trusted TLS, real admin login, Secure/HttpOnly/Lax Cookie, workspace and published image story`);
     } finally { await context.close(); }
   }
   // This private file is read by the parent only to verify revocation. It is

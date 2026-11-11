@@ -14,6 +14,7 @@ import { readBackupReceipt } from "../production/backup-window.mjs";
 import { claimProductionOperation } from "../production/operation-lock.mjs";
 import { assertDatabaseUrl, LOGIN_IDENTITIES } from "../production/database-config.mjs";
 import { verifyReleaseBundle, releaseCompatibility, TARGETS, sha256 } from "./bundle.mjs";
+import { validateOwnerCiExemption } from "./gate.mjs";
 import { planProductionBootstrap, planProductionChange, planProductionActivation, planProductionPrivatePreview,
   planProductionPreviewClose, validatePrivatePreview, executeProductionPlan } from "./production-plan.mjs";
 
@@ -82,7 +83,29 @@ export function validateCurrentReleaseGate(gate, sourceSha, now = Date.now()) {
   assert.equal(gate.sourceSha, sourceSha, "PRODUCTION_CURRENT_REVIEW_REQUIRED");
   for (const key of ["sourceSha", "observedMainSha", "reviewedHead"]) assert.match(gate[key], /^[a-f0-9]{40}$/);
   assert.equal(gate.reviewer, "SnorkelingBreather", "PRODUCTION_CURRENT_REVIEW_REQUIRED");
-  for (const key of ["pullRequest", "reviewId", "qualityRunId"]) assert.ok(Number.isSafeInteger(gate[key]) && gate[key] > 0);
+  for (const key of ["pullRequest", "reviewId"]) assert.ok(Number.isSafeInteger(gate[key]) && gate[key] > 0);
+  if (Object.hasOwn(gate, "ciExemption")) {
+    validateOwnerCiExemption(gate.ciExemption, sourceSha);
+    assert.equal(gate.qualityRunId, null, "PRODUCTION_CI_EVIDENCE_REJECTED");
+    const observed = gate.observedCi;
+    assert.deepEqual(Object.keys(observed).sort(), ["conclusion", "jobs", "runId", "status"], "PRODUCTION_CI_EVIDENCE_REJECTED");
+    assert.ok(observed.runId === null || (Number.isSafeInteger(observed.runId) && observed.runId > 0), "PRODUCTION_CI_EVIDENCE_REJECTED");
+    assert.ok(Array.isArray(observed.jobs), "PRODUCTION_CI_EVIDENCE_REJECTED");
+    if (observed.runId === null) {
+      assert.equal(observed.status, "missing"); assert.equal(observed.conclusion, null); assert.deepEqual(observed.jobs, []);
+    } else assert.notEqual(observed.status, "missing");
+    for (const entry of [observed, ...observed.jobs]) {
+      assert.match(entry.status, /^[a-z_]{1,32}$/, "PRODUCTION_CI_EVIDENCE_REJECTED");
+      if (entry.conclusion !== null) assert.match(entry.conclusion, /^[a-z_]{1,32}$/, "PRODUCTION_CI_EVIDENCE_REJECTED");
+    }
+    for (const job of observed.jobs) {
+      assert.deepEqual(Object.keys(job).sort(), ["conclusion", "name", "status"]);
+      assert.ok(["quality", "database", "container"].includes(job.name), "PRODUCTION_CI_EVIDENCE_REJECTED");
+    }
+  } else {
+    assert.ok(Number.isSafeInteger(gate.qualityRunId) && gate.qualityRunId > 0);
+    assert.equal(gate.observedCi, undefined, "PRODUCTION_CI_EVIDENCE_REJECTED");
+  }
   const checked = Date.parse(gate.checkedAt);
   assert.ok(Number.isFinite(checked) && checked <= now && now - checked <= 60 * 60 * 1000, "PRODUCTION_CURRENT_REVIEW_EXPIRED");
 }

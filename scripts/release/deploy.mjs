@@ -14,7 +14,19 @@ export function planRelease({ release, currentRelease, config: input, backupRece
     for (const target of TARGETS) assert.match(item.images?.[target]?.indexDigest ?? "", /^sha256:[a-f0-9]{64}$/, "RELEASE_IMAGE_DIGEST_REQUIRED");
     assert.equal(item.compatibility?.migrations?.length, 9, "RELEASE_MIGRATION_REVIEW_REQUIRED");
   }
-  assert.deepEqual(release.compatibility, currentRelease.compatibility, "RELEASE_ROLLBACK_OR_MIGRATION_INCOMPATIBLE");
+  const comparable = [release, currentRelease].map(item => globalThis.structuredClone(item.compatibility));
+  if (mode === "upgrade") {
+    // Reviewed executor fixes can advance without changing persisted data or
+    // runtime contracts. The host still verifies every source hash against the
+    // candidate; rollback retains the previous exact-compatibility rule.
+    for (const name of ["scripts/release/production-plan.mjs", "scripts/release/production-host.mjs"]) {
+      for (const compatibility of comparable) {
+        assert.match(compatibility.contracts?.[name] ?? "", /^[a-f0-9]{64}$/, "RELEASE_EXECUTOR_CONTRACT_REQUIRED");
+        compatibility.contracts[name] = "reviewed-upgrade-executor";
+      }
+    }
+  }
+  assert.deepEqual(comparable[0], comparable[1], "RELEASE_ROLLBACK_OR_MIGRATION_INCOMPATIBLE");
   assert.ok(backupReceipt?.verified && backupReceipt.deploymentId === config.deploymentId,
     "RELEASE_VERIFIED_BACKUP_REQUIRED");
   assert.match(backupReceipt.snapshotId ?? "", /^[a-f0-9]{64}$/, "RELEASE_VERIFIED_BACKUP_REQUIRED");

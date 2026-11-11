@@ -3,10 +3,23 @@ import assert from "node:assert/strict";
 export const REPOSITORY = "SynapseOperator/mq-story-blog";
 const shaPattern = /^[a-f0-9]{40}$/;
 
+/** Operator-recorded owner authorization, not a signature or a Review. The
+ * referenced local evidence must be retained beside the release evidence. */
+export function validateOwnerCiExemption(value, sourceSha) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), "RELEASE_CI_EXEMPTION_REJECTED");
+  assert.deepEqual(Object.keys(value).sort(), ["localValidationSha256", "reason", "sourceSha", "version"], "RELEASE_CI_EXEMPTION_REJECTED");
+  assert.equal(value.version, 1, "RELEASE_CI_EXEMPTION_REJECTED");
+  assert.equal(value.sourceSha, sourceSha, "RELEASE_CI_EXEMPTION_SOURCE_MISMATCH");
+  assert.equal(value.reason, "owner-approved-github-actions-quota", "RELEASE_CI_EXEMPTION_REJECTED");
+  assert.match(value.localValidationSha256 ?? "", /^[a-f0-9]{64}$/, "RELEASE_CI_EXEMPTION_REJECTED");
+  return { ...value };
+}
+
 /** Read-only GitHub evidence, not a user-supplied approval string. A release
  * may use an older reviewed main commit, but never an unmerged branch head. */
-export async function verifyReleaseGate({ sourceSha, request }) {
+export async function verifyReleaseGate({ sourceSha, request, ownerCiExemption }) {
   assert.match(sourceSha ?? "", shaPattern, "RELEASE_SOURCE_REJECTED");
+  const ciExemption = ownerCiExemption === undefined ? undefined : validateOwnerCiExemption(ownerCiExemption, sourceSha);
   const prefix = `/repos/${REPOSITORY}`;
   const main = await request(`${prefix}/git/ref/heads/main`);
   const comparison = await request(`${prefix}/compare/${sourceSha}...${main.object.sha}`);
@@ -33,16 +46,19 @@ export async function verifyReleaseGate({ sourceSha, request }) {
   // The latest attempt, not an older green run while a new run is failing.
   const run = runs.workflow_runs.filter(item => item.head_sha === sourceSha && item.head_branch === "main")
     .sort((a, b) => b.id - a.id)[0];
-  assert.ok(run && run.status === "completed" && run.conclusion === "success", "RELEASE_MAIN_CI_REQUIRED");
-  const jobs = await request(`${prefix}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`, { all: true, field: "jobs" });
-  for (const name of ["quality", "database", "container"]) {
+  if (!ciExemption) assert.ok(run && run.status === "completed" && run.conclusion === "success", "RELEASE_MAIN_CI_REQUIRED");
+  const jobs = run ? await request(`${prefix}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`, { all: true, field: "jobs" }) : [];
+  for (const name of ciExemption ? [] : ["quality", "database", "container"]) {
     const matches = jobs.filter(job => job.name === name);
     assert.equal(matches.length, 1, "RELEASE_CI_JOBS_REQUIRED");
     assert.ok(matches[0].status === "completed" && matches[0].conclusion === "success", "RELEASE_CI_JOBS_REQUIRED");
   }
   return { kind: "reviewed-main", repository: REPOSITORY, sourceSha, observedMainSha: main.object.sha,
     pullRequest: pr.number, reviewedHead: pr.head.sha, reviewer, reviewId: latest.id,
-    qualityRunId: run.id, checkedAt: new Date().toISOString() };
+    qualityRunId: ciExemption ? null : run.id, checkedAt: new Date().toISOString(),
+    ...(ciExemption ? { ciExemption, observedCi: { runId: run?.id ?? null, status: run?.status ?? "missing",
+      conclusion: run?.conclusion ?? null, jobs: jobs.filter(job => ["quality", "database", "container"].includes(job.name))
+        .map(({ name, status, conclusion }) => ({ name, status, conclusion })) } } : {}) };
 }
 
 export function githubRequest(token, fetcher = globalThis.fetch) {
