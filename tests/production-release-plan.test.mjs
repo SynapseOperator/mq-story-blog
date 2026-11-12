@@ -174,6 +174,21 @@ test("upgrade and rollback retain data compatibility and fresh-backup requiremen
   }
 });
 
+test("production upgrade from 009 binds reviewed 010 and runs migration; rollback cannot remove it", async () => {
+  const input = fixture();
+  input.release.compatibility.migrations.push({ name: "202611120010_seven_story_stars", sha256: digest });
+  const plan = planProductionChange({ ...input, mode: "upgrade" }), calls = [];
+  const result = await executeProductionPlan({ plan, ...permission(plan), execute: executor(calls) });
+  assert.ok(calls.includes("migrate") && calls.includes("provision"));
+  assert.equal(result.receipt.release.compatibility.migrations.length, 10);
+  assert.equal(plan.currentRelease.compatibility.migrations.length, 9);
+  assert.equal(planProductionBootstrap(input).release.compatibility.migrations.length, 10);
+  assert.throws(() => planProductionChange({ ...input, release: input.currentRelease,
+    currentRelease: input.release, mode: "rollback" }), /INCOMPATIBLE/);
+  input.release.compatibility.migrations[8].sha256 = "e".repeat(64);
+  assert.throws(() => planProductionChange({ ...input, mode: "upgrade" }), /INCOMPATIBLE/);
+});
+
 test("application rollback never migrates, provisions, restores secrets or opens ingress", async () => {
   const plan = planProductionChange({ ...fixture(), mode: "rollback", features: { ...disabled, auth: true } }), calls = [];
   const result = await executeProductionPlan({ plan, ...permission(plan), execute: executor(calls) });

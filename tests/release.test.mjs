@@ -210,6 +210,27 @@ test("wrong/stale backup and production apply reject before executing anything",
   const plan = planRelease({ ...fixture, config: { ...fixture.config, environment: "production", database: { ...fixture.config.database, name: "mq_production" } } });
   await assert.rejects(applySyntheticRelease({ plan, confirmation: plan.deploymentId, execute() { assert.fail("must not execute"); } }), /NOT_AUTHORIZED/);
 });
+
+test("only reviewed 010 can append to an unchanged nine-migration candidate; downgrade stays forbidden", () => {
+  const fixture = deploymentFixture();
+  fixture.release.compatibility.migrations.push({ name: "202611120010_seven_story_stars", sha256: "e".repeat(64) });
+  assert.equal(planRelease(fixture).mode, "upgrade");
+  assert.equal(fixture.release.compatibility.migrations.length, 10, "Planning preserves candidate evidence");
+  for (const mode of ["upgrade", "rollback"]) assert.throws(() => planRelease({ ...fixture,
+    release: fixture.currentRelease, currentRelease: fixture.release, mode }), /INCOMPATIBLE/);
+  assert.throws(() => planRelease({ ...fixture, mode: "rollback" }), /INCOMPATIBLE/);
+  for (const mutate of [
+    value => { value.release.compatibility.migrations[0].sha256 = "a".repeat(64); },
+    value => { value.release.compatibility.migrations.reverse(); },
+    value => { value.release.compatibility.migrations[9].name = "202611120010_unreviewed"; },
+    value => { value.release.compatibility.migrations[9].sha256 = "unverified"; },
+    value => { value.release.compatibility.migrations.push({ name: "202611120011_unreviewed", sha256: "e".repeat(64) }); },
+    value => { value.release.compatibility.contracts.schema = "changed"; },
+  ]) {
+    const changed = globalThis.structuredClone(fixture); mutate(changed);
+    assert.throws(() => planRelease(changed));
+  }
+});
 test("failed health never reopens ingress; compatible application rollback does not migrate or restore secrets", async () => {
   const plan = planRelease(deploymentFixture()), calls = [];
   await assert.rejects(applySyntheticRelease({ plan, confirmation: plan.deploymentId,

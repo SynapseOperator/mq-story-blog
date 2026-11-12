@@ -1,11 +1,14 @@
 import type { Story } from "./story";
 
-// These IDs preserve the three accepted prototype positions across breakpoints.
-// They do not set the eventual number of available publishing slots.
+// Stable database slots share their responsive positions with the admin preview.
 export const storySlotClasses = {
   "star-1": "story-position--1",
   "star-2": "story-position--2",
   "star-3": "story-position--3",
+  "star-4": "story-position--4",
+  "star-5": "story-position--5",
+  "star-6": "story-position--6",
+  "star-7": "story-position--7",
 } as const;
 
 export type StorySlotId = keyof typeof storySlotClasses;

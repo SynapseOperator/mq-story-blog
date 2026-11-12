@@ -101,7 +101,8 @@ export async function inspectOciArchive(path, { sourceSha } = {}) {
 export async function releaseCompatibility(projectRoot) {
   const directory = join(projectRoot, "prisma", "migrations");
   const names = (await readdir(directory, { withFileTypes: true })).filter(item => item.isDirectory()).map(item => item.name).sort();
-  assert.equal(names.length, 9, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+  assert.equal(names.length, 10, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+  assert.equal(names[9], "202611120010_seven_story_stars", "RELEASE_MIGRATION_REVIEW_REQUIRED");
   const migrations = [];
   for (const name of names) migrations.push({ name, sha256: sha256(await readFile(join(directory, name, "migration.sql"))) });
   const files = ["prisma/schema.prisma", "scripts/production/database-policy.mjs", "scripts/production/runtime-config.mjs",

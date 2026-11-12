@@ -72,6 +72,22 @@ export async function runStoryIntegration(client, isolatedClient, pass, setStage
     assert.equal(await isolatedClient.story.count(), 0);
   });
 
+  await check("all four added slots publish, retain exclusive bindings and restore public content", async () => {
+    for (const slotId of ["star-4", "star-5", "star-6", "star-7"]) {
+      let story = await createDraft(slotId, { slotId });
+      await assert.rejects(createDraft(`${slotId}-occupied`, { slotId }), domainCode("CONFLICT"));
+      story = await service.publish({ storyId: story.id, expectedVersion: story.version });
+      const published = await service.getPublicStory(story.slug);
+      assert.equal(published.slotId, slotId);
+      assert.deepEqual(published.revision.content, syntheticContent());
+      story = await service.withdraw({ storyId: story.id, expectedVersion: story.version });
+      assert.equal(await service.getPublicStory(story.slug), null);
+      await assert.rejects(createDraft(`${slotId}-withdrawn`, { slotId }), domainCode("CONFLICT"));
+      story = await service.restore({ storyId: story.id, expectedVersion: story.version });
+      assert.deepEqual(await service.getPublicStory(story.slug), published);
+    }
+  });
+
   await check("a new draft is private and an unbound star cannot publish", async () => {
     accepted = await createDraft("accepted");
     assert.equal(accepted.state, "DRAFT");

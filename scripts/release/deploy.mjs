@@ -4,7 +4,7 @@ import { sha256, TARGETS } from "./bundle.mjs";
 import { validateDeploymentConfig } from "../production/database-config.mjs";
 
 /** Offline deployment planning. It neither grants GitHub approval nor connects
- * to a host. This first release contract deliberately rejects schema changes. */
+ * to a host. Only the reviewed, data-only 010 addition can extend migrations. */
 export function planRelease({ release, currentRelease, config: input, backupReceipt, mode = "upgrade", now = Date.now() }) {
   const config = validateDeploymentConfig(input);
   assert.ok(["upgrade", "rollback"].includes(mode), "RELEASE_MODE_REJECTED");
@@ -12,10 +12,21 @@ export function planRelease({ release, currentRelease, config: input, backupRece
     assert.ok(item?.version === 1 && item.platform === "linux/amd64", "RELEASE_MANIFEST_REJECTED");
     assert.match(item.sourceSha ?? "", /^[a-f0-9]{40}$/, "RELEASE_SOURCE_REJECTED");
     for (const target of TARGETS) assert.match(item.images?.[target]?.indexDigest ?? "", /^sha256:[a-f0-9]{64}$/, "RELEASE_IMAGE_DIGEST_REQUIRED");
-    assert.equal(item.compatibility?.migrations?.length, 9, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+    assert.ok([9, 10].includes(item.compatibility?.migrations?.length), "RELEASE_MIGRATION_REVIEW_REQUIRED");
+    if (item.compatibility.migrations.length === 10) {
+      assert.equal(item.compatibility.migrations[9].name, "202611120010_seven_story_stars", "RELEASE_MIGRATION_REVIEW_REQUIRED");
+      assert.match(item.compatibility.migrations[9].sha256 ?? "", /^[a-f0-9]{64}$/, "RELEASE_MIGRATION_REVIEW_REQUIRED");
+    }
   }
   const comparable = [release, currentRelease].map(item => globalThis.structuredClone(item.compatibility));
   if (mode === "upgrade") {
+    if (comparable[0].migrations.length === 10 && comparable[1].migrations.length === 9) {
+      // The old nine checksums and order remain exact. No removal, rewrite or
+      // arbitrary future migration is allowed; 10 -> 9 rollback stays closed.
+      assert.deepEqual(comparable[0].migrations.slice(0, 9), comparable[1].migrations,
+        "RELEASE_ROLLBACK_OR_MIGRATION_INCOMPATIBLE");
+      comparable[0].migrations.pop();
+    }
     // Reviewed executor fixes can advance without changing persisted data or
     // runtime contracts. The host still verifies every source hash against the
     // candidate; rollback retains the previous exact-compatibility rule.

@@ -89,7 +89,7 @@ async function main() {
     const pool = new pg.Pool({ connectionString: owner.href, max: 1 });
     try {
       const migrations = (await pool.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
-      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions"]);
+      assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle", "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions", "202611120010_seven_story_stars"]);
       await applyAdminDraftDatabasePrivileges(pool, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await pool.query(`GRANT SELECT ON public.story_like,public.story_comment TO "${runtimeRole}"`);
     } finally { await pool.end(); }
