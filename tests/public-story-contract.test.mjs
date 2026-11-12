@@ -12,6 +12,16 @@ test("public catalog reorder/removal preserves explicit slots and campfire ident
   }
 });
 
+test("all seven slots decode without changing bindings when the catalog is reordered", () => {
+  const stars = Array.from({ length: 7 }, (_, index) => ({ ...star,
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    slug: `synthetic-star-${index + 1}`, slotId: `star-${index + 1}` }));
+  assert.deepEqual(decodePublicCatalog({ stories: stars.toReversed() }), stars.toReversed());
+  assert.throws(() => decodePublicCatalog({ stories: [...stars, { ...other,
+    id: "00000000-0000-4000-8000-000000000008", slug: "synthetic-duplicate-slot", slotId: "star-7" }] }));
+  assert.throws(() => decodePublicCatalog({ stories: [{ ...star, slotId: "star-8" }] }));
+});
+
 test("ambiguous or unknown catalog identities never become interactive entries", () => {
   for (const stories of [[star, star], [star, { ...other, slotId: star.slotId }],
     [fire, { ...fire, id: other.id }], [{ ...star, slotId: "unknown" }], [{ ...star, id: "not-an-id" }]]) {

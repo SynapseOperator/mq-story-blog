@@ -17,6 +17,7 @@ const publicationMigration = "202611040006_story_publication";
 const likesMigration = "202611040007_story_likes";
 const commentsMigration = "202611050008_story_comments";
 const sessionMigration = "202611080009_protected_sessions";
+const starMigration = "202611120010_seven_story_stars";
 const checksum = value => createHash("sha256").update(value).digest("hex");
 let stage = "validate isolated PostgreSQL test target";
 
@@ -65,13 +66,15 @@ async function main() {
     });
     await runPrisma(["migrate", "deploy"], fresh);
     const firstHistory = await migrationHistory(fresh);
-    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration, sessionMigration]);
+    assert.deepEqual(firstHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration, sessionMigration, starMigration]);
     assert.ok(firstHistory.every(row => row.finished_at && row.rolled_back_at === null));
+    const expectedSlots = Array.from({ length: 7 }, (_, index) => ({ id: `star-${index + 1}`, scene_key: `story-position--${index + 1}` }));
+    await withPool(fresh, async pool => assert.deepEqual((await pool.query("SELECT * FROM star_slot ORDER BY id")).rows, expectedSlots));
     await runPrisma(["migrate", "deploy"], fresh);
     await runPrisma(["migrate", "status"], fresh);
     await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], fresh);
     assert.deepEqual(await migrationHistory(fresh), firstHistory);
-    console.log("PASS media migrations: empty 001 -> 009, repeated deploy, status and schema drift");
+    console.log("PASS media migrations: empty 001 -> 010 seeds seven slots, repeated deploy, status and schema drift");
 
     stage = "construct a byte-identical temporary 001 through 004 migration tree";
     temporaryMigrations = await mkdtemp(join(tmpdir(), "mq-media-migrations-"));
@@ -240,8 +243,10 @@ async function main() {
     console.log("PASS comments migration: real 007 -> 008 preserves stories, media, auth, likes and 001 -> 007 checksums");
 
     stage = "upgrade populated 008 to 009, revoking legacy sessions without deleting users or business data";
-    await runPrisma(["migrate", "deploy"], upgrade);
-    await runPrisma(["migrate", "status"], upgrade);
+    await mkdir(join(migrationDirectory, sessionMigration));
+    await copyFile(join(root, "prisma/migrations", sessionMigration, "migration.sql"), join(migrationDirectory, sessionMigration, "migration.sql"), 1);
+    await runPrisma(["migrate", "deploy", "--config", config], upgrade);
+    await runPrisma(["migrate", "status", "--config", config], upgrade);
     await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], upgrade);
     const protectedHistory = await migrationHistory(upgrade);
     assert.deepEqual(protectedHistory.map(row => row.migration_name), [...historical, MEDIA_MIGRATION, publicationMigration, likesMigration, commentsMigration, sessionMigration]);
@@ -251,6 +256,55 @@ async function main() {
     assert.deepEqual(protectedAuth.users, authBefore.users); assert.deepEqual(protectedAuth.sessions, []);
     await withPool(upgrade, async pool => assert.deepEqual((await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, priorLikes));
     console.log("PASS session migration: real 008 -> 009 preserves users, stories, media and likes, revokes legacy sessions, matches schema");
+
+    stage = "upgrade populated 009 to 010 without moving three existing story bindings";
+    await withPool(upgrade, async pool => {
+      await pool.query("BEGIN");
+      try {
+        // star-1 already holds the published media fixture. Cover the other
+        // stable bindings with a reserved draft and a withdrawn public story.
+        for (const slotId of ["star-2", "star-3"]) {
+          const storyId = randomUUID(), revisionId = randomUUID();
+          await pool.query("INSERT INTO story(id,slug,kind,draft_revision_id,slot_id) VALUES($1,$2,'STAR',$3,$4)",
+            [storyId, `retained-${storyId}`, revisionId, slotId]);
+          await pool.query("INSERT INTO story_revision(id,story_id,title,content) VALUES($1,$2,$3,$4::jsonb)",
+            [revisionId, storyId, `Synthetic retained ${slotId}`, JSON.stringify({ version: 1, blocks: [{ type: "paragraph", text: "Unchanged by slot expansion" }] })]);
+          if (slotId === "star-3") {
+            await pool.query("UPDATE story SET state='PUBLISHED',published_revision_id=draft_revision_id,version=version+1 WHERE id=$1", [storyId]);
+            await pool.query("UPDATE story SET state='WITHDRAWN',version=version+1 WHERE id=$1", [storyId]);
+          }
+        }
+        await pool.query("COMMIT");
+      } catch (error) { await pool.query("ROLLBACK"); throw error; }
+    });
+    const retainedSnapshot = () => withPool(upgrade, async pool => ({
+      slots: (await pool.query("SELECT * FROM star_slot WHERE id IN ('star-1','star-2','star-3') ORDER BY id")).rows,
+      stories: (await pool.query("SELECT * FROM story ORDER BY id")).rows,
+      revisions: (await pool.query("SELECT * FROM story_revision ORDER BY id")).rows,
+    }));
+    const retainedBefore = await retainedSnapshot();
+    assert.deepEqual(retainedBefore.slots, expectedSlots.slice(0, 3));
+    assert.equal(retainedBefore.stories.filter(story => story.slot_id !== null).length, 3);
+    await runPrisma(["migrate", "deploy"], upgrade);
+    await runPrisma(["migrate", "status"], upgrade);
+    const starHistory = await migrationHistory(upgrade);
+    assert.deepEqual(starHistory.slice(0, 9), protectedHistory);
+    assert.deepEqual(starHistory.map(row => row.migration_name), firstHistory.map(row => row.migration_name));
+    for (const migration of protectedHistory) {
+      assert.equal(checksum(await readFile(join(root, "prisma/migrations", migration.migration_name, "migration.sql"))), migration.checksum);
+    }
+    assert.deepEqual(await retainedSnapshot(), retainedBefore);
+    assert.deepEqual(await managedSnapshot(), managedBefore);
+    assert.deepEqual(await authSnapshot(), protectedAuth);
+    await withPool(upgrade, async pool => {
+      assert.deepEqual((await pool.query("SELECT * FROM star_slot ORDER BY id")).rows, expectedSlots);
+      assert.deepEqual((await pool.query("SELECT * FROM story_like ORDER BY story_id,user_id")).rows, priorLikes);
+    });
+    await runPrisma(["migrate", "deploy"], upgrade);
+    assert.deepEqual(await migrationHistory(upgrade), starHistory);
+    assert.deepEqual(await retainedSnapshot(), retainedBefore);
+    await runPrisma(["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"], upgrade);
+    console.log("PASS star migration: real 009 -> 010 adds four slots, retains all three bindings and revisions, historical checksums, media, auth and likes; repeat deploy is unchanged");
 
     stage = "provision runtime only in this run's disposable database";
     await withPool(fresh, pool => provisionMediaTestRuntime(pool, runtimeRole, new URL(fresh).pathname.slice(1)));

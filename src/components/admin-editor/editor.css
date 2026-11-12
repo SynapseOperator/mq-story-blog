@@ -74,7 +74,7 @@
 .publication-slots { display: grid; grid-template-columns: minmax(160px, .8fr) minmax(0, 1.2fr); gap: 18px; }
 .publication-slot-map { position: relative; min-height: 165px; overflow: hidden; background: radial-gradient(ellipse at 50% 0%, #31455688, transparent 80%), #0b1a27; border: 1px solid #c8a96c28; border-radius: 7px; }
 .publication-slot-map::after { position: absolute; content: ""; width: 130%; height: 75%; left: -15%; top: 75%; border-radius: 50%; border-top: 1px solid #aab8c324; background: #12212b; }
-.publication-map-logo { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); color: #dfbe8799; font: italic 21px Georgia, serif; }
+.publication-map-logo { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); color: #dfbe8799; font: italic 21px Georgia, serif; }
 .publication-map-caption { position: absolute; bottom: 10px; z-index: 1; width: 100%; text-align: center; color: #9faebc; font-size: 10px; }
 .publication-map-point { text-align: center; color: #d6c4a0; font-size: 22px; line-height: 1; }
 .publication-map-point small { display: block; color: #afbdc8; font: 10px/1.5 Arial, sans-serif; }

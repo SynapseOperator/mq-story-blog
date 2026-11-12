@@ -87,7 +87,7 @@ export async function restoreDeployment({ controlPool, config, targetMigrationUr
     phase = "plaintext-cleanup";
     await removeBackupWorkChild(directory, workspace);
     return { restored: true, snapshotId, sourceDeploymentId: manifest.deployment.id, deploymentId: config.deploymentId,
-      migrations: 9, assets: rows.length, files: rows.length * 2, sessionsRevoked: true, signingKeysRemoved: true,
+      migrations: 10, assets: rows.length, files: rows.length * 2, sessionsRevoked: true, signingKeysRemoved: true,
       writersRemainPaused: true, privilegesRequireProvisioning: true, serviceEnabled: false };
   } catch { throw Object.assign(new Error("DEPLOYMENT_RESTORE_FAILED"), { phase }); }
   finally {

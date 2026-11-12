@@ -26,7 +26,8 @@ function fixture() {
     database: { host: "postgres", port: 5432, name: "mq_production" }, origin: "https://synthetic.example.invalid",
     media: { root: "/var/lib/mq/media", minFreeBytes: 8 * 1024 ** 3 } };
   const release = { version: 1, sourceSha, platform: "linux/amd64", gate: { kind: "reviewed-main", sourceSha },
-    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })),
+    compatibility: { migrations: Array.from({ length: 10 }, (_, index) => ({
+      name: index === 9 ? "202611120010_seven_story_stars" : `migration_00${index + 1}`, sha256: digest })),
       contracts: { "scripts/release/production-plan.mjs": digest, "scripts/release/production-host.mjs": digest } },
     images: Object.fromEntries(TARGETS.map(name => [name, { file: `${name}.oci.tar`, archiveBytes: 1024, indexDigest: `sha256:${digest}` }])) };
   return { config, release, candidateManifestSha256: digest };

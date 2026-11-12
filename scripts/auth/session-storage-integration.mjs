@@ -126,7 +126,7 @@ async function main() {
     sql = new pg.Pool({ connectionString: url.href, max: 3 });
     sql.on("error", () => { failed = true; });
     const legacyUser = randomUUID(), legacyToken = randomBytes(16).toString("hex"), story = randomUUID(), revision = randomUUID();
-    await check("008 to 009 revokes only old sessions; accounts and story bytes survive", async () => {
+    await check("008 to current revokes only old sessions; accounts and story bytes survive", async () => {
       legacy = await prepareLegacySessionDatabase(url.href);
       await sql.query('INSERT INTO "User"(id,name,email,username,"updatedAt") VALUES($1,$2,$3,$4,now())',
         [legacyUser,"Synthetic legacy",`${randomUUID()}@accounts.invalid`,`legacy_${randomBytes(6).toString("hex")}`]);
@@ -147,7 +147,7 @@ async function main() {
       assert.ok((await sql.query('SELECT count(*)::int AS n FROM "Session"')).rows[0].n === 0);
       assert.ok((await sql.query('SELECT password FROM "Account" WHERE "userId"=$1',[legacyUser])).rows[0].password === oldHash);
       assert.deepEqual((await sql.query("SELECT * FROM story_revision WHERE id=$1",[revision])).rows[0],before);
-      assert.equal((await sql.query('SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')).rows[0].n,9);
+      assert.equal((await sql.query('SELECT count(*)::int AS n FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')).rows[0].n,10);
       await legacy.cleanup(); legacy = null;
     });
     const app = await start();

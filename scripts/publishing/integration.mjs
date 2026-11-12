@@ -21,6 +21,7 @@ import { runPublishingHttpTests } from "./http-tests.mjs";
 import { runPublishingBrowser } from "./browser-tests.mjs";
 import { runPublicationBackupTests } from "./backup-tests.mjs";
 import { runPublishingEditorBrowser } from "./editor-browser-tests.mjs";
+import { runStarSlotsBrowser } from "./star-slots-browser-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const next = fileURLToPath(new URL("../../node_modules/next/dist/bin/next", import.meta.url));
@@ -80,7 +81,7 @@ async function main() {
       await verifyDatabaseLogging(owner);
       const migrations = (await owner.query('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name')).rows.map(row => row.migration_name);
       assert.deepEqual(migrations, ["202610230001_database_foundation", "202610230002_story_lifecycle",
-        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions"]);
+        "202610230003_username_auth", "202610250004_admin_authorization", "202611030005_media_foundation", "202611040006_story_publication", "202611040007_story_likes", "202611050008_story_comments", "202611080009_protected_sessions", "202611120010_seven_story_stars"]);
       await applyAdminDraftDatabasePrivileges(owner, { runtimeRole, maintenanceRole, expectedDatabase: name });
       await applyMediaDatabasePrivileges(owner, { runtimeRole, expectedDatabase: name });
       await applyPublishingDatabasePrivileges(owner, { runtimeRole, publicationOwnerRole, expectedDatabase: name });
@@ -160,6 +161,11 @@ async function main() {
             evidenceDirectory: process.env.PUBLISH_BROWSER_EVIDENCE_DIR });
           assert.equal(ui.passed, ui.total);
           console.log(`Publishing editor browser: ${ui.passed}/${ui.total} checks passed; ${ui.screenshots} screenshots`);
+          stage = "seven-slot publication and responsive scene";
+          const stars = await runStarSlotsBrowser({ baseURL: origin, ...application, admin: httpResult.admin,
+            privateValues: secrets, evidenceDirectory: process.env.PUBLISH_BROWSER_EVIDENCE_DIR });
+          assert.equal(stars.passed, true);
+          console.log("PASS seven-star browser: real seven-slot publication and matching desktop/390/320 scene and administrator map");
         } finally { await stopServer(uiServer); }
       }
       stage = "publishing disabled and missing signing key fail closed";
