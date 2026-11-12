@@ -13,7 +13,8 @@ function fixture() {
     media: { root: "/var/lib/mq/media", minFreeBytes: 8 * 1024 ** 3 } };
   const release = { version: 1, sourceSha, platform: "linux/amd64", gate: { kind: "reviewed-main", sourceSha },
     compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })),
-      contracts: { schema: digest, permissions: digest } },
+      contracts: { schema: digest, permissions: digest,
+        "scripts/release/production-plan.mjs": digest, "scripts/release/production-host.mjs": digest } },
     images: Object.fromEntries(TARGETS.map(target => [target, { indexDigest: `sha256:${digest}` }])) };
   const currentRelease = { ...globalThis.structuredClone(release), sourceSha: previousSha,
     gate: { kind: "reviewed-main", sourceSha: previousSha } };
@@ -161,7 +162,7 @@ test("failed health or missing real receipt cannot complete a deployment", async
   }
 });
 
-test("upgrade and rollback retain exact compatibility and fresh-backup requirements", () => {
+test("upgrade and rollback retain data compatibility and fresh-backup requirements", () => {
   for (const mutate of [
     input => { input.currentRelease.compatibility.contracts.schema = "changed"; },
     input => { input.backupReceipt.verified = false; },
@@ -234,7 +235,7 @@ function previewFixture() {
   return { currentRelease: input.release, config: input.config, receipt: prior, preview };
 }
 
-test("private preview binds only auth, exact loopback port and certificate identities to its own approval", async () => {
+test("private preview defaults to auth only and binds loopback and certificate identities to its approval", async () => {
   const input = previewFixture(), plan = planProductionPrivatePreview(input), calls = [];
   assert.deepEqual(plan.features, { ...disabled, auth: true });
   assert.equal(plan.publicIngress, false); assert.equal(plan.privateIngress, true);
@@ -255,7 +256,32 @@ test("private preview binds only auth, exact loopback port and certificate ident
   }
 });
 
-test("preview rejects public addresses, extra controls and non-auth business features", () => {
+test("private business flags require their own plan approval and matching receipt", async () => {
+  const input = previewFixture(), authOnly = planProductionPrivatePreview(input);
+  const features = { auth: true, media: true, publishing: true, comments: true };
+  const plan = planProductionPrivatePreview({ ...input, features });
+  assert.notEqual(plan.planId, authOnly.planId);
+  assert.deepEqual(plan.features, features); assert.equal(plan.publicIngress, false);
+  const calls = [];
+  await assert.rejects(executeProductionPlan({ plan, ...permission(authOnly), execute: executor(calls) }), /APPROVAL_MISMATCH/);
+  assert.deepEqual(calls, []);
+  await assert.rejects(executeProductionPlan({ plan: { ...authOnly, features }, ...permission(authOnly), execute: executor(calls) }), /PLAN_CHANGED/);
+  const run = executor(calls);
+  const result = await executeProductionPlan({ plan, ...permission(plan), execute: async (step, value) => {
+    if (step === "private-https") return true;
+    if (step === "receipt") return { ...receipt(value), privateIngress: true, preview: value.preview };
+    return run(step, value);
+  } });
+  assert.deepEqual(result.receipt.features, features);
+  assert.throws(() => planProductionActivation({ ...input, receipt: result.receipt, features }), /PREVIEW_MUST_CLOSE/);
+  await assert.rejects(executeProductionPlan({ plan, ...permission(plan), execute: async (step, value) => {
+    if (step === "private-https") return true;
+    if (step === "receipt") return { ...receipt(value), features: authOnly.features, privateIngress: true, preview: value.preview };
+    return run(step, value);
+  } }), /INGRESS_CLOSED/);
+});
+
+test("preview rejects public addresses, extra controls and invalid business features", () => {
   for (const mutate of [
     value => { value.preview.host = "0.0.0.0"; }, value => { value.preview.host = "::"; },
     value => { value.preview.port = 443; }, value => { value.preview.port = 65536; },
@@ -263,9 +289,9 @@ test("preview rejects public addresses, extra controls and non-auth business fea
     value => { value.preview.privateKey.path = value.preview.certificate.path; },
     value => { value.preview.ca.sha256 = "unverified"; },
     value => { value.preview.ca.skipTlsVerification = true; },
-    value => { value.features = { ...disabled, auth: true, media: true }; },
-    value => { value.features = { ...disabled, auth: true, publishing: true }; },
-    value => { value.features = { ...disabled, auth: true, comments: true }; },
+    value => { value.features = { ...disabled, auth: true, media: "true" }; },
+    value => { value.features = { ...disabled, auth: true, extra: true }; },
+    value => { value.features = { auth: true }; },
     value => { value.features = disabled; },
     value => { value.receipt.action = "activate"; value.receipt.publicIngress = true; },
   ]) { const input = previewFixture(); mutate(input); assert.throws(() => planProductionPrivatePreview(input)); }
@@ -285,7 +311,8 @@ test("private ingress cannot borrow bootstrap approval, expired approval or a pu
 });
 
 test("ending preview closes first, drains writers, revokes sessions and restores disabled features before a closed receipt", async () => {
-  const input = previewFixture(), start = planProductionPrivatePreview(input);
+  const input = previewFixture(), start = planProductionPrivatePreview({ ...input,
+    features: { auth: true, media: true, publishing: true, comments: true } });
   const plan = planProductionPreviewClose({ ...input, receipt: { ...receipt(start), privateIngress: true, preview: start.preview } });
   const calls = [], run = executor(calls);
   const result = await executeProductionPlan({ plan, ...permission(plan), execute: async (step, value) => {

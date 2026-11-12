@@ -9,15 +9,17 @@
 | 操作 | 实际顺序 | 成功后的入口 |
 |---|---|---|
 | bootstrap | 空目标检查 → PostgreSQL → 五类身份 → 001–009 → 11 个函数 owner/权限 → 独立业务签名 → runtime audit → 私有卷 → app 健康 → 回执 | 无代理端口，四项业务开关全部关闭；不创建管理员或数据 |
-| upgrade | 近期验证备份 → 关闭入口/app → 迁移/provision/audit → 指定 digest 的 app → 健康 → 回执 | 仍关闭，须单独 activate |
+| upgrade | 近期验证备份 → 关闭入口/app → 迁移/provision/audit → 指定 digest 的 app → 健康 → 回执 | 仍关闭，须单独 private-preview 或 activate |
 | rollback | 兼容性和备份检查 → 关闭入口/app → 权限 audit → 已审核旧镜像 → 健康 → 回执 | 仍关闭，不执行 down migration 或恢复旧秘密 |
-| private-preview | 关闭回执 → 独立批准 → 网络/TLS 准入 → auth-only app → 回环 TLS 代理 → HTTPS → 预览回执 | 仅 `127.0.0.1:<批准端口>`；保持正式 Origin，发布/媒体写入/留言关闭 |
+| private-preview | 关闭回执 → 独立批准 → 网络/TLS 准入 → 按批准开关启动 app → 回环 TLS 代理 → HTTPS → 预览回执 | 仅 `127.0.0.1:<批准端口>`；保持正式 Origin，默认仅 auth，可明确批准私有业务验收开关 |
 | close-preview | 预览回执 → 独立批准 → 关闭代理/app → 撤销 Session → 权限 audit → 全关闭 app → 回执 | 无代理端口，须新批准才能再次预览或 activate |
 | activate | 精确已部署回执 → 权限 audit → 明确选定业务开关 → 健康 → Caddy 80/443 → 公共信任链 HTTPS/公开查询 → 回执 | 仅此操作能绑定 80/443，需另外的正式上线授权 |
 
 失败在发生服务变更后会停止代理和 app，保留 PostgreSQL、媒体卷及操作记录。若不能确认关闭，返回 `PRODUCTION_FAILED_CONTAINMENT_UNCONFIRMED`；不能把错误码当成已经安全停止。验证/只读预检失败不停止现有服务。公网入口检查使用系统证书信任与 hostname 验证；只有独立 private-preview 接受计划绑定的测试 CA，仍严格验证 hostname/信任链，不跳过 TLS 或降级 HTTP。
 
 已公开的回执不能直接再次 activate。调整开关须先完成受控 upgrade/rollback，取得入口关闭的新回执；若回执称关闭但代理仍运行，预检拒绝并保留现场。
+
+upgrade 允许候选中的 `production-plan.mjs`、`production-host.mjs` 执行器修复与当前版本不同；两者仍必须有合法源码摘要，执行主机仍逐项核验候选与受审源码完全一致。迁移、Schema、数据库权限、运行配置、Session、Compose 和 Caddy 合同仍须相同。rollback 保持全部合同完全相同，不能把升级许可当作旧执行器回退许可。
 
 旧 `applySyntheticRelease` 的 production 拒绝保持不变。新入口使用独立计划、逐次批准和固定动作，不通过改环境名进入 staging，也没有任意 shell/Compose override 钩子。
 
@@ -118,7 +120,7 @@ P5-02 已通过独立评审并合并；真实 OSS 合成恢复也已完成。正
 | B-BACKUP-RESTORE | 明确批准 production/ 仓库 init、首份备份和新目标恢复 | 独立 repository ID/密码、每日完整校验、精确快照、权限/旧 Session 失效；保留仍 dry-run |
 | B-ACTIVATE | 前述证据完成后新 activate 计划、业务开关和80/443授权 | 公共 CA 证书、DNS/IPv6/云与主机规则、Origin/Cookie、外部探针、备份/告警定时任务验收 |
 
-`auth=true` 同时启用普通注册，不是“仅管理员登录”。private-preview 仅启用 auth，其余三项 false；访问权限来自回环绑定与受控 SSH 转发。公网 activate 必须明确批准注册等产品开关。飞书单条真实测试已经确认送达，不需重复；自动故障通知和外部探针仍需授权并验收，不能由这条测试代替。
+`auth=true` 同时启用普通注册，不是“仅管理员登录”。private-preview 默认仅启用 auth；进行私有业务验收时，可以在配置中明确设定 media、publishing、comments。四项布尔开关都参与 planId 和独立批准，auth 必须为 true；既有 auth-only 计划不能用于开启其他业务。访问权限始终来自回环绑定与受控 SSH 转发。close-preview 仍关闭全部开关并撤销 Session，不删除验收期间创建的数据。公网 activate 必须另行明确批准注册等产品开关。飞书单条真实测试已经确认送达，不需重复；自动故障通知和外部探针仍需授权并验收，不能由这条测试代替。
 
 ### 私有 HTTPS 的操作者路径
 

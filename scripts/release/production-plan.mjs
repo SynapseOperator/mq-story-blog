@@ -109,7 +109,7 @@ function receiptMatches(receipt, { config, release, candidateManifestSha256, act
   if (receipt.action !== "activate") assert.equal(receipt.publicIngress, false, "PRODUCTION_RECEIPT_REJECTED");
   if (receipt.action === "private-preview") {
     assert.equal(receipt.privateIngress, true, "PRODUCTION_RECEIPT_REJECTED");
-    assert.deepEqual(receipt.features, { ...disabled, auth: true }, "PRODUCTION_RECEIPT_REJECTED");
+    assert.equal(receipt.features.auth, true, "PRODUCTION_RECEIPT_REJECTED");
     validatePrivatePreview(receipt.preview);
   } else assert.ok(receipt.privateIngress === undefined || receipt.privateIngress === false, "PRODUCTION_RECEIPT_REJECTED");
   if (receipt.action === "close-preview") {
@@ -138,8 +138,8 @@ export function planProductionChange({ release, currentRelease, config: input, b
   const config = productionConfig(input);
   assert.ok(["upgrade", "rollback"].includes(mode), "PRODUCTION_ACTION_REJECTED");
   releaseContract(release, candidateManifestSha256);
-  // Keep the existing exact migration/permission/config compatibility and
-  // recent verified-backup requirements; never introduce a down migration.
+  // Keep migration/permission/config compatibility and a recent verified
+  // backup. Only reviewed executor fixes may differ during an upgrade.
   planRelease({ release, currentRelease, config, backupReceipt, mode, now });
   return frozenPlan({ version: 1, action: mode, deploymentId: config.deploymentId,
     environment: config.environment, database: config.database.name, origin: config.origin,
@@ -169,8 +169,8 @@ export function planProductionPrivatePreview({ currentRelease, config: input, re
   assert.equal(receipt.publicIngress, false, "PRODUCTION_PREVIEW_REQUIRES_CLOSED_RECEIPT");
   assert.notEqual(receipt.privateIngress, true, "PRODUCTION_PREVIEW_MUST_CLOSE");
   assert.ok(Date.parse(receipt.completedAt) <= Date.now(), "PRODUCTION_RECEIPT_REJECTED");
-  const previewFeatures = { ...disabled, auth: true };
-  assert.deepEqual(featureFlags(features ?? previewFeatures), previewFeatures, "PRODUCTION_PREVIEW_AUTH_ONLY");
+  const previewFeatures = featureFlags(features ?? { ...disabled, auth: true });
+  assert.equal(previewFeatures.auth, true, "PRODUCTION_PREVIEW_AUTH_REQUIRED");
   return frozenPlan({ version: 1, action: "private-preview", deploymentId: config.deploymentId,
     environment: config.environment, database: config.database.name, origin: config.origin,
     sourceSha: currentRelease.sourceSha, candidateManifestSha256: receipt.candidateManifestSha256,

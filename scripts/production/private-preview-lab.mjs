@@ -3,6 +3,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 import { laboratoryTransport } from "./http-tests.mjs";
 
 export async function runPrivatePreviewChecks({ docker, project, directory, evidence, origin, port, ca, wrongCa,
@@ -52,6 +55,39 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
     await revoke(); expect(await request("/api/admin/stories", { jar: admin }), 401);
     await restore(); admin = await login(accounts.admin);
   });
+  let story;
+  const title = "私有 HTTPS 合成验收";
+  await check("approved private flags enable media, publishing, likes and moderated comments", async () => {
+    const bytes = await sharp({ create: { width: 64, height: 48, channels: 3, background: "#617b95" } }).png().toBuffer();
+    const asset = expect(await request("/api/admin/media", { method: "POST", jar: admin, bytes,
+      headers: { "content-type": "image/png", "idempotency-key": randomUUID() } }), 201).data.asset;
+    expect(await request(`/api/admin/media/${asset.id}/content`, { jar: reader }), 403);
+    story = expect(await request("/api/admin/stories", { method: "POST", jar: admin,
+      body: { kind: "STAR", title, content: { version: 2, blocks: [
+        { type: "paragraph", text: "仅用于隔离验收，不含私人故事。" },
+        { type: "image", assetId: asset.id, alt: "私有验收合成图片" }] } } }), 201).data.story;
+    expect(await request(`/api/stories/${story.id}`), 404);
+    for (const action of ["slot", "publish"]) {
+      story = { ...story, ...expect(await request(`/api/admin/stories/${story.id}/${action}`, { method: action === "slot" ? "PUT" : "POST",
+        jar: admin, body: { expectedVersion: story.version, ...(action === "slot" ? { slotId: "star-1" } : {}) } }), 200).data.story };
+    }
+    const image = expect(await request(`/api/stories/${story.id}/media/${asset.id}`), 200);
+    assert.equal(createHash("sha256").update(image.bytes).digest("hex"), asset.display.sha256);
+    expect(await request(`/api/stories/${story.id}/media/${asset.id}`, { method: "HEAD" }), 200);
+    for (const method of ["PUT", "DELETE"]) expect(await request(`/api/stories/${story.id}/likes`, { method, jar: reader, body: {} }), 200);
+    assert.equal(expect(await request(`/api/stories/${story.id}/likes`, { jar: reader }), 200).data.count, 0);
+    const submitted = expect(await request(`/api/stories/${story.id}/comments`, { method: "POST",
+      headers: { "idempotency-key": randomUUID() }, body: { body: "私有 HTTPS 合成留言", identity: "anonymous" } }), 202);
+    assert.equal(expect(await request(`/api/stories/${story.id}/comments`), 200).data.count, 0);
+    expect(await request(`/api/admin/comments/${submitted.data.receiptId}/moderate`, { method: "POST", jar: admin,
+      body: { action: "approve", expectedVersion: 0 } }), 200);
+    assert.equal(expect(await request(`/api/stories/${story.id}/comments`), 200).data.count, 1);
+    for (const action of ["withdraw", "restore"]) {
+      story = { ...story, ...expect(await request(`/api/admin/stories/${story.id}/${action}`, { method: "POST", jar: admin,
+        body: { expectedVersion: story.version } }), 200).data.story };
+      expect(await request(`/api/stories/${story.id}/media/${asset.id}`), action === "withdraw" ? 404 : 200);
+    }
+  });
 
   // The browser container trusts only this test CA via its private NSS store.
   // A random, strictly checked SSH reverse tunnel routes browser loopback:443
@@ -62,13 +98,16 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
   const generated = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key], { encoding: "utf8", windowsHide: true });
   assert.equal(generated.status, 0, "PRIVATE_BROWSER_TEST_KEY_FAILED");
   await writeFile(join(directory, "preview-ca.pem"), ca);
-  await writeFile(join(directory, "browser-input.json"), JSON.stringify({ origin, admin: accounts.admin }), { mode: 0o600 });
+  await writeFile(join(directory, "browser-input.json"), JSON.stringify({ origin, admin: accounts.admin,
+    story: { slug: story.slug, title } }), { mode: 0o600 });
   let tunnel;
   try {
     onStage("private browser image and container startup");
     docker(["image", "inspect", browserImage]);
     docker(["run", "-d", "--name", container, "--label", `mq.lab=${project}`, "--network", "bridge",
       "--publish", `127.0.0.1:${sshPort}:22`, "--memory", "1g", "--cpus", "1", "--pids-limit", "256", "--shm-size", "256m", browserImage]);
+    // A cached browser image supplies Chromium; always execute this checkout's fixture.
+    docker(["cp", fileURLToPath(new globalThis.URL("../../tests/fixtures/private-preview-browser.mjs", import.meta.url)), `${container}:/fixture/private-preview-browser.mjs`]);
     for (const [source, target] of [[`${key}.pub`, "authorized_keys"], [join(directory, "preview-ca.pem"), "ca.pem"], [join(directory, "browser-input.json"), "input.json"]])
       docker(["cp", source, `${container}:/fixture/${target}`]);
     const localPublicKey = spawnSync("ssh-keygen", ["-lf", `${key}.pub`], { encoding: "utf8", windowsHide: true });
@@ -139,7 +178,9 @@ export async function runPrivatePreviewChecks({ docker, project, directory, evid
         assert.match(status.stage, /^[a-z-]+$/); onStage(`private browser failed: ${status.stage}`);
         throw new Error("PRIVATE_PREVIEW_BROWSER_FAILED");
       }
-      for (const name of ["desktop", "mobile"]) docker(["cp", `${container}:/fixture/private-preview-${name}.png`, join(evidence, `private-preview-${name}.png`)]);
+      for (const name of ["desktop", "mobile"]) for (const view of ["", "-reader"]) {
+        docker(["cp", `${container}:/fixture/private-preview-${name}${view}.png`, join(evidence, `private-preview-${name}${view}.png`)]);
+      }
       const browserResult = JSON.parse(docker(["exec", container, "cat", "/fixture/result.json"]).stdout);
       assert.equal(browserResult.ignoreHTTPSErrors, false);
       await writeFile(join(evidence, "private-preview-browser.json"), JSON.stringify(browserResult, null, 2));

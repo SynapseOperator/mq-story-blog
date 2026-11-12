@@ -238,14 +238,13 @@ ${Object.entries(volumes).map(([name, full]) => `  ${name}: { external: true, na
     fixture("admin-init", "maintenance", { MAINTENANCE_DATABASE_URL_FILE: "/run/secrets/maintenance_database_url", MQ_LAB_ACCOUNTS_FILE: "/run/secrets/accounts" });
     if (privatePreview) {
       stage = "actual private HTTPS plan";
-      const opened = planProductionPrivatePreview({ currentRelease: release, config: manifest, receipt, preview });
+      const opened = planProductionPrivatePreview({ currentRelease: release, config: manifest, receipt, preview, features: enabled });
       await apply(opened);
       const binding = json(docker(["inspect", service("proxy"), "--format", "{{json .HostConfig.PortBindings}}"]));
       assert.deepEqual(binding, { "443/tcp": [{ HostIp: "127.0.0.1", HostPort: String(port) }] });
       for (const name of ["app", "postgres"]) assert.deepEqual(json(docker(["inspect", service(name), "--format", "{{json .HostConfig.PortBindings}}"])), {});
       const previewEnvironment = json(docker(["inspect", service("app"), "--format", "{{json .Config.Env}}"]));
-      assert.ok(previewEnvironment.includes("MQ_AUTH_ENABLED=true"));
-      for (const name of ["MEDIA", "PUBLISH", "COMMENTS"]) assert.ok(previewEnvironment.includes(`MQ_${name}_ENABLED=false`));
+      for (const name of ["AUTH", "MEDIA", "PUBLISH", "COMMENTS"]) assert.ok(previewEnvironment.includes(`MQ_${name}_ENABLED=true`));
       for (const [field, filename] of [["certificate", "preview_certificate"], ["privateKey", "preview_private_key"]]) {
         const digest = docker(["exec", service("proxy"), "sha256sum", `/run/secrets/${filename}`]).stdout.trim().split(/\s+/)[0];
         assert.equal(digest, preview[field].sha256);

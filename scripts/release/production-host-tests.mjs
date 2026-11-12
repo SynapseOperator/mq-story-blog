@@ -26,7 +26,8 @@ function fixture() {
     database: { host: "postgres", port: 5432, name: "mq_production" }, origin: "https://synthetic.example.invalid",
     media: { root: "/var/lib/mq/media", minFreeBytes: 8 * 1024 ** 3 } };
   const release = { version: 1, sourceSha, platform: "linux/amd64", gate: { kind: "reviewed-main", sourceSha },
-    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })), contracts: {} },
+    compatibility: { migrations: Array.from({ length: 9 }, (_, index) => ({ name: `migration_00${index + 1}`, sha256: digest })),
+      contracts: { "scripts/release/production-plan.mjs": digest, "scripts/release/production-host.mjs": digest } },
     images: Object.fromEntries(TARGETS.map(name => [name, { file: `${name}.oci.tar`, archiveBytes: 1024, indexDigest: `sha256:${digest}` }])) };
   return { config, release, candidateManifestSha256: digest };
 }
@@ -96,6 +97,24 @@ test("fresh workstation review evidence must match the candidate and expires aft
   for (const changes of [{ sourceSha: "b".repeat(40) }, { reviewer: "owner" }, { qualityRunId: 0 },
     { checkedAt: new Date(now + 1).toISOString() }, { checkedAt: new Date(now - 3600001).toISOString() }])
     assert.throws(() => validateCurrentReleaseGate({ ...gate, ...changes }, sourceSha, now));
+});
+
+test("host accepts explicit owner CI exemption metadata but retains source, Review and freshness requirements", () => {
+  const now = Date.now(), gate = { kind: "reviewed-main", repository: "SynapseOperator/mq-story-blog", sourceSha,
+    observedMainSha: sourceSha, reviewedHead: "b".repeat(40), reviewer: "SnorkelingBreather", pullRequest: 68,
+    reviewId: 123, qualityRunId: null, checkedAt: new Date(now).toISOString(),
+    ciExemption: { version: 1, sourceSha, reason: "owner-approved-github-actions-quota", localValidationSha256: digest },
+    observedCi: { runId: 456, status: "completed", conclusion: "failure", jobs: [{ name: "quality", status: "completed", conclusion: "failure" }] } };
+  validateCurrentReleaseGate(gate, sourceSha, now);
+  validateCurrentReleaseGate({ ...gate, observedCi: { runId: null, status: "missing", conclusion: null, jobs: [] } }, sourceSha, now);
+  for (const changes of [{ qualityRunId: 456 }, { ciExemption: undefined }, { observedCi: undefined },
+    { ciExemption: { ...gate.ciExemption, sourceSha: "b".repeat(40) } },
+    { ciExemption: { ...gate.ciExemption, localValidationSha256: "invalid" } },
+    { reviewer: "owner" }, { reviewId: null }, { sourceSha: "b".repeat(40) },
+    { checkedAt: new Date(now + 1).toISOString() }, { checkedAt: new Date(now - 3600001).toISOString() },
+    { observedCi: { runId: null, status: "completed", conclusion: "success", jobs: [] } }]) {
+    assert.throws(() => validateCurrentReleaseGate({ ...gate, ...changes }, sourceSha, now));
+  }
 });
 
 test("actual production secret files require a strong bootstrap password as well as role passwords", {
@@ -382,7 +401,8 @@ test("private preview host writes only loopback and closing revokes sessions bef
   const f = await hostFixture(t, "activate"), images = Object.fromEntries(TARGETS.map(name => [name, `sha256:${digest}`]));
   f.context.settings.deploymentFile = "/root/mq/deployment.json"; f.context.settings.secretDirectory = "/root/mq/secrets";
   const preview = privateMetadata(), opened = planProductionPrivatePreview({ currentRelease: f.context.release,
-    config: f.context.config, receipt: f.context.priorReceipt, preview });
+    config: f.context.config, receipt: f.context.priorReceipt, preview,
+    features: { auth: true, media: true, publishing: true, comments: true } });
   // A real closed bootstrap has frontend, but no proxy container or edge yet.
   let proxyRunning = false, proxyCreated = false, edgeExists = false, unsafeBinding = false;
   const runDocker = args => {
@@ -424,6 +444,10 @@ test("private preview host writes only loopback and closing revokes sessions bef
     const result = await applyProductionHost({ ...f.context, plan, priorReceipt }, `${action}:${plan.deploymentId}:${plan.planId}`, options);
     assert.equal(result.receipt.privateIngress, action === "private-preview");
     assert.equal(result.receipt.publicIngress, false);
+    const env = readFileSync(join(f.directory, "compose.env"), "utf8");
+    for (const name of ["AUTH", "MEDIA", "PUBLISH", "COMMENTS"]) {
+      assert.ok(env.includes(`MQ_${name}_ENABLED=${action === "private-preview"}`));
+    }
     priorReceipt = result.receipt;
   }
   assert.equal(proxyRunning, false);

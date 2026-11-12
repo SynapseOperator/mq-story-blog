@@ -9,8 +9,9 @@ import { readDeploymentManifest, readDeploymentFile } from "../production/runtim
 export async function runReleaseCommand(args, env = process.env) {
   try {
     const [operation, ...values] = args;
-    if (operation === "gate" && values.length === 2) {
-      const evidence = await verifyReleaseGate({ sourceSha: values[0], request: githubRequest(env.GH_TOKEN) });
+    if (operation === "gate" && (values.length === 2 || (values.length === 4 && values[2] === "--owner-ci-exemption"))) {
+      const ownerCiExemption = values.length === 4 ? JSON.parse(await readFile(resolve(values[3]), "utf8")) : undefined;
+      const evidence = await verifyReleaseGate({ sourceSha: values[0], request: githubRequest(env.GH_TOKEN), ownerCiExemption });
       await writeFile(resolve(values[1]), JSON.stringify(evidence, null, 2) + "\n", { flag: "wx", mode: 0o444 });
       console.log(JSON.stringify(evidence));
     } else if (operation === "manifest" && values.length === 4) {
