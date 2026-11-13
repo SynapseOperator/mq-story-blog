@@ -1,98 +1,146 @@
 # MQ · Our Stories
 
-MQ 是以共同回忆为主题的个人博客，也是《软件工程—敏捷 DevOps 方法》的课程项目。老师允许以 GitHub 替换华为工具链，个人博客题目与课程工程证据要求仍然有效。
+**把故事放进星空，把回忆写成一封信。**
 
-Phase 2、P3 及 P4 的部署基础已进入 main。VPS 为 Ubuntu24.04/amd64、4vCPU、3.82GiB内存，已完成 SSH/UFW/NTP 与 Docker 初始化。P5-01 已验证真实主机上的单套合成 staging，入口仅通过 SSH tunnel，未开放正式用户。实际结果与操作边界见 [首次隔离部署](docs/engineering/VPS_ISOLATED_DEPLOYMENT.md)；[P4-02 只读报告](docs/engineering/VPS_READINESS.md)保留当时状态。当前合同见 [生产基础](docs/engineering/PRODUCTION_FOUNDATION.md)、[备份恢复](docs/engineering/PRODUCTION_BACKUP.md)、[秘密轮换](docs/engineering/SECRET_ROTATION.md)和[主机运维](docs/engineering/OPERATIONS_RUNBOOK.md)。
+MQ Story 是一个以共同回忆为主题的个人博客，也是软件工程与 DevOps 课程项目。读者从星星或篝火进入故事，在同一张羽毛信纸中阅读、点赞和留言；作者在后台编辑草稿、管理图片、发布故事和审核留言。
 
-星空、信纸美术与后台保持不变；已验收的真实点赞与嵌套登录见 [STORY_LIKES.md](docs/engineering/STORY_LIKES.md)。编辑和发布见 [ADMIN_EDITOR.md](docs/engineering/ADMIN_EDITOR.md)、[STORY_PUBLICATION.md](docs/engineering/STORY_PUBLICATION.md)；公开读取与分享见 [PUBLIC_STORIES.md](docs/engineering/PUBLIC_STORIES.md)、[STORY_SHARING.md](docs/engineering/STORY_SHARING.md)。保存草稿不会改变公开版本，恢复只开放下架前的公开版本。
+[在线体验](https://mq-story.xyz) · [本地开发](docs/DEVELOPMENT.md) · [文档索引](docs/README.md) · [参与贡献](CONTRIBUTING.md)
 
-P5-02 已合并，提供受控生产初始化/升级/回退合同、[离线管理员维护](docs/engineering/PRODUCTION_ADMIN.md)、[OSS 香港与告警准备](docs/engineering/OFFSITE_BACKUP_AND_ALERTS.md)，不自动创建正式账号或开放网站。全部既有测试保留；`test:production:operations` 包含原容器验收及加密恢复、HTTPS 和轮换，`test:production:rotation` 验证数据库凭据与签名，`test:auth:session-spike` 验证锁定框架的 token 路径。生产开关默认关闭。[Session 安全存储](docs/engineering/SESSION_STORAGE.md) 使用独立密钥认证加密与查询索引保留原生撤销语义；009 撤销旧会话，历史摘要 Spike 保留对照。新 PR 默认 Ready for Review，审核由负责人口头协调，工具不得向协作者发送 Review 请求、@提及或催审提醒。最新提交仍须有匹配的独立 Review 和 CI，合并与部署各需明确授权。域名/TLS、主机验收、异地备份、容量、Session 风险处置及独立安全审查仍是正式开放门槛。留言合同见 [STORY_COMMENTS.md](docs/engineering/STORY_COMMENTS.md)。
+![MQ Story 实际生产首页](docs/showcase/home-desktop.png)
 
-P5-03 收紧生产备份前缀与异地回执核验，更新官方Node/npm维护版本，并增加五类镜像的完整扫描入口。经单独批准的一条飞书测试已实际送达；自动通知和生产任务尚未启用。[安全审查](docs/engineering/PRODUCTION_SECURITY_REVIEW.md)明确区分已修复项、剩余漏洞和Session风险；不能把合成测试或扫描工具执行完成视为生产安全放行。
+<p align="center">
+  <img src="docs/showcase/home-mobile.png" width="235" alt="实际生产首页，390px 手机视口" />
+  &nbsp;&nbsp;
+  <img src="docs/showcase/letter-mobile.png" width="235" alt="本地生产构建中的羽毛信阅读器，内容为明确标记的合成测试故事" />
+</p>
 
-仓库：[SynapseOperator/mq-story-blog](https://github.com/SynapseOperator/mq-story-blog)，创建时已核实为 private。未来如需公开，须重新审查文档、图片、许可与隐私。
+首页截图来自实际公网网站；阅读器截图来自隔离环境的真实生产构建，使用合成故事和非私人图片。[截图来源与版本](docs/showcase/README.md)。
 
+## 可以做什么
 
-[PR #54](https://github.com/SynapseOperator/mq-story-blog/pull/54) 与 [PR #56](https://github.com/SynapseOperator/mq-story-blog/pull/56) 已按普通 merge 合并，包含[原生主机预检](docs/engineering/HOST_PREPARATION.md)、[手动发布候选和应用回退](docs/engineering/RELEASE_OPERATIONS.md)、S3 备份及 HTTPS 告警。首次空库部署复用已有身份/迁移顺序，不伪造更新工具的当前版本或备份回执。旧合成 apply 继续拒绝 production；P5-02 的独立[生产初始化与开放门禁](docs/engineering/PRODUCTION_LAUNCH.md)默认关闭入口，未在真实 VPS 执行；`npm run test:release`、`npm run test:production:release` 使用隔离容器，`npm run host:preflight` 只读当前主机，不能把 Windows/容器结果当作 VPS 验收。
+- **星空阅读**：7 个固定故事星位和独立的篝火入口；桌面悬停、键盘和触屏交互，支持 reduced-motion。首页只显示已发布故事的入口。
+- **羽毛信与分享**：段落、图片、点赞和留言在同一内部滚动区域；独立 `/stories/:slug` 链接、前进后退、焦点恢复及未提交留言保护。
+- **真实互动**：登录点赞／取消点赞；游客匿名留言，登录用户可选账号或匿名身份。留言一律先审核，公开列表与计数只包含通过审核的内容。
+- **作者工作区**：唯一管理员、草稿编辑、图片上传、星位预览与占用校验、发布／更新／下架／恢复。保存草稿不会改变已公开版本。
+- **权限与持久化**：PostgreSQL 保存故事、修订、星位、账号、点赞及留言；公开接口不返回私有草稿。Session 使用独立密钥保护存储，保留框架的会话撤销语义。
+- **自托管运维**：Docker Compose、Caddy HTTPS、数据库最小权限身份、私有媒体卷、Restic 加密备份及隔离恢复工具。
 
-## 运行与检查
+M / Q 页面目前保留为建设中入口；不包含回复树、附件或富文本编辑器。
 
-环境：Node.js **24.22.2**、npm **11.21.2**。P5-03 更新同一维护线的安全补丁；VPS 运维运行时仍是已安装的24.19.0，升级需单独授权。使用 npm 与 `package-lock.json`，不混用锁文件。在仓库根执行：
+## 技术栈
+
+| 层次 | 当前实现 |
+| --- | --- |
+| 前端 | Next.js 16 App Router · React 19 · TypeScript · CSS / Tailwind CSS 4 |
+| 服务端 | Node.js 24 · Route Handlers · Better Auth 1.7.12 |
+| 数据 | PostgreSQL 18 · Prisma 7 · 显式 SQL 迁移与约束 |
+| 图片 | Sharp 处理 · 私有文件目录 · 受控读取接口 |
+| 部署 | Docker Compose · 非 root 应用容器 · Caddy |
+| 验证与运维 | Node 原生测试 · Playwright · 真实 PostgreSQL / HTTP / HTTPS · Restic |
+
+精确依赖以 [package-lock.json](package-lock.json) 为准；开发工具链固定 Node **24.22.2**（[.nvmrc](.nvmrc)）和 npm **11.21.2**。
+
+## 系统架构
+
+项目采用模块化单体：一个 Next.js 应用，按认证、故事、媒体、点赞、留言划分服务端模块。
+
+```mermaid
+flowchart LR
+    Browser[浏览器] -->|HTTPS| Caddy[Caddy]
+    Caddy --> App[Next.js 应用]
+    App --> Auth[认证与 Session]
+    App --> Domain[故事 / 发布 / 互动 / 审核]
+    Auth --> DB[(PostgreSQL)]
+    Domain --> DB
+    Domain --> Media[(私有媒体卷)]
+    Ops[离线维护与备份工具] --> DB
+    Ops --> Media
+    Ops -->|客户端加密 / HTTPS| OSS[(S3 兼容异地备份)]
+```
+
+只有反向代理提供公网入口。数据库和应用内部端口留在容器网络；迁移、维护、备份与应用运行身份分离。数据合同和限制见 [数据库](docs/engineering/DATABASE.md)、[生产基础](docs/engineering/PRODUCTION_FOUNDATION.md)及[Session 存储](docs/engineering/SESSION_STORAGE.md)。
+
+## 目录导航
+
+| 目录 | 职责 |
+| --- | --- |
+| `src/app/` | 页面、分享路由和 HTTP API |
+| `src/components/` | 星空、羽毛信、认证与管理员界面 |
+| `src/server/` | 认证、权限和各业务模块的事务服务 |
+| `src/lib/` | DTO、客户端请求、编辑器状态与共享规则 |
+| `prisma/` | Schema 与只增不改的 SQL 迁移 |
+| `scripts/` | 本地环境、集成验证、维护与发布工具 |
+| `ops/`、`config/` | Caddy、运维模板和数据库配置 |
+| `tests/` | 单元、配置与安全边界测试 |
+| `public/`、`docs/` | 静态素材、开发说明与历史工程记录 |
+
+## 本地快速开始
+
+准备 Node/npm；完整数据库功能还需要 Docker Engine 与 Compose。下列命令均从仓库根目录运行；Windows PowerShell 可以使用 `npm.cmd`。
 
 ```sh
+git clone https://github.com/SynapseOperator/mq-story-blog.git
+cd mq-story-blog
 npm ci
-npm run dev
+npm run dev -- --hostname 127.0.0.1
 ```
 
-普通场景预览打开 [http://localhost:3000](http://localhost:3000)。公开故事需要启动进程持有指向已迁移目标库的 `DATABASE_URL`；没有配置时显示可重试错误，不生成演示文章。仅查看公开故事时保持 `MQ_AUTH_ENABLED=false`，不要把连接串写入命令参数、仓库或日志；具体方式见 [公开读取说明](docs/engineering/PUBLIC_STORIES.md)。真实认证继续按 [认证配置](docs/engineering/AUTHENTICATION.md) 受控使用 `npm run dev:auth` / `npm run start:auth`，该现有工具不自动 seed 故事。其默认地址为 http://127.0.0.1:3000，不能混用不同 Origin。Windows PowerShell 可使用 `npm.cmd`，不修改系统执行策略。
+打开 <http://127.0.0.1:3000>。这是**场景开发入口**：未连接数据库时不会自动填入故事，目录会显示读取失败／重试状态，也不会启用登录。当前仓库仍在开源准备阶段，克隆需要已有访问权限。
+
+在全新开发环境中启用本地数据库和普通账号登录：
 
 ```sh
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm start
+npm run db:env
+npm run db:up -- dev
+npm run db:migrate
+npm run auth:env
+npm run dev:auth
 ```
 
-`npm start` 需先成功构建；它与开发服务使用相同默认端口，不要同时启动。用 Ctrl+C 停止自己启动的服务。一次执行全部工程检查：
+先停止前一个开发服务，仍使用 <http://127.0.0.1:3000>。两个 `*:env` 命令只创建被 Git 忽略的随机本地配置；发现已有文件时会保留并退出，不能为了重试随意删除已有配置或卷。
+
+**后台、媒体和发布需要额外的低权限身份与签名配置。** 上面的本地数据库默认身份用于开发初始化，不是完整后台的运行身份；普通注册也不会授予管理员权限。按[开发指南](docs/DEVELOPMENT.md)选择基础开发、完整隔离演练或持久自托管路径，仓库不提供默认管理员密码或生产数据 seed。
+
+## 验证与工程实践
 
 ```sh
 npm run check
 ```
 
-`check` 串行执行 lint、Prisma Schema 校验、类型检查、自动化测试和生产构建，任一步失败即返回非零；类型检查与构建会先生成 Prisma Client，但不连接数据库。`npm test` 使用 Node.js 原生测试运行器验证稳定绑定与数据库配置保护，包括故事重排、过滤及篝火身份等行为；CI 同样执行测试。此处为操作说明，实际结果以命令退出码及对应 [Actions 记录](https://github.com/SynapseOperator/mq-story-blog/actions) 为准，测试通过不代替浏览器回归或真实数据库验证。
+依次执行 lint、Prisma Schema 校验、类型检查、Node 测试和生产构建；不要求连接数据库。数据库和浏览器集成按实际改动另外运行：
 
-数据库环境、独立开发/测试入口、迁移与验证命令见 [数据库开发与测试说明](docs/engineering/DATABASE.md)。`npm run check` 可在没有数据库时检查现有前端与认证类型/单元行为；真实 PostgreSQL 迁移、隔离及持久化由独立数据库检查验证，不能用前端构建成功代替。2026-10-23 已按负责人授权安装官方 Docker Desktop（per-user / WSL 2），Windows 本机的迁移、11 项集成测试及 5 项隔离/持久化检查通过；与 Linux CI 的结果、版本差异和启动问题边界分别记录在该说明中。
+| 范围 | 入口示例 |
+| --- | --- |
+| 数据与公开读取 | `npm run test:db` · `npm run test:public` |
+| 认证与受保护 Session | `npm run test:auth` · `npm run test:auth:session-storage` |
+| 后台与发布 | `npm run test:admin-editor` · `npm run test:publishing` |
+| 点赞与留言 | `npm run test:likes` · `npm run test:comments` |
+| 容器与备份恢复 | `npm run test:production:container` · `npm run test:production:operations` |
 
-## 工程与需求入口
+先阅读[测试前置条件与隔离规则](docs/DEVELOPMENT.md)，不要将测试指向真实生产数据库。迁移只增量添加；已有 001–010 不重写。源码通过 Issue → 分支 → PR → 独立 Review 交付。
 
-- Next.js **16.4.2** App Router、React、TypeScript **5.9.3**、Tailwind CSS 4、ESLint **10.13.0**，由 `create-next-app@16.4.2 --empty` 起步。ESLint 的最小适配与规则缺口见 [工作流](docs/engineering/WORKFLOW.md)。
-- `src/app/`：应用路由、MQ 场景首页与 M/Q 建设中页面。保持单仓库模块化单体，按实际需要增加模块。
-- `src/components/scene/`：独立场景图层、固定导航与建设中视图；七张本地美术素材及来源、处理与差异说明见 [public/scene](public/scene/README.md)。
-- `src/components/reader/`：复用的羽毛信阅读器及样式；纸张与羽毛为独立装饰，文字、图片与控件由 DOM 渲染，素材说明见 [public/letter](public/letter/README.md)。
-- `src/lib/stories/`：公开摘要/正文 DTO、客户端读取边界与稳定星位映射；`src/data/` 保留四份合成夹具供隔离演示/测试，默认首页不导入或回退这些文章。
-- `prisma/`：基础探针及故事/内容版本/星位 Schema，历史迁移保留，新领域约束使用新增 SQL 迁移；[数据库说明](docs/engineering/DATABASE.md) 记录环境与测试隔离。
-- `src/server/stories/`：受限内容块、共享事务操作、内部生命周期工厂与公开只读查询；目录、ID/slug API 和分享 metadata 只读取公开版本。`src/app/api/admin/stories/` 的四个草稿接口复用 `withAdmin` 同一事务；发布/选位接口使用单独受控签名与数据库函数，不授予通用发布字段写权限。
-- `docs/product/`：正式 PRD、原型验收与关联图片，保持图片相对路径有效。
-- `docs/engineering/`：设计裁决、阶段划分、课程评分映射与工作流。
+[GitHub Actions](https://github.com/SynapseOperator/mq-story-blog/actions) 配置 quality、database、container 三项检查。近期远端运行受账户额度限制，相关交付使用负责人明确批准的 CI 豁免并保留本地证据；这不等同于远端 CI 成功，也不代表未来贡献自动豁免。
 
-先读 [PRD v1.1](docs/product/MQ_共享主页_PRD_v1.1.md)、[设计裁决](docs/engineering/DECISIONS_AND_REVIEW.md)、[原型验收清单](docs/product/MQ_交互原型验收清单_v1.0.md)。文字要求优先于概念图。PRD 与清单的 UX 编号不是同一映射，Issue/PR 必须带来源分别引用。
+## 部署
 
-2026-10-21 正式确认的 [视觉交接](docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md) 替代早期概念图的美术方向：[A 首页](docs/product/visual-baseline-v1.0/assets/A_MQ_home_approved.png) 是唯一场景构图/色彩基准；[B 羽毛信](docs/product/visual-baseline-v1.0/assets/B_MQ_letter_open_approved.png) 是已验收阅读器的视觉依据。两张都是合成参考图，不是页面可直接使用的独立图层；不得将图中 UI 当成真实控件。B 的导航/账号显示痕迹不覆盖 PRD 的阅读隐藏规则，阅读背景必须继续使用 A。
+实际网站于 **2026-11-12** 在香港 Ubuntu VPS 上线，使用单机 Compose + PostgreSQL 18 + Caddy；七星位已在后续增量升级中投入运行。生产备份使用 Restic 客户端加密及阿里云 OSS 香港私有存储，并已完成隔离恢复验收。
 
-原型可使用清楚标注的演示内容；可点击 UI、静态数据与本地状态不能证明真实认证、权限、持久化、审核和发布已完成。`LOCAL_ONLY_REFERENCE/` 中原始手绘、课程原文及额外 Word 文件不进入 Git，不上传 GitHub。
+自托管应创建自己的域名、数据库身份、管理员和秘密文件，不复制原站配置或数据。优先在构建机／CI 生成固定源码与摘要绑定的候选，再交付服务器；首次初始化、升级、私有预览和公网开放分别使用已有工具。
 
-## 开发协作
+- [生产基础与配置合同](docs/engineering/PRODUCTION_FOUNDATION.md)
+- [初始化、升级与开放流程](docs/engineering/PRODUCTION_LAUNCH.md)
+- [备份与恢复](docs/engineering/PRODUCTION_BACKUP.md) · [运维手册](docs/engineering/OPERATIONS_RUNBOOK.md)
 
-两位开发者分别使用自己的 GitHub 账号，以 Issue 明确范围和验收，在功能分支提交小 PR，互审后合并。未来应用内唯一共享管理员与 GitHub 开发账号是两个权限边界；本阶段不创建管理员账号或密码，不邀请未经确认的协作者。
+工具和模板存在不代表所有运维任务已经自动启用。原站的部署证据不替代你自己的主机、HTTPS、资源和恢复验证。
 
-PR #9 因第二位开发者暂时无法 Review，按产品负责人明确授权采用一次性 Review Exception，见 [审计说明](https://github.com/SynapseOperator/mq-story-blog/pull/9#issuecomment-6362057412)。这不是正式独立 Review 已通过；独立复核保留为非阻塞事项，其他 PR 继续按各自授权和评审门槛处理。
+## 许可与素材
 
-PR #11 的技术验收与另一份独立的一次性 Review Exception 见 [审计说明](https://github.com/SynapseOperator/mq-story-blog/pull/11#issuecomment-6363562717)。合并时无独立 APPROVED Review，不能把辅助复核描述为双人审批；该例外不适用于 P2-03。Docker 启动错误根因未明，保留为已记录环境风险，不擅自改注册表或重装。
+**当前为开源准备版本，许可候选尚未生效。** 拟采用 MIT 授权程序代码；最终版权署名、共同作者授权及素材分发范围仍需权利人确认，见 [LICENSE](LICENSE) 与[公开前核验](docs/engineering/OPEN_SOURCE_READINESS.md)。
 
-任务开始先读 [AGENTS.md](AGENTS.md) 并核对 `git status`；Skills 接入与权限路径见 [工作流](docs/engineering/WORKFLOW.md)。按 [课程 11 项评分映射](docs/engineering/COURSE_DEVOPS_RUBRIC.md) 积累真实证据，不补造历史。
+情侣角色、星空场景、羽毛信、MQ 标识及包含这些素材的截图**不自动纳入代码 MIT 许可**。第三方依赖保留各自许可证；故事正文、用户照片和留言也不属于代码授权。具体范围与待确认来源见 [ASSETS_LICENSE.md](ASSETS_LICENSE.md)。
 
-历史阶段文档保留当时的验收与限制；当前操作以生产基础、备份恢复和安全运维手册为准，原有本地工具的目标限制不能绕过。目录位置、移动端高清素材与手机长标题排版仍属于后续事项，本次不更改已验收界面。
+## 参与贡献
 
-已完成的静态场景检查、浏览器覆盖、初版返工过程与最终签收见 [Issue #2 验收记录](docs/engineering/ISSUE_2_REVIEW.md)；其中签收前的“待审”文字属于历史快照。
+先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。欢迎可复现的问题报告、文档改进和范围明确的小 PR；产品视觉与数据权限的改变请先讨论。不要在 Issue、PR、截图或日志中提交密码、Token、私人故事或用户照片。
 
-## 场景与阅读器原型操作
-
-首页仅为已发布、绑定稳定星位的故事显示可点击故事星，支持鼠标悬停标题、键盘焦点与单次触屏点按；已发布的唯一 CAMPFIRE 故事提供篝火入口。没有公开篝火故事时，景物与基础动画仍保留，但没有无效读信控件。所有入口与移动端辅助回忆目录使用同一公开摘要并复用羽毛信；目录的位置和外观仍是原型参数。
-
-故事星用常驻的暖金四角星芒及薄光环区别于底图星点，最暗闪烁阶段仍保持可见；悬停/聚焦进一步增强。高密度竖屏选择原图的无损 WebP 编码，减少草地与银河纹理的压缩损失；未改变构图或生成新美术。原图分辨率、景深与首次加载体积的边界见 [素材说明](public/scene/README.md)。
-
-- `src/data/demo-stories.ts`：保留四个稳定 ID 和 `synthetic-demo` 来源标记，包含合成标题、虚构日期、正文与配图；《把日常写成诗》用于长文阅读检查，不含真实回忆或照片。`demo-bindings.ts` 单独按故事 ID 指定稳定星位及篝火身份，不依赖数组下标。
-- `src/lib/stories/story.ts`：保留演示阅读契约，并接入真实公开段落/图片块；不捏造数据库未存储的日期、作者、引言或落款。`scene-catalog.ts` 将稳定逻辑 slot 映射到既有 CSS 位置，重排或过滤故事不重新分配其他故事的位置；服务端同时检查数据库星位映射。
-- `landscape.tsx`：背景/前景位移包装层、同层故事星与触区、独立火焰/暖光、局部草叶遮罩；按传入的稳定 slot 渲染现有位置。当前三个预设星位及其响应式位置不代表最终数量或星位策略。
-- `use-scene-motion.ts`：单个指针订阅与按需 rAF 平滑位移；触屏禁用视差，系统减少动态效果时关闭循环运动和视差，入口仍可操作。
-- `scene-page.tsx`：固定 Logo/导航/账号入口、阅读器入口状态及辅助目录。M/Q 保持建设中，不提供故事控件或循环动画。
-- `src/components/reader/feather-letter.tsx`：原生模态阅读层、内部滚动、草稿关闭确认，以及公开故事的真实点赞与留言组件。`letter.css` 将固定纸张纹理、磨损边缘和羽毛装饰与内容分开。
-
-读信时保留并暗化同一 MQ 场景，隐藏导航和普通账号入口，暂停背景响应；正文、配图、点赞和「留言」在同一信纸内部连续滚动。关闭按钮、Esc 和外围暗区共用关闭逻辑；有未提交留言或未知提交结果时先确认，继续编辑保留内容，关闭后恢复场景与触发入口焦点。展开/关闭期间拒绝冲突操作，减少动态效果模式取消舒展动画。
-
-公开故事的点赞与留言保存在数据库中。游客可匿名留言，登录用户可选择账号或匿名身份；提交只返回待审核回执，通过后才进入公开列表。四份合成演示夹具仍明确标注本地演示，管理员私有预览不显示互动区。分享 URL 支持前进/后退，外部直达时关闭仅回 MQ 首页。未提交草稿在关闭/历史导航时复用确认框，跨文档离开和刷新使用浏览器原生 beforeunload；不承诺浏览器崩溃后恢复，见 [分享说明](docs/engineering/STORY_SHARING.md)。
-
-当前视觉精修使用产品负责人提供的《MQ 羽毛信视觉精修交接包 v1.0》中的独立透明旧纸、羽毛、蝴蝶邮戳及少量细分隔，来源与用途见 [素材说明](public/letter/README.md)。标题、元信息、图片混排及同纸留言区均为真实 DOM。中文采用宋体/楷体回退；桌面信纸宽上限 640px、高度上限 928px 且不超过视口 90%，展开 1000ms、关闭 400ms、背景暗化 60%。移动端缩小装饰并保留正文宽度。最新精修版已通过产品视觉验收，本轮保留这些参数；辅助目录的最终位置与外观仍待后续评审。纸纹不随文章长度增长，未使用整张目标参考截图作为网页背景。
-
-Issue #3 的四项读信依赖已随 Issue #4 完成联合验收和收尾，P2-01 数据解耦亦已验收。后续改动仍须按实际影响验证，不能把历史通过结论当作新提交的测试结果；工程检查与产品验收分别记录。剩余生产开放与课程验收须按各自门槛继续完成。
+安全问题请遵循 [SECURITY.md](SECURITY.md)，不要直接公开敏感细节。完整技术说明、需求与历史工程记录见[文档索引](docs/README.md)。

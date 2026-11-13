@@ -1,13 +1,13 @@
 # PostgreSQL 开发与测试基础
 
-本文件记录已验收的 [P2-02 / Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10) 环境与迁移运行方式。P2-03 新增故事领域 Schema、原生约束和内部事务服务，见 [STORY_LIFECYCLE.md](STORY_LIFECYCLE.md)；页面仍使用四份合成演示故事，不创建账号、正式发布 API、点赞或留言服务。
+本文件保留 [P2-02 / Issue #10](https://github.com/SynapseOperator/mq-story-blog/issues/10) 建立的开发/测试数据库合同及当时的验证记录。当前 Schema 已包含账号、故事、发布、媒体、点赞和留言，迁移为 001–010；页面读取真实已发布故事，不回退演示内容。首次运行见[本地指南](../DEVELOPMENT.md)，领域约束见 [STORY_LIFECYCLE.md](STORY_LIFECYCLE.md)。文内带日期或阶段编号的环境诊断、测试计数按原时点理解。
 
 ## 技术与隔离边界
 
 - PostgreSQL 使用官方 `postgres:18.6-bookworm` 镜像；版本号固定，升级须通过迁移与集成测试。
 - Prisma CLI、Client、PostgreSQL adapter 均锁定 `7.10.1`，`pg` 驱动锁定 `8.23.1`，由 `package-lock.json` 固定依赖树。
-- P2-02 的 `DatabaseProbe` 保留为独立基础设施探针。P2-03 另增 `Story`、`StoryRevision` 和 `StarSlot`，使用新迁移，不改写已应用的探针迁移；具体约束见领域说明，不提前定义用户或其他业务实体。
-- 当前 Next.js、TypeScript、npm 与前端测试流程继续保留；网站页面不依赖数据库才能展示现有原型。
+- `DatabaseProbe` 保留为独立基础设施探针；其后的业务 Schema 通过增量迁移建立，不能改写已经应用的历史 SQL。009 保护 Session 存储，010 将预设星位扩展为七个并保留原绑定。
+- 首页场景可独立渲染，但真实故事与业务依赖数据库；数据库不可用时不返回旧演示文章。
 
 | 环境 | Compose 服务 | 数据库 / 用户 | 本机入口 | 网络 / 命名卷 |
 |---|---|---|---|---|

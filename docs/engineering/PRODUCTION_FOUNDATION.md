@@ -1,8 +1,8 @@
 # P3-02：生产身份与容器运行合同
 
-P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)，本分支没有合并该 PR。这里交付生产候选配置和隔离演练工具；没有购买 VPS、生成正式凭据或部署网站。
+P3-02 实施时在 `224eb14` 的 main 上独立实现，关联 Issue #49。P3-01 审查在 [PR #48](https://github.com/SynapseOperator/mq-story-blog/pull/48)。这些阶段已合并；下文 P3-02 的构建、失败及扫描记录保留原时间语境。
 
-后续 P3-03/#52 已基于本合同完成加密备份、隔离恢复与轮换验证。本文的 P3-02 构建/失败记录与当时未购买 VPS 的说明保留原时间语境；P4-02 的[只读容量报告](VPS_READINESS.md)之后，VPS 已完成 SSH/UFW/NTP 和 Docker 初始化，最新隔离部署边界与结果见 [P5-01](VPS_ISOLATED_DEPLOYMENT.md)。P5-02 的独立生产协调入口见 [PRODUCTION_LAUNCH.md](PRODUCTION_LAUNCH.md)，离线账号维护见 [PRODUCTION_ADMIN.md](PRODUCTION_ADMIN.md)，均不代表已经在 VPS 初始化正式生产。当前运维步骤以 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)为准。代码合并及合成验收不代表正式生产开放获授权。
+当前状态（2026-11-13）：MQ Story 已完成真实 VPS 初始化、私有 HTTPS 验收、生产 OSS 加密备份及恢复，并于 2026-11-12 正式上线；七星位/010 已升级生产。新实例的独立生产协调入口见 [PRODUCTION_LAUNCH.md](PRODUCTION_LAUNCH.md)，离线账号维护见 [PRODUCTION_ADMIN.md](PRODUCTION_ADMIN.md)。当前操作按 [备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)执行。部署授权仅适用于明确目标，已有站点上线不授权他人操作其资源。
 
 ## 运行结构
 
@@ -41,7 +41,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 ## 数据库身份与 11 个函数 owner
 
-生产数据库单独由引导身份创建。一次性 bootstrap 要求明确目标、PG18、同时为 SUPERUSER 与目标数据库所有者的离线身份，以及空库；拒绝接管现有同名角色或开发/测试库。迁移通过独立非 superuser 身份执行，历史 001–008 不变。授权配置与校验见 `scripts/production/database-policy.mjs` 和 `database.mjs`。
+生产数据库单独由引导身份创建。一次性 bootstrap 要求明确目标、PG18、同时为 SUPERUSER 与目标数据库所有者的离线身份，以及空库；拒绝接管现有同名角色或开发/测试库。迁移通过独立非 superuser 身份执行，当前已应用的 001–010 不得改写。授权配置与校验见 `scripts/production/database-policy.mjs` 和 `database.mjs`。
 
 | 身份 | 必要权限 | 明确禁止 |
 |---|---|---|
@@ -56,7 +56,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 全部 SECURITY DEFINER 保留 `search_path=pg_catalog`，撤销 PUBLIC EXECUTE。仅为鉴权/上下文取锁的 owner 获得相应 `UPDATE(id)`；发布与审核 owner 另持矩阵中的业务列 UPDATE，该权限不会给运行登录身份。发布与审核仍独立验证 HMAC、事务、会话、授权及 CAS。引导身份和迁移身份属于受信离线高权限运维，不声称数据库 owner 能被这些限制约束。
 
-启动和健康检查使用 runtime 自身连接核对目标标记、日志策略、角色标志/成员、函数 owner/EXECUTE、schema/表/列/序列授权；发现漂移拒绝启动或变为 unhealthy，绝不自动修复。权限升级不能靠重新启动得到放行。迁移部署额外核对 8 份历史 SQL 的 checksum 与完成记录。
+启动和健康检查使用 runtime 自身连接核对目标标记、日志策略、角色标志/成员、函数 owner/EXECUTE、schema/表/列/序列授权；发现漂移拒绝启动或变为 unhealthy，绝不自动修复。权限升级不能靠重新启动得到放行。迁移部署额外核对受审清单中 SQL 的 checksum 与完成记录，当前共 10 份。
 
 ## 首次初始化顺序
 
@@ -64,7 +64,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 1. 审核 manifest、镜像 digest、外部秘密文件权限、磁盘和日志配置；启动单独的 postgres。
 2. `node scripts/production/database-cli.mjs bootstrap`：`BOOTSTRAP_DATABASE_URL_FILE`、`MQ_ROLE_PASSWORDS_FILE`。后者为 migration/runtime/maintenance/mediaMaintenance/backup 的独立随机密码 JSON，每值满足 `[A-Za-z0-9_-]{32,128}` 且五项互异（推荐 64 位 hex）。只接受空库；bootstrap/provision/keys 均须离线 SUPERUSER 且为本库 owner。
-3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–009。
+3. `... database-cli.mjs migrate`：仅 `MIGRATION_DATABASE_URL_FILE`，执行正式 Prisma migrate deploy 001–010。
 4. `... database-cli.mjs provision`：仅 `BOOTSTRAP_DATABASE_URL_FILE`，同一事务设置 11 owner 与完整权限矩阵；验证失败整体回滚。
 5. `... database-cli.mjs keys`：引导连接及两个独立签名秘密文件；只允许首次插入，不覆盖旧密钥，不是轮换命令。
 6. `... database-cli.mjs audit`：仅 `RUNTIME_DATABASE_URL_FILE`，只读核验。不得用引导身份代替 runtime 验收。
@@ -73,7 +73,7 @@ staging 使用 `mq_staging` 或随机 `mq_staging_<32 hex>`。数据库角色名
 
 上述 database-cli 的四个 production 写操作必须追加 `--confirm-production=<deploymentId>`；staging 不接受这个参数。该确认防误操作，不代替操作系统权限或负责人授权。错误目标、过高身份、不完整配置会返回非零，诊断不输出 SQL 或秘密。
 
-升级时先停止业务写入、验证可恢复备份，再用迁移身份部署新增版本，重新 provision/audit 后切换已审核镜像。当前只允许已核实的 8 份迁移；未来新增迁移必须同时审查权限矩阵和迁移清单。应用镜像可回退不意味着数据库可以降级；不可逆迁移必须恢复成套数据库与媒体快照，不运行 reset 或修改历史 SQL。
+升级时先停止业务写入、验证可恢复备份，再用迁移身份部署新增版本，重新 provision/audit 后切换已审核镜像。当前受审清单包含 001–010；新增迁移必须同时审查权限矩阵和迁移清单。应用镜像可回退不意味着数据库可以降级；不可逆迁移必须恢复成套数据库与媒体快照，不运行 reset 或修改历史 SQL。
 
 ## 代理、存储与失败路径
 
@@ -98,7 +98,7 @@ npm run test:production:container
 
 成功后仅删除本次随机项目的容器/卷；失败保留其卷供检查，日志只保留脱敏诊断。没有 global prune、down -v，也不碰开发库。临时秘密、数据库和备份不上传 CI Artifacts。截图仅含合成内容。Windows 宿主测试与 Linux 容器权限测试分别记录，不能把 Windows mode bits 当作 Linux 权限证据。
 
-CI 保留原有 quality/database 全套检查，新增独立 container job。现有取消过时 PR 运行仍有效；构建重用同一个 runner 的 Docker 层，不上传带凭据的缓存。最终提交必须有真实成功 CI 与匹配的独立 Review；本轮不自动合并。
+CI 保留 quality/database/container 检查；构建重用同一个 runner 的 Docker 层，不上传带凭据的缓存。当前 Actions 额度豁免按 [AGENTS.md](../../AGENTS.md) 记录真实验证与未运行项，部署证据遵循显式 owner CI exemption 合同，不伪造成功。以下结果仅对应 P3-02 当时提交。
 
 本轮 Windows 本机已执行以下命令，均退出 0；详细 CI 结果以此 PR 的最终提交检查为准，不把本地结果冒充远端结果：
 
@@ -119,9 +119,9 @@ CI 保留原有 quality/database 全套检查，新增独立 container job。现
 
 依赖扫描：`npm audit --omit=dev` 退出 0，运行依赖无已报告项；全量扫描报告 10 个 moderate，均在 ESLint/TypeScript ESLint/minimatch 开发工具链。未执行自动升级或修改锁文件。维护镜像含开发依赖，正式使用前仍需单独评估及更新验证。
 
-## 尚未开放的门槛
+## 持续运维与新部署边界
 
-- P5-04 已实现独立密钥保护的 Session 存储；009 撤销旧会话，数据库不保存有效 Token 明文。任意 SQL 写入者回放完整旧行、应用密钥/进程失陷仍是残余风险，正式启用前须完成精确提交的独立安全审查，见 [Session 合同](SESSION_STORAGE.md)。
-- 加密备份、隔离恢复、密钥轮换及只读告警已在合成环境验证；主机防火墙/SSH、真实 OSS 合成恢复和一次飞书送达亦已有独立证据。正式公网 TLS、生产秘密托管、生产定时任务、磁盘硬配额及容量压力仍需按目标环境另行验收。
+- P5-04 已实现独立密钥保护的 Session 存储；009 撤销旧会话，数据库不保存有效 Token 明文。任意 SQL 写入者回放完整旧行、应用密钥/进程失陷仍是残余风险，见 [Session 合同](SESSION_STORAGE.md)。
+- 已有生产公网 TLS、OSS 加密备份与隔离恢复证据不代替新实例验收。定时任务、告警送达、容量压力、磁盘硬配额和证书续期应按实际目标持续核验，不能从工具已实现推断它们已启用。
 - 原有备份/管理员维护工具的本地目标保护保持不变；生产合同使用单独受控入口。恢复会清除 Session 与业务签名密钥，须按手册重新配置权限及验证，不能把恢复成功当作重新开放许可。
-- P5-01 已完成 VPS 主机加固、运行组件和隔离合成部署；P5-02 补充独立生产协调路径，但尚未执行正式生产部署。P5-04 未修改现有 VPS 合成环境；仓库合并和测试成功均不授权公开注册、留言或正式发布。
+- 现站已上线；仓库合并和测试成功均不自动授权修改现站、公开新实例或变更业务开关。已有数据库只能走升级路径，不能再次 bootstrap。

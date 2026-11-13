@@ -1,6 +1,6 @@
 # P2-04 用户名认证
 
-本分支实现 [Issue #15](https://github.com/SynapseOperator/mq-story-blog/issues/15)，负责人已验收的 [Spike #14](https://github.com/SynapseOperator/mq-story-blog/issues/14) completed 关闭。Better Auth **1.7.12** + Username，Prisma **7.10.1**、PostgreSQL **18.6**、Next **16.4.2**。这是正式项目集成，**尚未允许正式用户或生产开放**。
+本文记录 [Issue #15](https://github.com/SynapseOperator/mq-story-blog/issues/15) 建立的用户名认证合同与历史验证。当前使用 Better Auth **1.7.12** + Username、Prisma **7.10.1**、PostgreSQL **18.6**、Next **16.4.2**；网站已于 2026-11-12 正式上线。后续受保护 Session 实现以 [SESSION_STORAGE.md](SESSION_STORAGE.md) 为准，本地运行见[开发指南](../DEVELOPMENT.md)。下文 P2-04 的范围声明、待办及测试记录是当时状态，不代表当前功能或新的部署授权。
 
 ## 依赖与合并
 

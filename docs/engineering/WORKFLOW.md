@@ -4,7 +4,7 @@
 
 **历史检查记录（P3-01，2026-11-05）**：下文 Phase 0 环境、初始任务与停止条件是初始化历史。当天核实 main 未强制分支保护，Projects/Iteration 因缺少只读授权未能确认；详见 [部署审查](DEPLOYMENT_READINESS.md)。这些观察不是后续实时状态，不能把人工核验当作平台门禁。
 
-**当前工程状态（P5-04，2026-11-08）**：P3、P4、P5-01/#58、P5-02/#60和P5-03/#62已合并。P5-04在独立分支实现Session安全存储与009，见[会话合同](SESSION_STORAGE.md)；尚未获得本轮PR合并或生产操作授权。CI 保留 quality、database、container，容器套件包含加密备份、隔离恢复和轮换。`npm run check` 包含 lint、Prisma Schema、typecheck、单元测试与生产构建。VPS已完成初始化及仅回环开放的合成部署，OSS真实合成恢复通过；正式生产初始化和公网开放未授权。当前开发/候选使用Node24.22.2、npm11.21.2；主机运维Node仍24.19.0，不因代码更新自动升级。操作合同见[上线门禁](PRODUCTION_LAUNCH.md)及[安全审查](PRODUCTION_SECURITY_REVIEW.md)。下文Phase0/早期环境结果保留为历史记录，不是当前状态。
+**当前工程状态（P6，2026-11-13）**：MQ Story 于 2026-11-12 正式上线，P5-04 的受保护 Session/009 与七星位/010 均已合并并升级生产。开发/候选使用 Node24.22.2、npm11.21.2，VPS 运维也已使用独立 Node24.22.2。Quality、Database、Container 工作流继续保留；Actions 额度不足时按负责人明确授权记录远端 CI 豁免与真实本地验证，不将未运行写成成功，不绕过平台保护。独立 Review 与操作授权分别核验。新开发者见[本地指南](../DEVELOPMENT.md)，当前合同见[索引](../README.md)。以下 Phase0、Skills 接入、旧套餐与测试结果均保留为历史记录，不是当前环境的实时结论。
 
 ## 本阶段与 V1 接入
 
@@ -18,7 +18,9 @@ README 的 `npm run check` 串行运行 lint、typecheck、build。必要检查�
 
 本机工具包：`D:\Bread_coding\CodexDevSystem\V1`。接入依据为 `SYSTEM.json`、`templates/PROJECT-ONBOARDING.txt`、`templates/node/quality-contract.txt` 及缓存来源清单。全局规则位于 `C:\Users\33684\.codex\AGENTS.md`；核对时 `D:\` 与 `D:\Bread_coding\` 无额外 AGENTS/override。项目规则只补 MQ 约束；保留既有 Codex/MCP/登录/安全配置，不新增重复 `.codex/config.toml`。
 
-## Skills 来源与本地复现
+## 历史 Skills 来源与接入记录
+
+以下工具路径和缓存是作者在 Phase0 的个人环境记录，不是项目依赖，也不是新开发者的安装步骤。未持有该缓存可直接按[本地指南](../DEVELOPMENT.md)开发和测试，无需安装这些 Skills。
 
 | Skill | 官方来源与固定 commit | 已知许可 |
 |---|---|---|

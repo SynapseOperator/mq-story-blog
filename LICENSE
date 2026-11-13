@@ -1,0 +1,45 @@
+MQ Story — 代码许可候选 / Proposed code license
+
+状态：待项目所有者及相关权利人确认，尚未生效。
+Status: PROPOSAL ONLY. Not an effective license grant.
+
+下方为拟采用的 MIT 条款，不表示共同作者已经同意重新许可，也不替代
+既有第三方许可。公开前须核实有权许可的代码范围、取得必要同意、填写
+版权人，并通过明确的许可决定提交移除此候选提示。
+
+拟适用范围：项目自有程序代码、脚本、配置及相关技术文档。
+不包含个人美术、图像、品牌素材、含这些素材的截图、真实用户内容或
+第三方组件。具体排除范围和来源记录见 ASSETS_LICENSE.md。
+
+The text below is a proposed MIT license for project-owned code and related
+technical documentation. It is not a claim that all contributors have consented.
+Artwork, images, branding, screenshots containing these assets, user content,
+and third-party components are excluded; see ASSETS_LICENSE.md.
+
+--- BEGIN PROPOSED LICENSE TEXT (NOT YET EFFECTIVE) ---
+
+MIT License
+
+Copyright (c) [YEAR AND COPYRIGHT HOLDER(S) TO BE CONFIRMED]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--- END PROPOSED LICENSE TEXT ---
+
+Template: https://choosealicense.com/licenses/mit/

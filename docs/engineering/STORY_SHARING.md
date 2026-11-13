@@ -61,7 +61,7 @@ npm run test:public
 | `npm run test:auth` | 退出 0；35 项真实 HTTP、8 项证书验证 HTTPS；Session、CSRF、共享限流、容量分类与日志回归通过 |
 | 生产页面 Playwright Chromium 156 | 32 项通过，18 张截图；1536×1024、390×844、320×568；无意外运行错误或非公开响应泄露 |
 
-浏览器工具插件不可用，本轮复用 V1 已缓存的 Playwright/Chromium，没有下载新依赖。可通过 `MQ_PUBLIC_BROWSER_MODULE` 指定外部验收脚本、`PUBLIC_BROWSER_EVIDENCE_DIR` 指定产物目录，再运行 `npm run test:public`。本机脚本与证据保留在 `C:/Users/33684/.codex/visualizations/2026/10/21/01a15e37-d65f-7060-8479-b1bdf80a6d26/mq-p2-07/`：`browser-regression.mjs`、最终 `run-02/browser-results.json` 和截图。
+浏览器工具插件不可用，本轮复用 V1 已缓存的 Playwright/Chromium，没有下载新依赖。可通过 `MQ_PUBLIC_BROWSER_MODULE` 指定外部验收脚本、`PUBLIC_BROWSER_EVIDENCE_DIR` 指定产物目录，再运行 `npm run test:public`。本机脚本与证据保留在 历史证据集 `mq-p2-07`（未随仓库分发，不能作为新开发者的必需文件）：`browser-regression.mjs`、最终 `run-02/browser-results.json` 和截图。
 
 首轮 `run-01` 暴露关闭后焦点恢复早于历史提交的问题：目录刷新移除了刚获得焦点的热点。现等待历史提交、目录刷新完成后恢复焦点，`run-02` 完整复测通过；失败证据保留。预期的 404、故障测试 503、受控关闭认证 503 与主动请求取消单独记录，不计为意外错误。技术验证不代替本项产品/独立 Review 验收。
 
