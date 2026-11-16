@@ -6,7 +6,7 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 
 export const metadata: Metadata = {
   title: "MQ · Our Stories",
-  description: "MQ · Our Stories 交互原型：在星空下打开一封合成演示书信。",
+  description: "把故事放进星空，把回忆写成一封信。",
   robots: { index: false, follow: false },
 };
 

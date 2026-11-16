@@ -1,6 +1,16 @@
 {
   "name": "mq-story-blog",
   "version": "0.1.0",
+  "description": "MQ · Our Stories — a self-hosted personal blog with a starry-sky story reader.",
+  "license": "MIT",
+  "homepage": "https://mq-story.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SynapseOperator/mq-story-blog.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SynapseOperator/mq-story-blog/issues"
+  },
   "private": true,
   "packageManager": "npm@11.21.2",
   "engines": {

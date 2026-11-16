@@ -55,4 +55,5 @@ MQ Story 于 **2026-11-12** 正式上线，仓库于 **2026-11-16** 公开。项
 - [公开核验、授权与完成记录](engineering/OPEN_SOURCE_READINESS.md)
 - [MIT 代码许可](../LICENSE) · [素材版权与分发边界](../ASSETS_LICENSE.md)
 - [贡献指南](../CONTRIBUTING.md) · [安全问题报告](../SECURITY.md)
+- [英文项目介绍](../README.en.md) · [社区交流约定](../CODE_OF_CONDUCT.md)
 - [真实展示截图及来源](showcase/README.md)

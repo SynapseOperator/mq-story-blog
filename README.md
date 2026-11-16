@@ -6,17 +6,19 @@ MQ Story 是一个围绕共同回忆搭建的个人博客。点开首页的星�
 
 这个项目也用于软件工程与 DevOps 课程实践。从后台编辑、留言审核，到数据库迁移、容器部署和备份恢复，仓库保留了实现过程与工程记录。网站于 **2026-11-12** 上线，代码于 **2026-11-16** 公开。
 
-[在线体验](https://mq-story.xyz) · [本地开发](docs/DEVELOPMENT.md) · [文档索引](docs/README.md) · [参与贡献](CONTRIBUTING.md)
+[在线体验](https://mq-story.xyz) · [English](README.en.md) · [本地开发](docs/DEVELOPMENT.md) · [文档索引](docs/README.md) · [参与贡献](CONTRIBUTING.md)
 
-![MQ Story 实际生产首页](docs/showcase/home-desktop.png)
+![MQ Story 实际生产首页](docs/showcase/home-desktop-readme.webp)
 
 <p align="center">
-  <img src="docs/showcase/home-mobile.png" width="235" alt="实际生产首页，390px 手机视口" />
+  <img src="docs/showcase/home-mobile-readme.webp" width="235" alt="实际生产首页，390px 手机视口" />
   &nbsp;&nbsp;
   <img src="docs/showcase/letter-mobile.png" width="235" alt="本地生产构建中的羽毛信阅读器，内容为明确标记的合成测试故事" />
 </p>
 
 上面的首页截图来自在线网站。阅读器截图取自本地生产构建，文章和图片均为测试内容，未使用私人故事。[查看截图来源与版本](docs/showcase/README.md)。
+
+[功能](#可以做什么) · [技术栈](#技术栈) · [本地运行](#本地快速开始) · [测试](#验证与工程实践) · [部署](#部署) · [许可](#许可与素材)
 
 ## 可以做什么
 
@@ -80,14 +82,23 @@ flowchart LR
 
 准备 Node/npm；完整数据库功能还需要 Docker Engine 与 Compose。下列命令均从仓库根目录运行；Windows PowerShell 可以使用 `npm.cmd`。
 
+### 1. 获取代码与依赖
+
 ```sh
 git clone https://github.com/SynapseOperator/mq-story-blog.git
 cd mq-story-blog
 npm ci
+```
+
+### 2. 查看首页场景
+
+```sh
 npm run dev -- --hostname 127.0.0.1
 ```
 
-打开 <http://127.0.0.1:3000>，就可以查看和修改首页场景。这时还没有连接数据库，故事目录会显示读取失败／重试，登录也尚未启用。仓库已公开，可以直接克隆。
+打开 <http://127.0.0.1:3000>，就可以查看和修改首页场景。这时还没有连接数据库，故事目录会显示读取失败／重试，登录也尚未启用。
+
+### 3. 连接本地数据库并启用账号
 
 若要继续开发注册、登录和数据相关功能，可在全新的本地环境中执行：
 

@@ -25,7 +25,7 @@ cd mq-story-blog
 npm ci
 ```
 
-仓库公开前，clone 需要仓库读取权限。`package.json` 的 `private: true` 仅防止误发 npm 包。
+仓库可以直接克隆，不需要申请读取权限。`package.json` 的 `private: true` 仅防止误发 npm 包。
 
 ## 1. 只运行前端
 
@@ -118,7 +118,7 @@ npm run test:auth:session-storage
 
 数据库集成测试仅在 guarded test 实例中新建和清理自己的随机数据库/角色，不清空 `mq_test` 或开发库。`test:db:persistence` 会停止、启动和重建本项目两套本地数据库容器，运行前需结束依赖它们的开发会话；数据卷保留。
 
-GitHub 工作流分为 Quality、Database、Container。维护者目前因 Actions 额度不足使用负责人明确批准的远端 CI 豁免；这不表示远端检查通过，也不替代本地验证、独立 Review 或 GitHub 实际保护规则。贡献者应在 PR 写清真实命令、退出码及未运行项。
+GitHub 工作流分为 Quality、Database、Container。此前因额度限制采用的负责人 CI 豁免及本地证据仍保留在相关 PR 中，不能当作远端检查通过。公开仓库的标准 GitHub 托管 Runner 按[官方计费说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions)免费；是否实际运行成功仍以具体提交为准。贡献者应在 PR 写清真实命令、退出码及未运行项，独立 Review 和 GitHub 实际保护规则继续适用。
 
 ## 5. 常见问题与边界
 
