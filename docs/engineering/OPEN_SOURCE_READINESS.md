@@ -1,12 +1,12 @@
 # P6：公开前核验
 
-核验日期：2026-11-13。基线：`8dcf7cc8130cc0e2ad7390e48f80bd663032721b`。本报告与 P6 文档改动一同提交，审查对象是源码发行及 GitHub 历史，不是生产渗透测试。
+首次核验日期：2026-11-13。基线：`8dcf7cc8130cc0e2ad7390e48f80bd663032721b`。授权状态更新：2026-11-16。审查对象是源码发行及 GitHub 历史，不是生产渗透测试；本次仅做许可收尾和定向文档检查，没有重跑历史审查或生产测试。
 
-**结论 B：原仓库需完成下列少量指定确认后再公开。** 本次检查未确认有真实凭据泄露，当前没有证据要求重写 Git 历史或放弃原仓库。但代码许可、素材分发权和历史个人元数据的公开决定尚未完成，因此不能判为 A。
+**结论 A（本 PR 合并后）：原仓库可以直接公开，无需改写历史或另建公开版本。** 首次核验结论为 B；负责人现已确认双方 MIT 授权、素材有限分发及历史记录公开范围，并选定 GitHub Private Vulnerability Reporting，原确认事项已完成。本轮未取得合并或可见性变更执行授权，仓库仍须等待负责人最终指令；安全报告入口在正式公开后启用并验证。
 
 仓库核验时仍为 **Private**；本轮没有改变可见性、修改生产服务、删除记录或向协作者发送审核请求。
 
-## 实际检查范围
+## 首次核验范围（2026-11-13，保留原证据）
 
 | 对象 | 实际覆盖 | 结果及边界 |
 | --- | --- | --- |
@@ -31,26 +31,26 @@ Git 和首批 GitHub 审查脚本退出 **0**，剩余 96 次 Actions 日志审�
 
 本轮没有读取生产秘密、VPS 数据库或私有媒体。配置模板与运维合同可以公开，但不得附带本机证据目录、数据库转储、Cookie、真实 `.env`、云凭据或恢复包。
 
-### 2. 历史个人信息：需要明确接受公开范围
+### 2. 历史个人信息：负责人已接受公开范围
 
-- Git 历史中有 3 个作者身份：93 个提交使用 GitHub noreply 地址，另外 35 个提交使用个人邮箱。报告不重复输出邮箱原值。负责人须与相应作者确认，原仓库公开后这些既有署名及邮箱会被读取。
+- Git 历史中有 3 个作者身份：93 个提交使用 GitHub noreply 地址，另外 35 个提交使用个人邮箱。报告不重复输出邮箱原值。负责人已明确接受现有作者邮箱及署名随原仓库历史公开。
 - 基线当前文档及历史版本共发现 11 条作者本机路径引用。当前开发说明可改成仓库相对路径或证据集名称，但旧提交仍保留原路径和部分本机用户名。这些不是访问凭据。
-- [PR #64](https://github.com/SynapseOperator/mq-story-blog/pull/64)、[PR #66](https://github.com/SynapseOperator/mq-story-blog/pull/66)、[PR #70](https://github.com/SynapseOperator/mq-story-blog/pull/70)、[PR #72](https://github.com/SynapseOperator/mq-story-blog/pull/72) 正文含本机证据路径。公开前可由负责人选择保留其历史上下文，或将当前 PR 正文路径改成证据集名称；本轮没有编辑既有 PR。
-- [`docs/product/`](../product/) 保留情侣主题 PRD、产品设计图与课程工程记录。视觉交接说明把示例标题、昵称和评论标记为合成参考，仍应由负责人确认人物形象、文字及项目背景适合随仓库公开。
+- [PR #64](https://github.com/SynapseOperator/mq-story-blog/pull/64)、[PR #66](https://github.com/SynapseOperator/mq-story-blog/pull/66)、[PR #70](https://github.com/SynapseOperator/mq-story-blog/pull/70)、[PR #72](https://github.com/SynapseOperator/mq-story-blog/pull/72) 正文含本机证据路径。负责人已接受这些记录公开；保留历史，不再为这些已确认内容改写提交或修改旧 PR。
+- [`docs/product/`](../product/) 保留情侣主题 PRD、产品设计图与课程工程记录。视觉交接说明把示例标题、昵称和评论标记为合成参考；负责人已接受现有产品记录公开。
 
 没有发现所检查格式的 `user-attachments` / 私有 GitHub 图片链接；这不等于下载并审查了所有外链目标。普通外链、被删除的附件、图片中可读的个人信息，以及未被 API 返回的内容不在已验证范围。负责人如记得曾上传私人附件，应在公开前定点检查该附件；本轮不批量删除历史。
 
-### 3. 许可与素材：必须完成权利人确认
+### 3. 许可与素材：已完成授权确认
 
-[`LICENSE`](../../LICENSE) 是未生效的 MIT **候选**，尚未代共同作者授权。公开前需要确认适用的自有代码范围、版权人署名及共同作者同意，随后以明确提交使许可生效。
+负责人已确认双方共同作者同意 MIT，并选择使用 GitHub 账号名署名。[`LICENSE`](../../LICENSE) 已移除候选声明，版权行内容为 `Copyright (c) 2026 SynapseOperator and SnorkelingBreather`，采用完整 MIT 正式条款。
 
-[`ASSETS_LICENSE.md`](../../ASSETS_LICENSE.md) 将程序代码与美术分开。`public/scene/`、`public/letter/`、产品参考图、展示截图和历史旧素材都需要公开分发权。来源说明能证明交接路径，不能替代授权；即使不准他人商业复用，公开仓库仍会让这些文件被下载和 fork。
+[`ASSETS_LICENSE.md`](../../ASSETS_LICENSE.md) 将程序代码与美术分开。负责人已允许现有个人美术随本 GitHub 仓库公开展示、下载及 Fork；这些素材、产品参考图和含素材的截图不纳入代码 MIT，其他项目的独立复用仍须取得相应权利人许可。来源记录及第三方原有许可继续保留。
 
 本轮保留美术和历史，没有声称所有图像为纯手绘原创，也没有将第三方依赖、系统字体或真实用户内容纳入 MIT。新增首页截图来自实际公网首页，不含私人故事正文；阅读器截图来自隔离环境的合成内容，均保留[实际运行来源说明](../showcase/README.md)。
 
-### 4. 对外协作：完成可用的私密报告入口
+### 4. 对外协作：渠道已选定，公开后启用
 
-[`SECURITY.md`](../../SECURITY.md) 已明确入口待确认。公开前由维护者确定私密联系渠道；若选择 GitHub Private Vulnerability Reporting，应在获准公开时启用并核验，因为[该功能面向公开仓库](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。也可提供自己控制的私密联系方式。不要将未核实邮箱或普通公开 Issue 作为提交秘密与漏洞详情的入口。
+负责人已选定 GitHub Private Vulnerability Reporting，不新增个人邮箱。[`SECURITY.md`](../../SECURITY.md) 明确正式公开后启用并验证，因为[该功能面向公开仓库](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。本轮未修改设置，不能将渠道选择写成入口已启用；公开操作后须确认 Security → Advisories 的私密报告入口可用，普通公开 Issue 不用于提交秘密与漏洞细节。
 
 将仓库转为 Public 会使 Actions 历史和日志对外可见，因此不能只检查当前文件；这是本轮检查历史日志的原因。参阅 [GitHub 可见性说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility)。
 
@@ -58,18 +58,22 @@ Git 和首批 GitHub 审查脚本退出 **0**，剩余 96 次 Actions 日志审�
 
 | 选项 | 当前判断 | 需要的动作 |
 | --- | --- | --- |
-| A．原仓库直接公开 | **现在不选** | 许可和素材授权仍是候选，历史隐私范围尚需确认 |
-| B．指定处理后公开 | **推荐** | 确认代码/素材权利、接受历史作者元数据与产品记录的公开范围、确认私密安全报告入口，合并 P6 后再由负责人单独批准可见性变更 |
-| C．保留私有，另建公开版本 | 备选，不自动执行 | 若作者不愿公开个人历史，或旧美术无法取得分发权，保留原库审计记录，另建仅含获授权代码与替代素材的干净公开库 |
+| A．原仓库直接公开 | **本 PR 合并后的推荐方案** | 最终 HEAD 满足独立 Review、适用验证和 GitHub 合并条件后，由负责人授权合并及公开；公开后启用并验证私密漏洞报告 |
+| B．指定处理后公开 | 原确认事项已完成 | 本次提交落实 MIT、素材、历史和报告渠道决定，不再重复索取同一授权 |
+| C．保留私有，另建公开版本 | 当前不需要 | 没有本轮证据要求另建仓库，保留原工程历史 |
 
 选择 C 不需要也不意味着删除原仓库。仅从最新分支移除文件不能消除历史中的内容；本轮没有改写历史，也没有创建另一个仓库。
 
-## 本轮交付验证
+## 首次交付验证（2026-11-13，未重复执行）
 
 - `npm run check` 退出 **0**：lint、Schema、类型检查、生产构建通过；363 项测试中 357 项通过、6 项按既有平台/环境条件跳过，无失败。本轮未重跑数据库、浏览器和生产容器完整套件，业务代码与迁移未改动。
 - 文档/模板检查退出 **0**：56 份 Markdown 的 215 个本地链接目标存在，两个 Issue YAML 可解析，README/开发指南所列 npm 脚本均存在；`git diff --check` 通过。
 - 原有 `scripts/db/init-env.mjs` 与 `scripts/auth/init-env.mjs` 在项目外临时目录首次执行均退出 **0**；重复执行均退出 **1** 且原文件不变，随机秘密及本地目标检查通过。没有将其描述为全新 clone 的完整业务端到端验收。
 - P6 改动文件的增量凭据扫描未命中规则；三张实际截图无 EXIF 元数据，场景及合成内容已目视核对。另一个 Agent 完成文档交叉复核并发现一处截图来源表述不一致，已修正；这不是 GitHub 协作者 APPROVED 或独立法务意见。
 - 远端 CI 沿用负责人额度豁免，未运行不写成通过；未改变工作流、分支保护或 `package.json` 的 `private: true`。
+
+## 许可收尾验证（2026-11-16）
+
+仅修改 8 份许可和直接引用文档。定向检查退出 **0**：完整 MIT 条款保持不变，2026 年及双方公开账号署名准确，107 个本地链接目标有效；过时候选声明已移除，`git diff --check` 通过。检查器首次因 Windows 默认 GBK 解码退出 1，显式使用 UTF-8 后通过，未修改产品代码。没有重跑历史审查、完整测试或生产验收；远端 CI 额度豁免继续保留。最终提交仍须匹配独立 Review，并等待负责人合并与公开执行授权。
 
 本结果只覆盖本次取得的可达引用与 API 库存，不覆盖服务器上不可达对象、已删除讨论、过期工件、未来提交或外部附件内容。之后若有新的敏感材料进入仓库，应针对变化复核，无需重做未变化的生产验收。

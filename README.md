@@ -135,9 +135,9 @@ npm run check
 
 ## 许可与素材
 
-**当前为开源准备版本，许可候选尚未生效。** 拟采用 MIT 授权程序代码；最终版权署名、共同作者授权及素材分发范围仍需权利人确认，见 [LICENSE](LICENSE) 与[公开前核验](docs/engineering/OPEN_SOURCE_READINESS.md)。
+程序代码采用 [MIT License](LICENSE)，双方共同作者已同意。仓库目前仍为 Private，公开操作须另行批准；授权决定与核验范围见[公开前核验](docs/engineering/OPEN_SOURCE_READINESS.md)。
 
-情侣角色、星空场景、羽毛信、MQ 标识及包含这些素材的截图**不自动纳入代码 MIT 许可**。第三方依赖保留各自许可证；故事正文、用户照片和留言也不属于代码授权。具体范围与待确认来源见 [ASSETS_LICENSE.md](ASSETS_LICENSE.md)。
+情侣角色、星空场景、羽毛信、MQ 标识及包含这些素材的截图**不纳入代码 MIT 许可**。已允许随本 GitHub 仓库公开展示、下载及 Fork；其他项目的独立复用须获得相应权利人的许可。第三方依赖保留各自许可证，故事正文、用户照片和留言也不属于代码授权。具体范围见 [ASSETS_LICENSE.md](ASSETS_LICENSE.md)。
 
 ## 参与贡献
 

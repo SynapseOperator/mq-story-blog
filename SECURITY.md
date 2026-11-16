@@ -4,9 +4,9 @@ MQ Story 是个人维护项目。安全修复以最新受维护的 `main` 为目
 
 ## 私密报告入口
 
-**公开前待办：维护者须确定实际受控的私密报告渠道。** GitHub Private Vulnerability Reporting 面向公开仓库；若选择此方式，应在获准公开时启用并核验入口。也可公布维护者自己控制的安全联系方式。当前不能假定该功能已经开启；本文件不提供未经核实的邮箱。
+**已选定 GitHub Private Vulnerability Reporting。** 该功能将在仓库获准正式公开后启用并验证；当前仍为 Private，不能将渠道选择视为入口已经可用。本项目不新增个人邮箱作为安全报告渠道。
 
-当仓库 Security → Advisories 中显示 **Report a vulnerability** 时，请通过该入口提交私密报告。如果没有该入口，且你已经有与维护者约定的私密联系方式，请先通过该渠道联系；尚无私密渠道时，不要把敏感漏洞细节放到公开 Issue、PR 或评论中。GitHub 的[配置说明](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)供维护者公开前执行。
+当仓库 Security → Advisories 中显示 **Report a vulnerability** 时，请通过该入口提交私密报告。如果尚未显示，不要把敏感漏洞细节放到公开 Issue、PR 或评论中。维护者将在正式公开后按 GitHub 的[配置说明](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)启用功能，并验证报告入口可用。
 
 报告尽量包含：
 
