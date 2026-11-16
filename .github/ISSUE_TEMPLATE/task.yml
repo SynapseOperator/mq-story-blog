@@ -1,11 +1,14 @@
-name: 开发任务
-description: 一个可验证的小任务
+name: 改进建议 / 开发任务
+description: 提出一个范围明确、可验证的改进
 body:
+  - type: markdown
+    attributes:
+      value: 请勿提交密码、Token、连接串或私人内容。安全问题请先阅读仓库 SECURITY.md，不在此公开利用细节。
   - type: textarea
     id: scope
     attributes:
       label: 目标与负责范围
-      description: 说明当前阶段、负责人角色与涉及模块。
+      description: 说明要解决的问题、使用场景及涉及模块。
     validations:
       required: true
   - type: textarea

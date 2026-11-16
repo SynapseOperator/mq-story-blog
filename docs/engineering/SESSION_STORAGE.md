@@ -30,7 +30,7 @@ MQ仍关闭refresh和Cookie cache，但隔离框架实例验证真实刷新及�
 
 009在事务中锁Session、撤销全部旧会话，再加必填密文列和格式CHECK；User、Account及业务数据保留。001–008字节不改。CHECK只保证格式，密码真实性由应用验证。
 
-已有环境需要维护窗口：停止入口/app和写任务、备份→009→独立key→provision/audit→启动新应用并重新登录。不双读旧格式，不自动回退到008应用。正式生产尚未初始化。
+已有环境需要维护窗口：停止入口/app和写任务、备份→009→独立key→provision/audit→启动新应用并重新登录。不双读旧格式，不自动回退到008应用。此段描述 009 升级合同；原站现已完成生产初始化与上线，不意味着其他实例已应用该迁移。
 
 生产通过`SESSION_STORAGE_KEY_FILE`读取，复用普通文件、0400/0600、owner、无链接和Git外路径检查；Compose只默认挂给app。五个应用key与数据库密码均独立。缺失／格式错误拒绝启动；错误合法key拒绝旧会话，不能fallback。应用不生成默认key。
 
@@ -88,6 +88,6 @@ Windows Node24.19.0 与 Docker Desktop Linux 容器，全部为随机 PostgreSQL
 
 第八轮 [42507587528](https://github.com/SynapseOperator/mq-story-blog/actions/runs/42507587528) 在清理前明确记录7个script和7个image均`ERR_NETWORK_CHANGED`，主文档200/DOM完成，无HTTP错误、无OOM，正文请求尚未发出。提前初始化浏览器没有消除此问题，已撤回该时序试验。现在统一为最多3次匿名公开页完整读取，取代文档/正文两层重试；只有本次主文档、Next脚本、正文或目标受管图片的明确网络变更中断才允许重读，其他网络/HTTP/页面错误或任何写请求均拒绝。每次Request集合、正文结果和诊断独立，迟到回调不污染下一次；最终仍须完整通过阅读器、正文200及接收完成、图片解码和截图，不修改应用与写入合同。
 
-候选`1f6bec5`五类镜像完整扫描退出1：app 1 Critical/34 High、proxy 0/2、tools 4/75、operations 4/98、PostgreSQL 4/75。完整原始报告及归档/config摘要保存在项目外`D:\Bread_coding\mq-security-evidence\p504-1f6bec5`，未隐藏告警。后续恢复浏览器测试调整不更新依赖；该记录准确对应被扫描候选，不冒充之后提交的镜像摘要。
+候选`1f6bec5`五类镜像完整扫描退出1：app 1 Critical/34 High、proxy 0/2、tools 4/75、operations 4/98、PostgreSQL 4/75。完整原始报告及归档/config摘要保存在项目外证据集 `p504-1f6bec5`（不随仓库分发），未隐藏告警。后续恢复浏览器测试调整不更新依赖；该记录准确对应被扫描候选，不冒充之后提交的镜像摘要。
 
 只读复核：`p504_runtime_plan`检查非本人编写的codec/adapter/009及锁顺序；`p504_adapter_research`检查非本人编写的秘密、Compose、恢复、轮换和发布兼容接线；`p504_test_plan`检查新的框架集成断言并推动上述补强。三者均为Agent，尚需负责人协调GitHub正式独立Review。

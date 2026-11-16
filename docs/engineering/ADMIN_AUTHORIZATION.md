@@ -1,5 +1,7 @@
 # P2-05：唯一管理员授权与权限边界
 
+> 本文保留 P2-05 的实施范围与验证记录。当前后台编辑、发布、媒体、点赞和留言审核均已实现，网站已于 2026-11-12 上线；下文“本轮”“未来”指当时阶段。现行本地入口见[开发指南](../DEVELOPMENT.md)，生产管理员工具见 [PRODUCTION_ADMIN.md](PRODUCTION_ADMIN.md)，Session 存储以 [SESSION_STORAGE.md](SESSION_STORAGE.md) 为准。
+
 对应 [Issue #17](https://github.com/SynapseOperator/mq-story-blog/issues/17)，承接 PRD v1.1 §02、§8.1、§10、访问权限要求与 FN-01/02/17。依赖已合并的 P2-03/#13 和 P2-04/#16，基础 main 为 `30ccf87cd59f23a1f749b7843badca9ae80e829a`。本轮只有授权基础、离线维护和最小权限检查页；没有文章编辑、发布 API、上传、点赞或审核。
 
 ## 数据关系与约束
@@ -111,7 +113,7 @@ node --env-file=.env.admin.local scripts/admin/maintain.mjs --database mq_develo
 
 本轮在两个一次性 PostgreSQL 库、临时 runtime/maintenance 身份上运行真实认证与管理员 HTTP 测试，证明权限矩阵在该环境可执行。**现有开发库仍使用原基础设施身份，没有修改其角色、数据、凭据或全局设置；也没有配置生产身份。** 既有 `dev:auth` 使用开发库身份，管理入口将拒绝这种过宽权限；不能因此放宽守卫。正式启用前需为具体独立 MQ 库审核 owner、runtime、maintenance 身份和 ACL、网络与秘密分发，使用 runtime 的 DATABASE_URL 运行应用，并重复权限及失败测试。
 
-权限分离限制常规数据库身份的能力，不声称抵御运行时数据库凭据或整个应用进程被攻破：运行时仍需读写 Session，直接控制数据库会话就可能接管身份；Better Auth Token 仍原值存库。授权表只读不等于数据库泄漏后管理员仍安全。数据库、应用与备份访问必须继续严控。
+权限分离限制常规数据库身份的能力，不声称抵御整个应用进程被攻破。P5-04 已用独立密钥认证加密、查询索引和身份绑定保护 Session，不再保存有效 Token 明文，也拒绝简单 User ID 重绑；具有 SQL 写权限者回放完整旧行、应用密钥或主机失陷仍是残余风险。数据库、应用与备份访问必须继续严控，详见 [Session 存储边界](SESSION_STORAGE.md)。
 
 ## 验证与开放门槛
 

@@ -1,0 +1,27 @@
+name: 问题反馈
+description: 报告一个可以复现的功能或文档问题
+body:
+  - type: markdown
+    attributes:
+      value: 请使用合成数据复现，不粘贴密码、Cookie、密钥、私人文章或完整服务器日志。安全漏洞请阅读 SECURITY.md 并使用私密渠道。
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期行为与实际行为
+      description: 说明问题发生的位置和影响；截图需先移除私人信息。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 最小复现步骤
+      description: 包含必要的合成输入、操作顺序和固定错误码，避免提交原始敏感日志。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境与版本
+      description: 注明在线站点或本地环境、源码提交、操作系统、浏览器；本地问题可补 Node 与 Docker 版本。
+    validations:
+      required: true
