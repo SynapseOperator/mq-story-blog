@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞（私密报告）
+    url: https://github.com/SynapseOperator/mq-story-blog/security/advisories
+    about: 选择 Report a vulnerability 私密报告，不要在公开 Issue 中提交利用细节或凭据。
+  - name: 本地运行遇到问题
+    url: https://github.com/SynapseOperator/mq-story-blog/blob/main/docs/DEVELOPMENT.md#5-常见问题与边界
+    about: 先查看环境要求、启动步骤和常见问题；仍无法解决时，欢迎提交最小复现。

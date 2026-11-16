@@ -2,6 +2,13 @@
 
 这些 PNG 来自 Playwright 对实际页面的截图，未用生成式图像代替 UI，也未拼接或修改截图内容。
 
+README 使用两份等比缩小的 WebP 副本，减少首屏下载量。它们来自对应 PNG，未改变画面内容；原图仍保留，便于查看细节。
+
+| README 展示副本 | 像素 | 文件大小（原 PNG → WebP） |
+| --- | --- | --- |
+| [home-desktop-readme.webp](home-desktop-readme.webp) | 1536×1024 | 6,143,849 → 205,988 字节 |
+| [home-mobile-readme.webp](home-mobile-readme.webp) | 470×1017 | 1,579,679 → 75,946 字节 |
+
 | 文件 | 场景 | PNG 像素 | 采集日期 |
 | --- | --- | --- | --- |
 | [home-desktop.png](home-desktop.png) | 真实公网首页；1536×1024 CSS 视口，DPR 2 | 3072×2048 | 2026-11-13 UTC |
