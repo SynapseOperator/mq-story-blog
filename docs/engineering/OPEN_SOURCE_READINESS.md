@@ -1,10 +1,10 @@
-# P6：公开前核验
+# P6：开源核验与公开记录
 
-首次核验日期：2026-11-13。基线：`8dcf7cc8130cc0e2ad7390e48f80bd663032721b`。授权状态更新：2026-11-16。审查对象是源码发行及 GitHub 历史，不是生产渗透测试；本次仅做许可收尾和定向文档检查，没有重跑历史审查或生产测试。
+首次核验日期：2026-11-13。基线：`8dcf7cc8130cc0e2ad7390e48f80bd663032721b`。公开日期：2026-11-16。本文保留当时的源码与 GitHub 历史检查结果，并记录后续授权和公开操作；本次状态同步没有重跑历史审查或生产测试。
 
-**结论 A（本 PR 合并后）：原仓库可以直接公开，无需改写历史或另建公开版本。** 首次核验结论为 B；负责人现已确认双方 MIT 授权、素材有限分发及历史记录公开范围，并选定 GitHub Private Vulnerability Reporting，原确认事项已完成。本轮未取得合并或可见性变更执行授权，仓库仍须等待负责人最终指令；安全报告入口在正式公开后启用并验证。
+**结论 A 已执行：原仓库已公开，未改写历史，也未另建公开版本。** 首次核验结论为 B；负责人随后确认了双方 MIT 授权、素材有限分发及历史记录公开范围，并授权合并和公开。[PR #74](https://github.com/SynapseOperator/mq-story-blog/pull/74) 在最新 HEAD 获得独立 APPROVED 后，以普通 merge 合入 main，合并提交为 `914ef9d6c3c0d2e14ad7df4d692e8d8f42e91c0c`，Issue #73 已关闭。
 
-仓库核验时仍为 **Private**；本轮没有改变可见性、修改生产服务、删除记录或向协作者发送审核请求。
+当前仓库为 **Public**，GitHub Private Vulnerability Reporting 已启用。匿名 API 已验证公开状态及 `enabled: true`，公开 Advisories 页面已显示 **Report a vulnerability** 入口；未提交测试漏洞报告。公开操作没有改动生产服务、删除记录或发送审核提醒。
 
 ## 首次核验范围（2026-11-13，保留原证据）
 
@@ -48,17 +48,17 @@ Git 和首批 GitHub 审查脚本退出 **0**，剩余 96 次 Actions 日志审�
 
 本轮保留美术和历史，没有声称所有图像为纯手绘原创，也没有将第三方依赖、系统字体或真实用户内容纳入 MIT。新增首页截图来自实际公网首页，不含私人故事正文；阅读器截图来自隔离环境的合成内容，均保留[实际运行来源说明](../showcase/README.md)。
 
-### 4. 对外协作：渠道已选定，公开后启用
+### 4. 对外协作：私密漏洞报告已启用
 
-负责人已选定 GitHub Private Vulnerability Reporting，不新增个人邮箱。[`SECURITY.md`](../../SECURITY.md) 明确正式公开后启用并验证，因为[该功能面向公开仓库](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository)。本轮未修改设置，不能将渠道选择写成入口已启用；公开操作后须确认 Security → Advisories 的私密报告入口可用，普通公开 Issue 不用于提交秘密与漏洞细节。
+GitHub Private Vulnerability Reporting 已于 2026-11-16 启用并完成设置与入口验证。安全问题通过 [Security → Advisories](https://github.com/SynapseOperator/mq-story-blog/security/advisories) 的私密入口报告，具体说明见 [`SECURITY.md`](../../SECURITY.md)。不新增个人邮箱，也不使用公开 Issue 收集秘密或漏洞细节。
 
 将仓库转为 Public 会使 Actions 历史和日志对外可见，因此不能只检查当前文件；这是本轮检查历史日志的原因。参阅 [GitHub 可见性说明](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility)。
 
 ## 公开方式的决定
 
-| 选项 | 当前判断 | 需要的动作 |
+| 选项 | 当前状态 | 结果 |
 | --- | --- | --- |
-| A．原仓库直接公开 | **本 PR 合并后的推荐方案** | 最终 HEAD 满足独立 Review、适用验证和 GitHub 合并条件后，由负责人授权合并及公开；公开后启用并验证私密漏洞报告 |
+| A．原仓库直接公开 | **已完成** | PR #74 普通合并，原仓库公开，私密漏洞报告已启用并验证 |
 | B．指定处理后公开 | 原确认事项已完成 | 本次提交落实 MIT、素材、历史和报告渠道决定，不再重复索取同一授权 |
 | C．保留私有，另建公开版本 | 当前不需要 | 没有本轮证据要求另建仓库，保留原工程历史 |
 
@@ -74,6 +74,6 @@ Git 和首批 GitHub 审查脚本退出 **0**，剩余 96 次 Actions 日志审�
 
 ## 许可收尾验证（2026-11-16）
 
-仅修改 8 份许可和直接引用文档。定向检查退出 **0**：完整 MIT 条款保持不变，2026 年及双方公开账号署名准确，107 个本地链接目标有效；过时候选声明已移除，`git diff --check` 通过。检查器首次因 Windows 默认 GBK 解码退出 1，显式使用 UTF-8 后通过，未修改产品代码。没有重跑历史审查、完整测试或生产验收；远端 CI 额度豁免继续保留。最终提交仍须匹配独立 Review，并等待负责人合并与公开执行授权。
+当时仅修改 8 份许可和直接引用文档。定向检查退出 **0**：完整 MIT 条款保持不变，2026 年及双方公开账号署名准确，107 个本地链接目标有效；过时候选声明已移除，`git diff --check` 通过。检查器首次因 Windows 默认 GBK 解码退出 1，显式使用 UTF-8 后通过，未修改产品代码。没有重跑历史审查、完整测试或生产验收；远端 CI 额度豁免继续保留。此后最终提交 `ae91f483cacde34422d2b128ea2c08afbb068ae7` 获得匹配的独立 APPROVED，再按负责人授权完成合并和公开。
 
 本结果只覆盖本次取得的可达引用与 API 库存，不覆盖服务器上不可达对象、已删除讨论、过期工件、未来提交或外部附件内容。之后若有新的敏感材料进入仓库，应针对变化复核，无需重做未变化的生产验收。

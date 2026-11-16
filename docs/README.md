@@ -1,6 +1,6 @@
 # 文档索引
 
-MQ Story 于 **2026-11-12** 正式上线，当前支持七个预设故事星位、独立篝火故事、账号、后台编辑与发布、私有图片、点赞和留言审核。首页介绍见[项目 README](../README.md)，首次运行从[本地开发指南](DEVELOPMENT.md)开始。
+MQ Story 于 **2026-11-12** 正式上线，仓库于 **2026-11-16** 公开。项目支持七个故事星位、篝火故事、账号、后台编辑与发布、图片、点赞和留言审核。想先看实际效果，可以从[项目 README](../README.md)开始；准备在本地运行时，请阅读[开发指南](DEVELOPMENT.md)。
 
 工程文档保留了从原型到上线的真实记录。下表的“合同”用于理解当前代码；文内带日期、阶段编号、测试数量、提交或扫描结果的段落是对应时点的证据，不是永久有效的生产状态。源码和具体目标的实时状态优先，历史的“尚未上线”不代表现站仍未上线。
 
@@ -31,7 +31,7 @@ MQ Story 于 **2026-11-12** 正式上线，当前支持七个预设故事星位�
 
 - [PRD v1.1](product/MQ_共享主页_PRD_v1.1.md)与[交互原型验收清单](product/MQ_交互原型验收清单_v1.0.md)：原始需求与验收编号；后续裁决见下一节。
 - [视觉交接](product/visual-baseline-v1.0/VISUAL_HANDOFF.md)与[交接目录说明](product/visual-baseline-v1.0/README.md)：概念图和最初构图依据，**不是实际运行截图**。
-- [场景素材说明](../public/scene/README.md)：资源路径和使用方式；公开分发权限另按仓库素材版权说明确认。
+- [场景素材说明](../public/scene/README.md)：资源路径和使用方式；素材随项目分发，独立复用范围见[版权说明](../ASSETS_LICENSE.md)。
 - [历史交接 Prompt](product/visual-baseline-v1.0/CODEX_NEXT_STEP_PROMPT.md)：当时的工作说明，不能自动扩展当前任务授权。
 
 ## 决策与历史实施记录
@@ -50,9 +50,9 @@ MQ Story 于 **2026-11-12** 正式上线，当前支持七个预设故事星位�
 
 `WORKFLOW.md` 中的个人工具路径和 Skills 缓存仅是初始化记录；新 clone 不依赖这些目录。本仓库不分发生产秘密、数据库备份、浏览器会话、作者电脑上的证据目录或原始课程文件。
 
-## 公开准备与协作
+## 开源许可与协作
 
-- [公开前核验与授权决定](engineering/OPEN_SOURCE_READINESS.md)
+- [公开核验、授权与完成记录](engineering/OPEN_SOURCE_READINESS.md)
 - [MIT 代码许可](../LICENSE) · [素材版权与分发边界](../ASSETS_LICENSE.md)
 - [贡献指南](../CONTRIBUTING.md) · [安全问题报告](../SECURITY.md)
 - [真实展示截图及来源](showcase/README.md)

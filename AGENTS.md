@@ -3,7 +3,7 @@
 ## 范围与需求
 
 - 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 当前基线（2026-11-13）：MQ Story 已于 2026-11-12 正式公网上线；七星位扩展也已合并并升级生产。P3/P4/P5 的合成验证与后来生产操作须按各自时间区分，不把旧报告的“尚未上线”当作当前状态。保留已应用的 001–010 迁移、数据、全部测试、权限边界及已验收视觉。开发入口与当前合同见 [文档索引](docs/README.md)；生产操作复用 `PRODUCTION_LAUNCH.md`、`PRODUCTION_BACKUP.md` 与 `OPERATIONS_RUNBOOK.md`。修改代码不自动授权部署、改变仓库可见性或操作真实秘密。
+- 当前基线（2026-11-16）：MQ Story 已于 2026-11-12 正式公网上线，七星位扩展已升级生产；仓库于 2026-11-16 公开，GitHub Private Vulnerability Reporting 已启用并验证。P3/P4/P5 的合成验证与后来生产操作须按各自时间区分，不把旧报告的“尚未上线”当作当前状态。保留已应用的 001–010 迁移、数据、全部测试、权限边界及已验收视觉。开发入口与当前合同见 [文档索引](docs/README.md)；生产操作复用 `PRODUCTION_LAUNCH.md`、`PRODUCTION_BACKUP.md` 与 `OPERATIONS_RUNBOOK.md`。修改代码不自动授权部署、改变仓库可见性或操作真实秘密。
 - 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
 - 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动。已验收布局现有七个预设故事星位和一个篝火入口，保留既有响应式位置与视觉；新视觉变更需对应产品确认。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
 - 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
