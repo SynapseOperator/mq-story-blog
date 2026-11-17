@@ -1,3 +1,5 @@
+import { URL } from "node:url";
+
 /** Only local demo callers use HTTP; the actual app still enforces its Origin. */
 export function demoRequest(address, origin = address) {
   return async (path, { method = "GET", body, bytes, jar, requestOrigin = origin, headers = {} } = {}) => {
@@ -13,4 +15,3 @@ export function demoRequest(address, origin = address) {
       data: /application\/json/.test(response.headers.get("content-type") ?? "") ? JSON.parse(buffer.toString("utf8")) : null };
   };
 }
-import { URL } from "node:url";

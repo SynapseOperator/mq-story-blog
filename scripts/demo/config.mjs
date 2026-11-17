@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-export const postgresImage = "postgres:18.6-bookworm@sha256:f1ea2a1a4fb7b68d4836be1fdcb8a6466a89b072158bf9d97663600538c294c5";
 export function demoState(port = 3030) {
   return validateDemoState({ version: 1, deploymentId: randomUUID(), port });
 }

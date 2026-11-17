@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import pg from "pg";
 import { validateDeploymentConfig, deploymentDatabaseTag } from "../production/database-config.mjs";
 import { bootstrapDeploymentDatabase, migrateDeploymentDatabase, provisionDeploymentDatabase, initializeDeploymentSigningKeys, auditRuntimeDatabase } from "../production/database.mjs";
@@ -41,6 +41,5 @@ try {
     if (!grant) await initializeAdmin(client, secrets.admin);
     // Repeat starts never reset the admin's password, grant or application data.
   } finally { await client.$disconnect(); }
-  await writeFile("/run/mq-demo/setup/initialized", "1", { mode: 0o600 });
   console.log("DEMO_DATABASE_READY: PostgreSQL 18, migrations, five login roles and eleven function owners verified");
 } catch { console.error(`DEMO_INITIALIZE_FAILED: ${stage}; database and secret volumes retained`); process.exitCode = 1; }
