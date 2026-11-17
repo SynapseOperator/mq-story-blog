@@ -1,6 +1,6 @@
 # Issue #2 场景素材
 
-2026-10-22 已接入用户提供的 7 张 PNG 的 WebP 版本，独立素材缺口已解除。按 [正式基准 A](../../docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md) 返工的 Issue #2 已获用户明确视觉及评审通过，PR #5 已合并。Issue #3 复用以下素材，动效的视觉与交互验收仍须单独进行。检查结果和评审记录见 [Issue #2 验收记录](../../docs/engineering/ISSUE_2_REVIEW.md)。
+2026-10-22 已接入用户提供的 7 张 PNG 的 WebP 版本，独立素材缺口已解除。按 [正式基准 A](../../docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md) 返工的 Issue #2 已获用户明确视觉及评审通过，PR #5 已合并。Issue #3 复用以下素材，动效的视觉与交互验收仍须单独进行。检查结果和评审记录见 [Issue #2 验收记录](../../docs/archive/ISSUE_2_REVIEW.md)。
 
 本轮来源为用户提供的图片，不冒称第三方开源素材或从 A 逐像素拆出的原始图层。原始下载 PNG 保持原样、不提交；本轮只提交用于网页的 WebP。编码使用 Sharp，参数为 `quality: 92`、`alphaQuality: 100`、`effort: 6`，没有缩放、重绘、AI 生成或自动抠图。所有输出均为 **1536 × 1024**，共 **1,503,134 bytes**，由本地路径提供。
 

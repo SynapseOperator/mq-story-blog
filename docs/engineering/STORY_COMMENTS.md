@@ -1,6 +1,6 @@
 # 留言提交与审核（P2-12A/B）
 
-对应 [Issue #43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)、PRD v1.1 §09 / FN-05/06/07/17。P2-12A 后端与 P2-12B 羽毛信/管理员审核界面均已合并，负责人技术、视觉与交互验收通过。两个 PR 的独立 APPROVED 均匹配合并前 HEAD；最终 main `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc` 的 [CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41996598552) quality/database 成功。生产开放仍受 [部署审查](DEPLOYMENT_READINESS.md) 所列门槛限制。
+对应 [Issue #43](https://github.com/SynapseOperator/mq-story-blog/issues/43)、[Issue #45](https://github.com/SynapseOperator/mq-story-blog/issues/45)、PRD v1.1 §09 / FN-05/06/07/17。P2-12A 后端与 P2-12B 羽毛信/管理员审核界面均已合并，负责人技术、视觉与交互验收通过。两个 PR 的独立 APPROVED 均匹配合并前 HEAD；最终 main `224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc` 的 [CI](https://github.com/SynapseOperator/mq-story-blog/actions/runs/41996598552) quality/database 成功。生产开放仍受 [部署审查](../archive/DEPLOYMENT_READINESS.md) 所列门槛限制。
 
 ## 合同
 

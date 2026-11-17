@@ -52,3 +52,6 @@ LOCAL_ONLY_REFERENCE/
 /playwright-report/
 /test-results/
 *.log
+
+# Local demo resource coordinates; synthetic secrets remain in Docker volumes.
+/.mq-demo.json

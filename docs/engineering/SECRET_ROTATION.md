@@ -7,7 +7,7 @@
 | 凭据 | 影响与处理 | 当前证据边界 |
 | --- | --- | --- |
 | runtime / migration / maintenance / mediaMaintenance / backup 数据库口令 | 只影响新连接；旧连接不会自动消失。先阻止新写连接并排空，再原子更新 5 个口令、替换各自秘密文件、重启对应客户端 | 隔离 PG18 SCRAM 验证旧口令拒绝、新口令成功，角色权限没有增加 |
-| AUTH_SECRET | MQ 使用单一 secret；改变 Cookie 签名验证及限流 HMAC 命名空间。删除全部 Session、换文件、重启 app，所有用户重新登录 | Better Auth 1.7.12 Cookie 与 Session 实验见 [SESSION_TOKEN_SPIKE.md](SESSION_TOKEN_SPIKE.md)；不启用未经本项目验证的多 secret 模式 |
+| AUTH_SECRET | MQ 使用单一 secret；改变 Cookie 签名验证及限流 HMAC 命名空间。删除全部 Session、换文件、重启 app，所有用户重新登录 | Better Auth 1.7.12 Cookie 与 Session 实验见 [SESSION_TOKEN_SPIKE.md](../archive/SESSION_TOKEN_SPIKE.md)；不启用未经本项目验证的多 secret 模式 |
 | SESSION_STORAGE_KEY | 独立保护数据库Session及身份绑定。停入口/app、pause排空、撤销Session、原子换文件并重建app；可保持AUTH_SECRET不变 | 错key拒绝旧会话，无原值fallback或长期双key；恢复新key并清Session，见[安全存储](SESSION_STORAGE.md) |
 | AUTH_PROXY_SECRET | Caddy 和 app 必须一致；不同步时认证请求拒绝。停止入口/app，替换两个挂载源并重建两个容器 | 使用实际 HTTPS 容器演练；无旧、新代理 key 同时接受的过渡期 |
 | 发布 / 留言审核 HMAC | 独立私有 schema 与 app 文件必须配对。两类 key 原子替换，撤销全部 Session；重新登录之后才允许生成新签名 | 真实 PG 验证旧 key、旧会话失败，新 key 发布/审核成功，错误旧 key 与事务失败整体回滚 |

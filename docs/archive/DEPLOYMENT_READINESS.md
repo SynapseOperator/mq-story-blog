@@ -2,7 +2,7 @@
 
 审查日期：2026-11-05。基线：`224eb14b2fdd8babc8df1d79e0bb6cedff4dc0cc`，对应 [Issue #47](https://github.com/SynapseOperator/mq-story-blog/issues/47)。本报告是检查结果和待批准方案，不是部署完成证明。依据 PRD v1.1 §03/08–11、FN-01/02/05–09/14/17/18 及课程原评分表。
 
-**历史快照与后续落实**：本报告以下表格、统计、方案和验证记录保留 2026-11-05 的检查事实，不代表当前代码仍缺少所有列出的能力。后续 [PR #50](https://github.com/SynapseOperator/mq-story-blog/pull/50) 已交付生产身份、秘密、私有媒体与 Compose；[PR #52](https://github.com/SynapseOperator/mq-story-blog/pull/52) 已交付加密备份、完整隔离恢复、轮换和运维检查，两者均已合并。当前可执行合同见 [生产基础](PRODUCTION_FOUNDATION.md)、[备份恢复](PRODUCTION_BACKUP.md)、[秘密轮换](SECRET_ROTATION.md)和[主机运维](OPERATIONS_RUNBOOK.md)。Session 摘要候选仅完成 [兼容性实验](SESSION_TOKEN_SPIKE.md)，没有接入认证。负责人后来已购买 VPS，尚未连接或部署，实际规格待只读核验；以下“未购买”等表述保留当时状态。课程中的真实主机配置、生产部署与 CD 不因本地容器通过而计为完成；Projects/Iteration 与平台保护须另行实时核验。
+**历史快照与后续落实**：本报告以下表格、统计、方案和验证记录保留 2026-11-05 的检查事实，不代表当前代码仍缺少所有列出的能力。后续 [PR #50](https://github.com/SynapseOperator/mq-story-blog/pull/50) 已交付生产身份、秘密、私有媒体与 Compose；[PR #52](https://github.com/SynapseOperator/mq-story-blog/pull/52) 已交付加密备份、完整隔离恢复、轮换和运维检查，两者均已合并。当前可执行合同见 [生产基础](../engineering/PRODUCTION_FOUNDATION.md)、[备份恢复](../engineering/PRODUCTION_BACKUP.md)、[秘密轮换](../engineering/SECRET_ROTATION.md)和[主机运维](../engineering/OPERATIONS_RUNBOOK.md)。Session 摘要候选仅完成 [兼容性实验](SESSION_TOKEN_SPIKE.md)，没有接入认证。负责人后来已购买 VPS，尚未连接或部署，实际规格待只读核验；以下“未购买”等表述保留当时状态。课程中的真实主机配置、生产部署与 CD 不因本地容器通过而计为完成；Projects/Iteration 与平台保护须另行实时核验。
 
 **结论：建议首版采用单 Linux VPS + Docker Compose + Next.js + PostgreSQL 18 + Caddy + 私有媒体卷；目前不具备直接开放真实用户的条件。** Phase 2 功能和隔离测试已完成，生产运行身份、环境合同、主机入口、密钥/会话恢复和交付门禁仍有明确缺口。没有采购、部署、创建域名、生成生产凭据或修改业务代码。
 

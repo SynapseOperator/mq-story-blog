@@ -98,7 +98,7 @@ npm run test:production:container
 
 成功后仅删除本次随机项目的容器/卷；失败保留其卷供检查，日志只保留脱敏诊断。没有 global prune、down -v，也不碰开发库。临时秘密、数据库和备份不上传 CI Artifacts。截图仅含合成内容。Windows 宿主测试与 Linux 容器权限测试分别记录，不能把 Windows mode bits 当作 Linux 权限证据。
 
-CI 保留 quality/database/container 检查；构建重用同一个 runner 的 Docker 层，不上传带凭据的缓存。当前 Actions 额度豁免按 [AGENTS.md](../../AGENTS.md) 记录真实验证与未运行项，部署证据遵循显式 owner CI exemption 合同，不伪造成功。以下结果仅对应 P3-02 当时提交。
+CI 的 quality/database/container 是当前 main 的必需检查；构建重用同一个 runner 的 Docker 层，不上传带凭据的缓存。早期额度豁免与部署工具的显式 owner CI exemption 留作历史兼容，不是新 PR 的默认流程。以下结果仅对应 P3-02 当时提交。
 
 本轮 Windows 本机已执行以下命令，均退出 0；详细 CI 结果以此 PR 的最终提交检查为准，不把本地结果冒充远端结果：
 

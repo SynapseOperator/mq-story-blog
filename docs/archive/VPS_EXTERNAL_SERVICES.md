@@ -1,6 +1,6 @@
 # 域名、异地备份与告警准备
 
-本文保留 P4-02 的历史公开查询。后续实名已通过，P5-01 已核验 A 指向 VPS；下表 clientHold/NXDOMAIN 不是当前状态。P5-02 当前 R2、费用、飞书适配和外部探针以 [异地备份与告警](OFFSITE_BACKUP_AND_ALERTS.md) 为准。本文不授权改 DNS、购买服务、生成正式凭据或发送通知。现有工具合同见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[RELEASE_OPERATIONS.md](RELEASE_OPERATIONS.md) 和 [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md)。
+本文保留 P4-02 的历史公开查询。后续实名已通过，P5-01 已核验 A 指向 VPS；下表 clientHold/NXDOMAIN 不是当前状态。P5-02 当前 R2、费用、飞书适配和外部探针以 [异地备份与告警](../engineering/OFFSITE_BACKUP_AND_ALERTS.md) 为准。本文不授权改 DNS、购买服务、生成正式凭据或发送通知。现有工具合同见 [PRODUCTION_BACKUP.md](../engineering/PRODUCTION_BACKUP.md)、[RELEASE_OPERATIONS.md](../engineering/RELEASE_OPERATIONS.md) 和 [OPERATIONS_RUNBOOK.md](../engineering/OPERATIONS_RUNBOOK.md)。
 
 ## 域名实查
 

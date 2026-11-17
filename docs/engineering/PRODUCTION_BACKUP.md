@@ -1,6 +1,6 @@
 # 加密备份与隔离恢复
 
-P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；P5-02 又完成真实 OSS 合成备份及隔离恢复，但尚无正式生产仓库、密码或已启用的定时任务。详见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
+P3-03 / Issue #51 使用 PR #50 的显式部署身份；P4 / Issue #53 在该合同上增加 S3 后端和保留策略预览。`scripts/production/backup-cli.mjs` 是受控入口；原 `media:backup` 的 localhost/dev/test 限制保持不变。P5-01 后已完成真实 VPS 的隔离部署和同机加密备份/恢复，见 [VPS 实测](../archive/VPS_ISOLATED_DEPLOYMENT.md)；P5-02 又完成真实 OSS 合成备份及隔离恢复，但尚无正式生产仓库、密码或已启用的定时任务。详见 [外部服务验收](OFFSITE_BACKUP_AND_ALERTS.md)。下文保留各阶段的合成验证边界。
 
 P5-04：新备份合同为 009。`SESSION_STORAGE_KEY` 不进入数据库 dump 或备份包，须由独立秘密托管保管；恢复始终删除全部 Session，再使用目标新密钥和新登录。旧 008 包需在停写的新隔离目标按旧版本校验/恢复后升级 009，不伪造迁移清单。恢复与密钥步骤见 [Session 安全存储](SESSION_STORAGE.md)。
 
