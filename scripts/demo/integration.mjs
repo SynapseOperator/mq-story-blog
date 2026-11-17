@@ -111,7 +111,7 @@ try {
 } catch { console.error(`DEMO_INTEGRATION_FAILED: ${stage}; raw responses and credentials withheld`); process.exitCode = 1; }
 finally {
   await writeFile(join(evidence, "summary.json"), JSON.stringify({ passed, checks, ...(passed ? {} : { failedStage: stage }), syntheticOnly: true }, null, 2));
-  if (passed && demo) await demo.compose(["down", "--volumes", "--remove-orphans"]);
+  if (passed && demo) await demo.compose(["--profile", "setup", "down", "--volumes", "--remove-orphans"]);
   else console.error(`DEMO_TEST_STATE_RETAINED: ${statePath}; inspect this test's project before retrying`);
   // No host files, developer databases or non-test Docker resources are removed.
 }

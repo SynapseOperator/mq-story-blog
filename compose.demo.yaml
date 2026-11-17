@@ -68,6 +68,7 @@ services:
     cpus: 1.0
   app:
     <<: *tool
+    networks: [database, frontend]
     command: [scripts/demo/start.mjs]
     volumes: ["runtime:/run/mq-demo/runtime:ro", "media:/var/lib/mq-demo"]
     tmpfs: ["/tmp:size=128m,mode=1777", "/app/.next/cache:size=64m,uid=10001,gid=10001,mode=0700", "/var/lib/postgresql:size=1m,mode=0700"]
@@ -81,6 +82,7 @@ services:
       retries: 40
 networks:
   database: {internal: true}
+  frontend: {}
 volumes:
   database:
   media:
