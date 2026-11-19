@@ -1,6 +1,6 @@
 # P3-03：单机运维与上线前检查
 
-关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 的历史只读采集见 [VPS_READINESS.md](VPS_READINESS.md)。随后已完成 SSH/UFW/NTP、Docker 初始化和 P5-01 真实 VPS 隔离演练，见 [VPS 实测](VPS_ISOLATED_DEPLOYMENT.md)；域名 A 已指向 VPS，正式密钥和公网 HTTPS/上线验收仍未完成。下列正式运维变更不因历史实验授权而自动执行。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)，OSS 与飞书/外部探针见 [P5-02 外部服务](OFFSITE_BACKUP_AND_ALERTS.md)。
+关联 Issue #51，复用 P3-02 / PR #50 的生产基础；#50/#52 后续均已合并。P4-02 的历史只读采集见 [VPS_READINESS.md](../archive/VPS_READINESS.md)。随后已完成 SSH/UFW/NTP、Docker 初始化和 P5-01 真实 VPS 隔离演练，见 [VPS 实测](../archive/VPS_ISOLATED_DEPLOYMENT.md)；域名 A 已指向 VPS，正式密钥和公网 HTTPS/上线验收仍未完成。下列正式运维变更不因历史实验授权而自动执行。备份与轮换合同分别见 [PRODUCTION_BACKUP.md](PRODUCTION_BACKUP.md)、[SECRET_ROTATION.md](SECRET_ROTATION.md)，OSS 与飞书/外部探针见 [P5-02 外部服务](OFFSITE_BACKUP_AND_ALERTS.md)。
 
 ## 主机、网络和账号
 

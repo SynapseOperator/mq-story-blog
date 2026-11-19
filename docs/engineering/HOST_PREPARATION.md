@@ -1,6 +1,6 @@
 # P4-01：Ubuntu 主机预检与告警接入
 
-关联 Issue #53。本页保留 P4-01 的合成验证与通用操作说明，不替代生产数据库、秘密轮换或备份恢复流程。后续 P4-02 真实只读结果、无需远端 Node 的采集方式及待授权加固步骤见 [VPS_READINESS.md](VPS_READINESS.md)。尚未安装软件、修改 SSH/防火墙或向外部通知渠道发送消息。
+关联 Issue #53。本页保留 P4-01 的合成验证与通用操作说明，不替代生产数据库、秘密轮换或备份恢复流程。后续 P4-02 真实只读结果、无需远端 Node 的采集方式及待授权加固步骤见 [VPS_READINESS.md](../archive/VPS_READINESS.md)。尚未安装软件、修改 SSH/防火墙或向外部通知渠道发送消息。
 
 ## P5-05C：正式操作前需补齐的只读核验
 
@@ -135,4 +135,4 @@ node scripts/production/alert-webhook.mjs --send
 
 `node --test tests/production-host-preflight.test.mjs tests/production-alert-webhook.test.mjs` 在 Windows 与非root、只读、无外网的 Linux operations 容器均通过21项测试，退出码0。覆盖真实本地 HTTPS、合成 CA、无效信任链、403/429/503、重定向、响应丢失、有界重试、dry-run 零请求、实际发送失败的非零退出、OnFailure无状态文件及输出脱敏。Ubuntu24.04 的健康/故障分类使用合成采样；实际 collector 也读取了本机/容器，明确保留其环境限制。
 
-以上为 P4-01 时点证据；P4-02 已补充真实架构/容量与一次 SSH 只读采集，见 [VPS_READINESS.md](VPS_READINESS.md)。云防火墙、特权 SSH 配置、外部扫描、时间同步修复、正式证书、告警送达及主机容量压测仍未完成，不能由本地绿色结果替代。
+以上为 P4-01 时点证据；P4-02 已补充真实架构/容量与一次 SSH 只读采集，见 [VPS_READINESS.md](../archive/VPS_READINESS.md)。云防火墙、特权 SSH 配置、外部扫描、时间同步修复、正式证书、告警送达及主机容量压测仍未完成，不能由本地绿色结果替代。

@@ -254,24 +254,36 @@ export async function runMediaUploadHttpTests({ connectionString, maintenanceUrl
     });
     await run("HEAD, conditionals, forged Origin, optimizer and traversal cannot bypass private access", async () => {
       const conditional = { "if-none-match": "*", "if-modified-since": "Wed, 01 Jan 2099 00:00:00 GMT" };
+      stage = "private media: authorized HEAD and conditional GET";
       const head = await request(contentPath(readyId), { method: "HEAD", jar, headers: conditional });
       assert.equal(head.status, 200); assert.equal(head.bytes.length, 0); privateHeaders(head);
-      assert.equal(Number(head.headers["content-length"]), readyDto.display.byteLength);
+      // Next 16.4.5's Node transport omits response framing headers. HEAD may
+      // omit Content-Length; if emitted, it must still describe the GET bytes.
+      if (head.headers["content-length"] !== undefined) assert.equal(Number(head.headers["content-length"]), readyDto.display.byteLength);
       const conditionalGet = await request(contentPath(readyId), { jar, headers: conditional }); assert.equal(conditionalGet.status, 200); privateHeaders(conditionalGet);
+      assert.equal(conditionalGet.bytes.length, readyDto.display.byteLength);
+      assert.equal(hash(conditionalGet.bytes), readyDto.display.sha256);
+      stage = "private media: guest and ordinary-user conditional GET/HEAD";
       for (const method of ["GET", "HEAD"]) {
         const guest = await request(contentPath(readyId), { method, headers: conditional }); assert.equal(guest.status, 401); privateHeaders(guest);
         assert.equal((await request(contentPath(readyId), { method, jar: ordinaryJar, headers: conditional })).status, 403);
       }
+      stage = "private media: missing, forged and cross-site Origin";
       assert.equal((await upload(png, "image/png", randomUUID(), { requestOrigin: "https://attacker.invalid" })).response.status, 403);
       assert.equal((await upload(png, "image/png", randomUUID(), { requestOrigin: null })).response.status, 403);
       assert.equal((await request(contentPath(readyId), { jar, headers: { "sec-fetch-site": "cross-site" } })).status, 403);
       for (const path of [contentPath(readyId), `${contentPath(readyId)}?variant=thumbnail`]) {
         const optimized = `/_next/image?url=${encodeURIComponent(path)}&w=640&q=75`;
-        for (const actor of [undefined, jar]) assert.equal((await request(optimized, { jar: actor })).status, 400);
+        for (const actor of [undefined, jar]) {
+          stage = `private media: ${actor ? "administrator" : "guest"} optimizer ${path.includes("?") ? "thumbnail" : "display"}`;
+          assert.equal((await request(optimized, { jar: actor })).status, 400);
+        }
       }
+      stage = "private media: query variants and malformed asset identifier";
       for (const query of ["variant=original", "variant=../display", "path=../../private"]) assert.equal((await request(`${contentPath(readyId)}?${query}`, { jar })).status, 400);
       assert.equal((await request("/api/admin/media/not-a-uuid/content", { jar })).status, 400);
       const key = (await owner.query("SELECT storage_key FROM media_asset WHERE id=$1", [readyId])).rows[0].storage_key;
+      stage = "private media: private filesystem path is not public";
       assert.equal((await request(`/media/${key}/display.webp`)).status, 404);
     });
     await run("database authorization failure fails closed and recovers without losing confirmed bytes", async () => {

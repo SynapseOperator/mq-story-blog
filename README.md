@@ -1,10 +1,12 @@
 # MQ · Our Stories
 
-**把故事放进星空，把回忆写成一封信。**
+**一个小博客，从权限设计到部署、备份和恢复。**
 
-MQ Story 是一个围绕共同回忆搭建的个人博客。点开首页的星星或篝火，就能读到对应的故事。文字和照片放在一张羽毛信纸里，读完可以点个赞，也可以留下一句话。
+MQ Story 是一份可运行的自托管工程参考：用 Next.js 和 PostgreSQL 做故事编辑、发布与互动，再把数据库身份分离、受保护的 Session、容器部署和加密备份串成实际可验证的流程。星空和羽毛信是它的产品界面，也是这些工程能力服务的真实场景。
 
-这个项目也用于软件工程与 DevOps 课程实践。从后台编辑、留言审核，到数据库迁移、容器部署和备份恢复，仓库保留了实现过程与工程记录。网站于 **2026-11-12** 上线，代码于 **2026-11-16** 公开。
+[![CI](https://github.com/SynapseOperator/mq-story-blog/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SynapseOperator/mq-story-blog/actions/workflows/ci.yml)
+
+如果你正在做一个小型自托管应用，可以从这里借鉴事务内鉴权、最小权限数据库账号、私有图片读取，以及数据库和文件的一致性恢复。想做自己的故事博客，也可以在这些基础上替换主题；原站美术不随代码 MIT 授权独立复用，见[素材说明](ASSETS_LICENSE.md)。
 
 [在线体验](https://mq-story.xyz) · [English](README.en.md) · [本地开发](docs/DEVELOPMENT.md) · [文档索引](docs/README.md) · [参与贡献](CONTRIBUTING.md)
 
@@ -18,7 +20,17 @@ MQ Story 是一个围绕共同回忆搭建的个人博客。点开首页的星�
 
 上面的首页截图来自在线网站。阅读器截图取自本地生产构建，文章和图片均为测试内容，未使用私人故事。[查看截图来源与版本](docs/showcase/README.md)。
 
-[功能](#可以做什么) · [技术栈](#技术栈) · [本地运行](#本地快速开始) · [测试](#验证与工程实践) · [部署](#部署) · [许可](#许可与素材)
+[本地演示](#本地快速开始) · [功能](#可以做什么) · [工程导读](#从哪里读代码) · [测试](#验证与工程实践) · [部署](#部署) · [许可](#许可与素材)
+
+## 从哪里读代码
+
+| 想解决的问题 | 阅读入口 |
+| --- | --- |
+| 应用出错时，怎样限制数据库误操作的范围？ | [五类数据库身份与事务内授权](docs/guides/DATABASE_IDENTITIES.md) |
+| 数据库和私有图片怎样一起备份、恢复后怎样验收？ | [小型自托管服务的备份与恢复](docs/guides/BACKUP_AND_RESTORE.md) |
+| 怎样把构建产物交付到服务器，区分首次安装、升级和开放入口？ | [生产部署流程](docs/engineering/PRODUCTION_LAUNCH.md) |
+
+不必先读完所有文档。现行说明集中在[文档索引](docs/README.md)，课程过程和失败实验保留在[工程档案](docs/archive/README.md)。
 
 ## 可以做什么
 
@@ -29,7 +41,7 @@ MQ Story 是一个围绕共同回忆搭建的个人博客。点开首页的星�
 - **账号与内容权限**：PostgreSQL 保存故事、修订、账号和互动记录。草稿与私有图片按权限读取；Session 使用独立密钥加密存储，管理操作仅向唯一管理员开放。
 - **自行部署**：提供 Docker Compose、Caddy HTTPS、私有媒体卷，以及 Restic 加密备份和隔离恢复工具。应用、迁移、维护与备份使用各自的数据库身份。
 
-M / Q 页面目前保留为建设中入口；不包含回复树、附件或富文本编辑器。
+M / Q 页面目前保留为建设中入口；不包含回复树、附件或富文本编辑器。默认开放主题、星位配置化和文档翻译等后续方向见 [Roadmap](docs/ROADMAP.md)。
 
 ## 技术栈
 
@@ -80,39 +92,27 @@ flowchart LR
 
 ## 本地快速开始
 
-准备 Node/npm；完整数据库功能还需要 Docker Engine 与 Compose。下列命令均从仓库根目录运行；Windows PowerShell 可以使用 `npm.cmd`。
-
-### 1. 获取代码与依赖
+准备上面列出的 Node/npm，以及运行中的 Docker Engine/Desktop（Linux 容器）和 Compose。Windows PowerShell 可以使用 `npm.cmd`。
 
 ```sh
 git clone https://github.com/SynapseOperator/mq-story-blog.git
 cd mq-story-blog
 npm ci
+npm run demo
 ```
 
-### 2. 查看首页场景
+演示会创建独立的本地数据库和卷，执行迁移，生成随机管理员与普通账号，并通过实际业务接口放入几篇合成故事和图片。打开终端给出的 **`http://127.0.0.1:3030`**，就能点星星、读信、登录和进入后台；不需要云账号、线上数据或私有证书。
+
+第一次运行需要下载并构建镜像，耗时取决于网络和机器；后续启动复用镜像和自己的演示数据。不要把本地 HTTP 演示当作生产部署，也不要用它保存私人内容。
 
 ```sh
-npm run dev -- --hostname 127.0.0.1
+npm run demo:credentials  # 在自己的交互终端查看本地演示账号
+npm run demo:status       # 查看地址和服务状态
+npm run demo:stop         # 停止演示，保留数据库、图片和账号
+npm run demo             # 恢复原演示，不重新灌入数据
 ```
 
-打开 <http://127.0.0.1:3000>，就可以查看和修改首页场景。这时还没有连接数据库，故事目录会显示读取失败／重试，登录也尚未启用。
-
-### 3. 连接本地数据库并启用账号
-
-若要继续开发注册、登录和数据相关功能，可在全新的本地环境中执行：
-
-```sh
-npm run db:env
-npm run db:up -- dev
-npm run db:migrate
-npm run auth:env
-npm run dev:auth
-```
-
-先停止前一个开发服务，再打开 <http://127.0.0.1:3000>。两个 `*:env` 命令会分别生成本地配置，并由 Git 忽略。若提示文件已存在，复用原文件即可；已有数据库卷需要与原来的密码保持对应，请保留这些配置和卷。
-
-完整后台还需要配置低权限数据库身份、管理员及签名密钥。上面的默认数据库身份用于开发初始化，不能直接用于后台；注册得到的也只是普通账号。[开发指南](docs/DEVELOPMENT.md)分别介绍了基础开发、完整容器演练和长期自托管的做法。仓库没有默认管理员密码，也不会导入在线网站的数据。
+只修改页面时仍可使用 `npm run dev`；不连数据库的开发模式不会自动填入演示文章。热更新、独立开发数据库、演示前提与故障处理见[开发指南](docs/DEVELOPMENT.md)。
 
 ## 验证与工程实践
 
@@ -120,23 +120,23 @@ npm run dev:auth
 npm run check
 ```
 
-依次执行 lint、Prisma Schema 校验、类型检查、Node 测试和生产构建；不要求连接数据库。数据库和浏览器集成按实际改动另外运行：
+依次执行 lint、Prisma Schema 校验、类型检查、Node 测试和生产构建；不要求连接数据库。常用测试入口只有几组，原来的细分命令仍保留，方便定点排查：
 
-| 范围 | 入口示例 |
+| 入口 | 范围 |
 | --- | --- |
-| 数据与公开读取 | `npm run test:db` · `npm run test:public` |
-| 认证与受保护 Session | `npm run test:auth` · `npm run test:auth:session-storage` |
-| 后台与发布 | `npm run test:admin-editor` · `npm run test:publishing` |
-| 点赞与留言 | `npm run test:likes` · `npm run test:comments` |
-| 容器与备份恢复 | `npm run test:production:container` · `npm run test:production:operations` |
+| `npm run test:unit` | Node 单元与配置测试 |
+| `npm run test:integration` | 核心数据库与认证集成；需要专用测试库与应用构建 |
+| `npm run test:e2e` | 合成 HTTPS 环境中的完整业务和浏览器回归 |
+| `npm run test:ops` | 隔离备份、恢复及运维故障验证 |
+| `npm run test:demo` | 本地演示首启、停止恢复、权限与读信体验 |
 
 先阅读[测试前置条件与隔离规则](docs/DEVELOPMENT.md)，不要将测试指向真实生产数据库。迁移只增量添加；已有 001–010 不重写。源码通过 Issue → 分支 → PR → 独立 Review 交付。
 
-[GitHub Actions](https://github.com/SynapseOperator/mq-story-blog/actions) 配置了 quality、database、container 三项检查，结果以对应提交的运行记录为准。此前因额度限制而采用的 CI 豁免及本地验证记录保留在相关 PR 和[工作流说明](docs/engineering/WORKFLOW.md)中；豁免不表示远端检查通过，也不自动适用于后续贡献。
+[GitHub Actions](https://github.com/SynapseOperator/mq-story-blog/actions) 的 **quality、database、container** 是 main 的必需检查，合并还需要独立审批并解决评审讨论。CI 使用标准 Linux Runner；结果以对应提交的真实运行记录为准。
 
 ## 部署
 
-在线网站运行在香港的一台 Ubuntu VPS 上，使用 Compose、PostgreSQL 18 和 Caddy。数据库与私有图片由 Restic 加密后备份到阿里云 OSS 香港私有存储，已完成隔离恢复验证。
+部署结构是一台 Ubuntu VPS、Compose、PostgreSQL 18 和 Caddy；Restic 把数据库与私有图片加密备份到 S3 兼容异地存储。项目已在实际服务器完成部署和隔离恢复验证，首次上线于 **2026-11-12**。
 
 如果想部署自己的实例，需要准备自己的域名、数据库身份、管理员和秘密文件。建议先在构建机或 CI 生成带版本与摘要的镜像，再交付服务器，避免在小型 VPS 上反复构建源码。首次初始化、日常升级、私有预览和公网开放都有对应的工具与说明：
 
@@ -157,3 +157,5 @@ npm run check
 如果你遇到了问题，或有想改善的地方，欢迎按 [贡献指南](CONTRIBUTING.md) 提交 Issue 或小 PR。说明复现步骤、预期效果和改动范围，会更方便讨论；涉及整体视觉或数据权限的改动，请先沟通。示例和截图请使用合成内容，不要附带密码、Token、私人故事或用户照片。
 
 安全问题请通过 [GitHub 私密漏洞报告入口](https://github.com/SynapseOperator/mq-story-blog/security/advisories)联系维护者，提交前可阅读 [SECURITY.md](SECURITY.md)。更多技术说明、需求与工程记录都在[文档索引](docs/README.md)中。
+
+版本进展见 [CHANGELOG](CHANGELOG.md)，适合参与的方向见 [Roadmap](docs/ROADMAP.md)。

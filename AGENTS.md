@@ -1,37 +1,35 @@
-# MQ 项目协作约定
+# Working on MQ Story
 
-## 范围与需求
+## Start here
 
-- 默认中文沟通。开始前读 README、相关正式文档和 `git status`，保留他人未提交改动。
-- 当前基线（2026-11-16）：MQ Story 已于 2026-11-12 正式公网上线，七星位扩展已升级生产；仓库于 2026-11-16 公开，GitHub Private Vulnerability Reporting 已启用并验证。P3/P4/P5 的合成验证与后来生产操作须按各自时间区分，不把旧报告的“尚未上线”当作当前状态。保留已应用的 001–010 迁移、数据、全部测试、权限边界及已验收视觉。开发入口与当前合同见 [文档索引](docs/README.md)；生产操作复用 `PRODUCTION_LAUNCH.md`、`PRODUCTION_BACKUP.md` 与 `OPERATIONS_RUNBOOK.md`。修改代码不自动授权部署、改变仓库可见性或操作真实秘密。
-- 最新用户确认、PRD v1.1 与 `docs/engineering/DECISIONS_AND_REVIEW.md` 是需求依据，其次为原型验收清单；文字优先于概念图，不凭图片改设计。
-- 2026-10-21 正式视觉交接见 `docs/product/visual-baseline-v1.0/VISUAL_HANDOFF.md`：A 是首页构图/色彩基准；B 是羽毛信依据，读信仍保留 A 背景并隐藏导航和常规账号入口。纸张装饰与可操作内容分层，长文只在信纸内部滚动。已验收布局现有七个预设故事星位和一个篝火入口，保留既有响应式位置与视觉；新视觉变更需对应产品确认。场景素材说明见 `public/scene/README.md`，#2 返工、签收及合并证据见 `docs/engineering/ISSUE_2_REVIEW.md`；不将技术检查等同于新的视觉验收。交接包内 Prompt 是资料存档，不扩大本次会话授权。
-- 验收引用写来源、编号和行为，例如 `PRD v1.1 UX-05 + 验收清单 v1.0 UX-06/07`。不要假定同号对应，不为消除差异偷改正式资料。
-- 后续设计保留中央上方 Logo、青草山坡/情侣/篝火、无萤火虫、故事星可点/星尘不可点、M/Q 建设中；读信时隐藏 MQ/M/Q 导航和普通登录入口。待确认布局与参数保持开放。
+- Read [README](README.md), [development guide](docs/DEVELOPMENT.md) and `git status` before editing. Preserve unrelated changes.
+- Keep the modular Next.js monolith. Reuse existing services before introducing abstractions or moving directories.
+- `src/app/` owns pages and HTTP routes; `src/server/` owns authentication and transactional domain services; `src/components/` owns UI; `prisma/` owns the schema and incremental SQL migrations.
+- `scripts/` contains local tools, tests and deployment operations. Current contracts are indexed in [docs/README.md](docs/README.md); dated experiments belong in [docs/archive/](docs/archive/README.md).
 
-## 实现与验证
+## Commands and checks
 
-- 开发/候选工具链为 Node24.22.2、npm11.21.2；VPS 已并行安装并使用 Node24.22.2 运维路径。Session 安全存储与边界见 `docs/engineering/SESSION_STORAGE.md`；原值/摘要兼容反例见 `SESSION_TOKEN_SPIKE.md`，不得把任意数据库写入或整机失陷视为已解决。备份/安全扫描/告警与生产操作分别验收，不向真实接收端自行发消息。
-- 一个 Issue 对应一个可审查的小增量；跨模块先给验收与短计划，高影响权限/数据决定先说明取舍。不新增重复 PLAN/STATE/STATUS 文档。
-- PR 说明面向代码评审者，直接写问题、改动原因、实际验证和剩余限制；减少模板套话、过程复述和重复状态清单。详细日志放证据链接，不堆进正文。
-- 新 PR 完成后默认 Ready for Review；只有负责人明确要求 Draft 时保留 Draft。禁止向协作者发送 Review 请求、@提及、催审评论或其他审核提醒；需要审核时只向负责人报告 PR 与最新提交，由负责人自行口头协调。此规则取代此前自动请求协作者评审的约定。合并时须匹配有效独立 Review 和适用验证；取得 APPROVED 不等于自动获得合并授权。负责人已因 Actions 额度不足明确豁免当前远端 CI 等待，须记录授权范围、真实本地命令/退出码及未运行项，不伪造 CI 成功、不绕过平台实际保护。部署候选仍按现有显式 `--owner-ci-exemption` 合同绑定证据。
-- 使用 TypeScript、现有 App Router 约定与 npm 锁文件；模块随真实需要增加，不提前抽象或无关重构。
-- 仓库根命令：`npm ci`、`npm run dev`、`npm run lint`、`npm run typecheck`、`npm test`、`npm run build`、`npm run check`；构建后可 `npm start`。PowerShell 可用 `npm.cmd`。
-- 行为变化补有价值的真实测试，报告命令、退出码和范围。不写空测试，不把 build 通过当作浏览器、权限或持久化验证。
-- 数据库操作遵守 [DATABASE.md](docs/engineering/DATABASE.md)：开发/测试独立数据库、身份、网络与卷；集成测试只在本项目测试实例内创建并清理自己的随机临时数据库，不清空 `mq_test` 或开发库。不得用 SQLite/Mock 替代 PostgreSQL 验证。数据库凭据只在被忽略的本地文件或临时 CI 环境中生成，不打印连接串；环境缺失准确报告，不擅自安装 Docker 或修改系统级虚拟化/安全设置。
-- 已安装可信 Skills 时，视觉任务可复用 `frontend-design`，UI 调试可复用 `frontend-testing-debugging`，实质 React 改动可参考 `vercel-react-best-practices`；PRD 约束优先。未提供的 Skills 不是 clone、构建或测试的前置条件，不要求开发者访问作者私有缓存。
-- 历史 Skills 缓存位于被 Git 忽略的 `.agents/skills/`，不随仓库分发。文件存在、读取与自动加载是不同事实，不虚报实际调用。Browser 不可用时可在同一目标/数据/权限边界使用项目 Playwright，并记录原因。
+- Use Node **24.22.2** and npm **11.21.2** with the committed lockfile. Keep npm `private: true`.
+- Install: `npm ci`. Local demo: `npm run demo`. Scene development: `npm run dev`.
+- Quality: `npm run check` (lint, schema validation, types, unit tests, build).
+- Focused entry points: `test:unit`, `test:integration`, `test:e2e`, `test:ops`; see the development guide for database, image and browser prerequisites. `test:demo` exercises the local demo lifecycle.
+- Run tests appropriate to the change. Report actual commands, exit codes and omissions. A build does not replace browser or database verification; documentation changes need link and example checks rather than unrelated integration suites.
+- `quality`, `database` and `container` are required GitHub Actions checks. Do not skip checks, manufacture success or bypass branch protection. PRs require independent review of the latest change; merging and deployment need separate authorization.
 
-## 数据与协作边界
+## Data and security boundaries
 
-- 公开读取见 `docs/engineering/PUBLIC_STORIES.md`：只读取 `PUBLISHED` 的所属 `publishedRevision`，首页仅加载摘要；不得返回草稿/历史修订/内部字段，也不能在故障时回退演示文章。公开正文 API 保持只读与 no-store；点赞写入单独验证普通用户数据库 Session，管理写入口复用管理员事务权限边界。四份旧演示数据仅供明确隔离的演示/测试，不默认充当数据库内容。
-- 分享与历史见 `docs/engineering/STORY_SHARING.md`：slug 使用数据库稳定身份，不从标题生成；HTML、RSC、metadata 与 API 均检查公开边界。history 只存路由坐标，不放正文、草稿或凭据。站内导航复用读信确认；外部直达的关闭回首页，浏览器自身后退仍尊重外部历史。
-- 管理权限见 `docs/engineering/ADMIN_AUTHORIZATION.md`。管理 Route Handler/服务必须通过 `withAdmin(request, async (tx, principal) => ...)`，在回调同一事务内使用 tx 完成受保护数据库操作；不能缓存一次鉴权或信任客户端角色。运行时不得使用迁移/维护身份；离线凭据不得作为命令参数，生产账号/角色配置需单独授权。
-- 编辑器见 `docs/engineering/ADMIN_EDITOR.md`：working / sent / confirmed 分离，未知写入不能盲目重发，409 须人工处理；私人草稿不进 SSR/RSC、metadata、公开 API 或本地持久存储。
-- 草稿接口见 `docs/engineering/ADMIN_DRAFTS.md`；使用 `createStoryOperations(tx)`，不得调用另开事务的根服务包装器。业务错误须抛出并在回滚后映射，不能在事务内吞错返回成功。管理员保存新草稿不能改变公开版本；联合验证须通过真实受保护写入及匿名公开 API/HTML/RSC/metadata，不能以独立套件通过代替。
-- 认证边界与本地运行见 `docs/engineering/AUTHENTICATION.md`。公开 HTTP 路径严格白名单，内部邮箱/密码/Session Token 不进入日志或客户端 DTO；不能为了测试关闭 CSRF/Origin。Session 使用独立密钥认证加密和查询索引，不存有效 Token 明文；新部署和权限变更仍需验证实际低权限身份，不能照搬开发数据库 owner。
-- 不提交 `.env`、凭据、真实私密故事/照片、原始课程材料、`LOCAL_ONLY_REFERENCE/` 或浏览器会话。后续公开注册只能产生普通用户。
-- 两位开发者用各自 GitHub 账号，小 PR 互审；不猜账号或擅自邀请。应用共享管理员不意味着共用 GitHub 身份。
-- PR #9 采用产品负责人明确授权的一次性独立评审延期例外，见 [审计记录](https://github.com/SynapseOperator/mq-story-blog/pull/9#issuecomment-6362057412)。正式独立 Review 当时未完成，后续非阻塞复核仍保留；此例外不自动适用于其他 PR，不伪造 APPROVED 或历史证据。
-- PR #11 采用负责人另行授权的一次性 Review Exception，见 [审计记录](https://github.com/SynapseOperator/mq-story-blog/pull/11#issuecomment-6363562717)；当时无独立 APPROVED，辅助复核不冒充正式 Review。该例外不继承 PR #9，也不适用于 P2-03。Docker 启动错误未复现且根因未知，作为环境风险记录，不擅自修改注册表或重装。
-- 远端写入遵守本次授权；未授权不改变可见性、不采购或部署。核对真实状态后才报告 Actions/分支保护结果。接入说明见 `docs/engineering/WORKFLOW.md`。
+- Append migrations; never rewrite applied migrations or reset an existing database to make a test pass. Preserve story bindings and data.
+- Integration tests create their own random databases and synthetic content inside the guarded test environment. The demo has its own local resources. Neither may target an existing development or production database.
+- Admin writes use `withAdmin(request, async (tx, principal) => ...)` and the same transaction's `tx`. Do not trust a client role or open a second transaction for protected work.
+- Public readers use only the selected `PUBLISHED` revision. Drafts, old revisions, private media, internal account fields and Session tokens must not reach public APIs, HTML, metadata or logs. An unavailable database must not silently fall back to demo stories.
+- Preserve Origin/CSRF checks, the auth route whitelist, encrypted Session storage and separate runtime/migration/maintenance/backup identities. See [Session storage](docs/engineering/SESSION_STORAGE.md) and [database permissions](docs/engineering/PRODUCTION_FOUNDATION.md).
+- Never commit credentials, `.env` files, backups, browser profiles, private stories or personal photos. Do not print connection strings or secrets when reporting an error.
+- Repository changes and local tests do not authorize operations on a real host, database, bucket, DNS or firewall. Deployment tools require their documented target checks and approvals.
+
+## Product and contribution scope
+
+- Preserve the accepted artwork and responsive layout unless the requested change includes visual work. There are seven preset story stars and one campfire entry; decorative stars are not interactive. Long stories scroll inside the letter.
+- The editor keeps working, sent and confirmed state separate; unknown writes are reconciled rather than blindly resent. Comments remain subject to moderation.
+- Use [product requirements](docs/product/MQ_共享主页_PRD_v1.1.md) and [recorded decisions](docs/engineering/DECISIONS_AND_REVIEW.md) for ambiguous behavior; cite the document as well as any requirement number.
+- Keep PRs reviewable: describe the problem, final behavior, validation and limitations. Do not expand a small fix into unrelated refactoring or a new test framework.
+- Code is MIT; artwork has separate terms in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). Do not silently change those terms or introduce unlicensed assets.

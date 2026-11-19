@@ -6,12 +6,13 @@
 
 | 目的 | 入口 | 可以验证什么 |
 |---|---|---|
+| 第一次体验完整读信和后台 | `npm run demo` | 独立的本地数据库、合成故事和图片、随机演示账号；停止后保留数据 |
 | 浏览与修改前端场景 | `npm run dev` | 首页构图、动效、响应式布局；无数据库时不会填入演示故事 |
 | 本地数据库与普通账号开发 | 下文数据库和认证步骤 | 001–010 迁移、注册、用户名登录、当前会话与退出 |
 | 完整业务和部署边界验证 | `npm run test:production:container` | 随机隔离环境中的管理员、故事、图片、发布、点赞、留言与 HTTPS |
 | 持续运行自己的完整实例 | [生产运行合同](engineering/PRODUCTION_FOUNDATION.md)与[发布流程](engineering/PRODUCTION_LAUNCH.md) | 独立运行身份、维护身份、私有媒体、签名密钥及受控部署 |
 
-本地快速启动不会自动创建管理员、发布故事或初始化生产环境。完整容器测试使用合成数据，成功后清理自己的随机资源，不是一个长期保留的演示站点。
+演示入口会创建自己的合成管理员与故事；普通开发入口不会。两者都不会初始化生产环境。自动化容器测试成功后清理自己的随机资源，与保留供手动体验的 demo 分开。
 
 ## 环境要求
 
@@ -26,6 +27,30 @@ npm ci
 ```
 
 仓库可以直接克隆，不需要申请读取权限。`package.json` 的 `private: true` 仅防止误发 npm 包。
+
+## 先体验本地演示
+
+Docker Linux Engine 就绪后执行：
+
+```sh
+npm run demo
+```
+
+脚本只使用本地 Docker，构建现有 tools 镜像并创建随机命名的独立 PostgreSQL、应用、秘密和媒体卷。它复用迁移和低权限初始化工具，再通过实际业务 API 放入明确标记的合成故事与图片。直接打开 `http://127.0.0.1:3030`；不要替换为 `localhost`，认证会检查 Origin。
+
+管理员和普通读者账号的密码随机生成。用 `npm run demo:credentials` 在自己的交互终端查看，不把密码贴进 Issue。数据库密码和 Session 等秘密保存在本次演示的 Docker 卷中，不进入镜像或项目文件。被忽略的 `.mq-demo.json` 仅记录资源坐标，保留它才能在下一次找到同一套演示。
+
+```sh
+npm run demo:status
+npm run demo:stop
+npm run demo
+```
+
+`stop` 仅停止自己的容器，保留账号、故事、图片和秘密；再次启动不会重新灌入或清空数据。不要删除状态文件来解决启动失败，也不要用全局 prune、`down -v` 或重置 Docker 来清理演示。
+
+首次启动需要下载镜像、安装依赖并构建 Next.js，不能保证在所有机器上三分钟完成。若 Docker 未运行或 3030 已被占用，先解决相应本机问题。这个入口使用现有 localhost HTTP 和 development 媒体合同，方便普通浏览器体验；正式部署仍必须使用生产 HTTPS 配置。它不会验证生产证书，也不适合保存私人内容。
+
+修改源码后再次运行 `npm run demo`，它会使用 Docker 构建缓存更新镜像；需要热更新时使用下文的开发入口。演示的端到端检查为 `npm run test:demo`，该测试另建自己的随机资源，不使用手动演示的数据。成功后只清理这次测试的资源，失败时保留现场并给出状态文件路径，方便排查。
 
 ## 1. 只运行前端
 
@@ -104,6 +129,16 @@ npm run check
 
 它依次执行 ESLint、Prisma Schema 校验、TypeScript、单元测试和生产构建；不等同于数据库或浏览器测试。修改文档通常只需链接、格式与命令合同核验。
 
+常用聚合入口保持简单，不替代下方定向脚本或减少 CI 覆盖：
+
+| 命令 | 实际调用与前提 |
+| --- | --- |
+| `test:unit` | `npm test`；不需要数据库 |
+| `test:integration` | `test:db` + `test:auth`；先启动专用 test 数据库并 `npm run build` |
+| `test:e2e` | `test:production:container`；按上一节构建 app/tools/proxy，安装 Chromium |
+| `test:ops` | `test:production:operations`；除上述镜像外，还需 `docker build --target operations -t mq-p303-operations:local .` |
+| `test:demo` | 演示首启、读信、后台权限、停止后恢复；需要 Docker 和 Chromium。可用 `MQ_DEMO_TOOLS_IMAGE` 指定本地已构建的 tools 镜像 |
+
 需要真实数据库测试时，先启动专用测试实例：
 
 ```sh
@@ -118,7 +153,7 @@ npm run test:auth:session-storage
 
 数据库集成测试仅在 guarded test 实例中新建和清理自己的随机数据库/角色，不清空 `mq_test` 或开发库。`test:db:persistence` 会停止、启动和重建本项目两套本地数据库容器，运行前需结束依赖它们的开发会话；数据卷保留。
 
-GitHub 工作流分为 Quality、Database、Container。此前因额度限制采用的负责人 CI 豁免及本地证据仍保留在相关 PR 中，不能当作远端检查通过。公开仓库的标准 GitHub 托管 Runner 按[官方计费说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions)免费；是否实际运行成功仍以具体提交为准。贡献者应在 PR 写清真实命令、退出码及未运行项，独立 Review 和 GitHub 实际保护规则继续适用。
+GitHub 的 `quality`、`database`、`container` 已恢复为 main 的必需检查；标准公开仓库 Runner 按[官方说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions)免费。不要使用 `[skip ci]` 代替检查。外部 Fork 的工作流运行需维护者批准，合并还要求独立 Review 和评审讨论解决。PR 应写清真实命令、退出码及未运行项。
 
 ## 5. 常见问题与边界
 

@@ -40,3 +40,4 @@ src/generated/prisma/**
 !ops/mq-backup-alert@.service
 **/node_modules/**
 **/.next/**
+/.mq-demo.json

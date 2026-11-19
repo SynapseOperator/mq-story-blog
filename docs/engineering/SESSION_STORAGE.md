@@ -1,6 +1,6 @@
 # Session 安全存储
 
-P5-04 / Issue #63。负责人选择在正式上线前改造；旧原值／简单摘要实验保留在[历史Spike](SESSION_TOKEN_SPIKE.md)。实际应用使用Better Auth 1.7.12的公开DBAdapter与Prisma API，不改依赖源码、Cookie协议或四条HTTP白名单。
+P5-04 / Issue #63。负责人选择在正式上线前改造；旧原值／简单摘要实验保留在[历史Spike](../archive/SESSION_TOKEN_SPIKE.md)。实际应用使用Better Auth 1.7.12的公开DBAdapter与Prisma API，不改依赖源码、Cookie协议或四条HTTP白名单。
 
 ## 数据与身份保护
 

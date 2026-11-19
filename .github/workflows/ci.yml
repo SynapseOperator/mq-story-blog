@@ -306,6 +306,21 @@ jobs:
       - name: Ubuntu OpenSSH include and connection-specific authentication policy
         # Synthetic keys/configuration inside one disposable container only.
         run: node scripts/production/ssh-hardening-tests.mjs
+      - name: Local demo, repeat startup and desktop/mobile reading
+        env:
+          MQ_DEMO_TOOLS_IMAGE: mq-p302-tools:local
+          MQ_DEMO_EVIDENCE_DIR: ${{ runner.temp }}/mq-demo-evidence
+        run: npm run test:demo
+      - name: Keep synthetic demo screenshots and check summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: local-demo-preview
+          path: |
+            ${{ runner.temp }}/mq-demo-evidence/demo-*.png
+            ${{ runner.temp }}/mq-demo-evidence/summary.json
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Unmount only this job's temporary Node toolchain
         if: always()
         run: |

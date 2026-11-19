@@ -1,8 +1,16 @@
 # 文档索引
 
-MQ Story 于 **2026-11-12** 正式上线，仓库于 **2026-11-16** 公开。项目支持七个故事星位、篝火故事、账号、后台编辑与发布、图片、点赞和留言审核。想先看实际效果，可以从[项目 README](../README.md)开始；准备在本地运行时，请阅读[开发指南](DEVELOPMENT.md)。
+想运行项目，从[开发指南](DEVELOPMENT.md)开始；想了解可以借鉴的实现，可以先读下面三篇。页面效果和功能概览见[项目 README](../README.md)。
 
-工程文档保留了从原型到上线的真实记录。下表的“合同”用于理解当前代码；文内带日期、阶段编号、测试数量、提交或扫描结果的段落是对应时点的证据，不是永久有效的生产状态。源码和具体目标的实时状态优先，历史的“尚未上线”不代表现站仍未上线。
+## 只想看三篇的话
+
+1. [生产基础与数据库身份](engineering/PRODUCTION_FOUNDATION.md)：应用、迁移、维护和备份为什么使用不同身份，秘密和容器各能访问什么。
+2. [数据库与图片的备份恢复](engineering/PRODUCTION_BACKUP.md)：怎样保证恢复后图文对应，什么条件下才算一次成功备份。
+3. [初始化、升级与开放流程](engineering/PRODUCTION_LAUNCH.md)：怎样把受审代码和镜像交付到一台 VPS，并保留失败时的恢复入口。
+
+如果更喜欢从问题和取舍读起，有两篇较短的源码导读：[为什么不让应用拿数据库 owner 账号](guides/DATABASE_IDENTITIES.md)、[把数据库和图片一起恢复](guides/BACKUP_AND_RESTORE.md)。
+
+下表的工程“合同”用于理解当前实现；带日期、阶段编号、提交或测试数量的段落是对应时点的记录。早期计划、课程证据和部署调查集中放在[历史目录](archive/README.md)，不作为新实例的操作步骤。
 
 ## 开发与业务合同
 
@@ -36,15 +44,11 @@ MQ Story 于 **2026-11-12** 正式上线，仓库于 **2026-11-16** 公开。项
 
 ## 决策与历史实施记录
 
-保留记录是为了说明取舍和失败修复，不能将其计数、旧版本或未完成事项直接当作当前结果。
+保留记录是为了说明取舍和失败修复，不把旧版本或当时未完成的事项当作当前状态。
 
-| 范围 | 记录 |
-|---|---|
-| 项目建立与需求裁决 | [工作流与 Phase 0 接入](engineering/WORKFLOW.md) · [需求裁决](engineering/DECISIONS_AND_REVIEW.md) · [交付阶段](engineering/DELIVERY_PHASES.md) |
-| 课程与视觉验收 | [课程 11 项指标及真实证据](engineering/COURSE_DEVOPS_RUBRIC.md) · [Issue #2 视觉返工与验收](engineering/ISSUE_2_REVIEW.md) |
-| P3 部署研究 | [部署就绪审查](engineering/DEPLOYMENT_READINESS.md) |
-| P4 / P5 主机与隔离部署 | [VPS 容量快照](engineering/VPS_READINESS.md) · [当时部署缺口](engineering/VPS_DEPLOYMENT_GAPS.md) · [外部服务准备](engineering/VPS_EXTERNAL_SERVICES.md) · [首次 VPS 合成部署](engineering/VPS_ISOLATED_DEPLOYMENT.md) |
-| 安全实验与扫描 | [Session 原值/简单摘要反例](engineering/SESSION_TOKEN_SPIKE.md) · [认证日志审查](engineering/AUTH_LOGGING_REVIEW.md) · [分阶段生产安全审查](engineering/PRODUCTION_SECURITY_REVIEW.md) · [P5-03 镜像扫描原始 JSON](engineering/security/P503_IMAGE_SCAN.json) |
+- [历史目录](archive/README.md)：课程评分、迭代计划、视觉签收、Session Spike、早期 VPS 调查及隔离部署。
+- [工作流与 Phase 0 接入](engineering/WORKFLOW.md) · [需求裁决](engineering/DECISIONS_AND_REVIEW.md)：项目的协作背景与产品取舍。
+- [认证日志审查](engineering/AUTH_LOGGING_REVIEW.md) · [分阶段安全审查](engineering/PRODUCTION_SECURITY_REVIEW.md) · [原始镜像扫描](engineering/security/P503_IMAGE_SCAN.json)：按各报告的范围、提交和时间阅读。
 
 当前 Session 实现以 [SESSION_STORAGE.md](engineering/SESSION_STORAGE.md) 为准，原值和简单摘要 Spike 是负控实验。历史镜像扫描只对应报告内的镜像与时间，既不能代表当前所有漏洞，也不能作为新版本的风险接受。
 

@@ -32,7 +32,7 @@ PR #60 的精确HEAD独立审批与三项CI复核后，以普通merge合并为 `
 
 已采用官方Node 24.22.2固定镜像与npm11.21.2，保持Node24/npm11、Next16、Prisma7及001–008不变。Node更新包含24.22.1的安全维护；npm更新替换内置旧tar/undici依赖，没有手改npm内部文件或强制覆盖应用锁文件。VPS主机运维Node仍为24.19.0，未作远端升级。[Node维护记录](https://nodejs.org/en/blog/release/v24.22.1)、[24.22.2](https://nodejs.org/en/blog/release/v24.22.2)、[npm版本](https://github.com/npm/cli/releases/tag/v11.21.2)
 
-Session Token仍原值存库。新增真实PostgreSQL/HTTP反例表明：任意运行身份SQL写能力可以重绑自己已有的签名Cookie，摘要存储也不能保护该身份映射；没有发现SQL注入或因此放宽权限。原有摘要候选仍不能正确单个/其他设备撤销，不能接入实际认证。登录、多个设备、列表、撤销、退出、过期、密钥轮换等16组测试通过；测试风险反例的PASS不是修复。完整威胁及补偿措施见 [Session报告](SESSION_TOKEN_SPIKE.md)。
+Session Token仍原值存库。新增真实PostgreSQL/HTTP反例表明：任意运行身份SQL写能力可以重绑自己已有的签名Cookie，摘要存储也不能保护该身份映射；没有发现SQL注入或因此放宽权限。原有摘要候选仍不能正确单个/其他设备撤销，不能接入实际认证。登录、多个设备、列表、撤销、退出、过期、密钥轮换等16组测试通过；测试风险反例的PASS不是修复。完整威胁及补偿措施见 [Session报告](../archive/SESSION_TOKEN_SPIKE.md)。
 
 备份新增生产/合成写前缀隔离，生产监控必须匹配S3仓库ID，拒绝把本地或其他仓库的新鲜回执当作异地成功。全量check、snapshot验证和保留dry-run不变。飞书一次送达测试经负责人单独批准，接口成功且负责人确认收件；没有启用真实timer或把凭据传到VPS。详见 [备份与告警](OFFSITE_BACKUP_AND_ALERTS.md)。
 
@@ -177,7 +177,7 @@ app 剩余 34 个 High 在本次数据库中没有可用修复版本，涉及 ut
 
 ## 其他不能被镜像扫描替代的门槛
 
-- Better Auth Session Token 仍原值存库。官方扩展点和哈希实验结果见 [Session Spike](SESSION_TOKEN_SPIKE.md)；不因镜像漏洞减少而接受数据库/备份泄露风险。
+- Better Auth Session Token 仍原值存库。官方扩展点和哈希实验结果见 [Session Spike](../archive/SESSION_TOKEN_SPIKE.md)；不因镜像漏洞减少而接受数据库/备份泄露风险。
 - 管理员维护、发布签名和留言审核仍必须满足数据库权限、有效 Session、事务和独立密钥约束。恢复后失效旧会话/秘密的流程不能省略。
 - 同机加密备份不是异地副本；OSS香港私有Standard/ZRS已完成小型合成数据的真实上传、全量检查和隔离恢复。正式生产数据备份、VPS定时任务和真实告警送达仍未验证。见 [异地备份与告警](OFFSITE_BACKUP_AND_ALERTS.md)。
 - 公网 TLS/代理、实际生产配置、正式密钥保管、入口限流及真实磁盘容量仍需单独验收。不得把合成环境写成已经正式上线。
